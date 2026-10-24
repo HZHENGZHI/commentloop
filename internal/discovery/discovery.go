@@ -44,6 +44,30 @@ func Path() (string, error) {
 	return filepath.Join(d, "server.json"), nil
 }
 
+// LogPath is where a background mdlive instance appends its stdout/stderr.
+func LogPath() (string, error) {
+	d, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "mdlive.log"), nil
+}
+
+// Find returns the discovery record for a specific process.
+func Find(pid int) (Info, error) {
+	for _, info := range readInstanceFiles() {
+		if info.PID == pid {
+			return info, nil
+		}
+	}
+	return Info{}, os.ErrNotExist
+}
+
+// RemovePID removes a process's discovery record.
+func RemovePID(pid int) {
+	_, _ = removeInstance(pid)
+}
+
 // Read returns the newest live instance. If the latest file is stale, it
 // promotes the newest remaining live instance.
 func Read() (Info, error) {

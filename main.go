@@ -34,23 +34,65 @@ var webFiles embed.FS
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	args := os.Args[1:]
+	if len(args) > 0 {
+		switch args[0] {
 		case "agent":
-			if err := agentcli.Run(os.Args[2:]); err != nil {
+			if err := agentcli.Run(args[1:]); err != nil {
 				fmt.Fprintln(os.Stderr, "mdlive agent:", err)
 				os.Exit(1)
 			}
 			return
 		case "mcp":
-			if err := agentmcp.Run(os.Args[2:], version); err != nil {
+			if err := agentmcp.Run(args[1:], version); err != nil {
 				fmt.Fprintln(os.Stderr, "mdlive mcp:", err)
 				os.Exit(1)
 			}
 			return
+		case "start":
+			if hasImmediateFlag(args[1:]) {
+				runServer(args[1:])
+				return
+			}
+			if err := startDaemon(args[1:]); err != nil {
+				fmt.Fprintln(os.Stderr, "mdlive start:", err)
+				os.Exit(1)
+			}
+			return
+		case "stop":
+			if err := stopDaemon(); err != nil {
+				fmt.Fprintln(os.Stderr, "mdlive stop:", err)
+				os.Exit(1)
+			}
+			return
+		case "status":
+			statusDaemon()
+			return
+		case "run":
+			runServer(args[1:])
+			return
+		case "help":
+			runServer([]string{"--help"})
+			return
 		}
 	}
 
+	// The daemon child is the actual server process. It must not try to
+	// background itself again. --version/--help stay foreground too.
+	if os.Getenv("MDLIVE_DAEMON_CHILD") == "1" || hasImmediateFlag(args) {
+		runServer(args)
+		return
+	}
+
+	// Default invocation starts the server in the background. Use
+	// `mdlive run ...` for a foreground process.
+	if err := startDaemon(args); err != nil {
+		fmt.Fprintln(os.Stderr, "mdlive start:", err)
+		os.Exit(1)
+	}
+}
+
+func runServer(args []string) {
 	var extraRoots []string
 	flag.Func("add-dir", "追加一个目录到工作区（可重复）", func(value string) error {
 		if strings.TrimSpace(value) == "" {
@@ -72,13 +114,20 @@ func main() {
 		stateDir  = flag.String("state-dir", "", "目录列表的保存位置（默认：用户配置目录/mdlive）")
 		showVer   = flag.Bool("version", false, "打印版本号后退出")
 	)
+	flag.BoolVar(showVer, "v", false, "打印版本号后退出")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "mdlive %s — Markdown 实时预览\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "用法: mdlive [选项] [目录或 Markdown 文件]\n\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "子命令:\n  mdlive agent ...   给代码 Agent 的 CLI（list/read/write/search/changes）\n  mdlive mcp         MCP stdio server（给支持 MCP 的 Agent）\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "用法: mdlive [start|run|stop|status] [选项] [目录或 Markdown 文件]\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "子命令:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  start              后台启动（默认）\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  run                前台运行（调试 / 由进程管理器托管）\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  stop               停止最近启动的实例\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  status             查看运行状态\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent ...          给代码 Agent 的 CLI（list/read/write/search/changes）\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  mcp                MCP stdio server（给支持 MCP 的 Agent）\n\n")
 		flag.PrintDefaults()
 	}
-	flag.CommandLine.Parse(reorderArgs(flag.CommandLine, os.Args[1:]))
+	flag.CommandLine.Parse(reorderArgs(flag.CommandLine, args))
 
 	if *showVer {
 		fmt.Println(version)

@@ -42,7 +42,7 @@ cd ~/Desktop/coding/mdlive
 # 首次构建会自动安装前端依赖、执行 vite build，再编译二进制
 make build
 
-# 打开一个笔记目录（会自动选择最近打开或最近修改的 Markdown 文件）
+# 后台启动并打开一个笔记目录；命令会立即返回
 ./bin/mdlive ~/Documents/notes
 
 # 同时添加多个目录（可重复 --add-dir）
@@ -60,6 +60,37 @@ make build
 ```bash
 cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 ```
+
+## 后台运行（start / stop / status）
+
+默认启动就是后台进程；也可以显式使用生命周期命令：
+
+```bash
+# 后台启动（默认行为；--no-open 不自动打开浏览器）
+./bin/mdlive start --no-open ~/Documents/notes
+
+# 查看最近启动的实例、URL、PID、运行时长和健康状态
+./bin/mdlive status
+
+# 停止最近启动的实例（先 SIGTERM；后台任务不退出时再强制停止）
+./bin/mdlive stop
+
+# 前台运行，适合调试或交给 launchd / systemd
+./bin/mdlive run --no-open ~/Documents/notes
+
+# 查看版本 / 帮助
+./bin/mdlive --version
+./bin/mdlive --help
+```
+
+后台日志在用户配置目录下：
+
+```text
+~/Library/Application Support/mdlive/mdlive.log   # macOS
+~/.config/mdlive/mdlive.log                        # Linux
+```
+
+`start` 发现已有实例时会拒绝重复启动；先 `stop`。启动完成后会打印 PID、URL、日志和停止 / 状态命令。
 
 启动后终端会打印实际地址（端口被占用时会自动向后尝试 30 个端口），并自动打开浏览器。
 
@@ -361,15 +392,19 @@ MCP 工具（共 13 个）：
 
 ## 评审模式（默认，前台不编辑，Agent 写入）
 
-mdlive 现在默认就是前台审阅窗口、后台由 Agent 改稿：
+mdlive 现在默认后台启动，前台是审阅窗口、后台由 Agent 改稿：
 
 ```bash
-./bin/mdlive ~/Documents/notes
-./bin/mdlive ~/Documents/notes/当前笔记.md
+./bin/mdlive start --no-open ~/Documents/notes
+./bin/mdlive start --no-open ~/Documents/notes/当前笔记.md
+./bin/mdlive status
+./bin/mdlive stop
 ```
 
+需要前台日志时使用 `./bin/mdlive run ...`。
+
 - 不渲染编辑器，不自动保存；保留新建 / 导入 / 删除文档入口，方便管理评审材料。
-- 前台发出的普通 `PUT/POST/DELETE /api/doc` 会返回 403；Agent CLI/MCP 的请求带 `X-Mdlive-Agent` 标记，仍可在后台写入。
+- 前台修改已有文档的 `PUT /api/doc` 会返回 403；新建（`POST`）、删除（`DELETE`）、导入仍可用。Agent CLI/MCP 的请求带 `X-Mdlive-Agent` 标记，仍可写入已有文档。
 - 评论、关联、局部回滚属于审阅操作，在审阅模式下可用；回滚只替换评论所在段落。
 - 仍可通过文件树切换文档；后台 Agent 或外部编辑器保存后，预览经 fsnotify + WebSocket 自动更新。
 - 快捷键只保留 `Mod+B`（侧边栏）和 `Mod+K`（搜索）。

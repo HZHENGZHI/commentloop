@@ -6,7 +6,7 @@ BIN_DIR := bin
 LDFLAGS := -s -w -X main.version=$(VERSION)
 BUILD_FLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
-.PHONY: all build run dev-backend dev-web test vet tidy cross clean
+.PHONY: all build run start stop status dev-backend dev-web test vet tidy cross clean
 
 all: build
 
@@ -21,7 +21,16 @@ build: web-build
 	CGO_ENABLED=0 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive .
 
 run: build
-	./$(BIN_DIR)/mdlive
+	./$(BIN_DIR)/mdlive run
+
+start: build
+	./$(BIN_DIR)/mdlive start
+
+stop:
+	./$(BIN_DIR)/mdlive stop
+
+status:
+	./$(BIN_DIR)/mdlive status
 
 # Two terminals: backend here, `make dev-web` in another.
 DEV_FLAGS ?= --dev
