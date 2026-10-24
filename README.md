@@ -1,15 +1,15 @@
 # mdlive
 
-本地优先的 Markdown 实时预览编辑器：**Go 后端 + React 前端**，编译后是单个可执行文件，macOS 与 Linux 通用。
+本地优先的 Markdown 审阅工作区：**Go 后端 + React 前端**，编译后是单个可执行文件，macOS 与 Linux 通用。
 
-编辑器在浏览器里运行，但只监听本机回环地址；文件读写、Markdown 渲染、文件监听全部由 Go 进程完成。一个工作区可以同时添加多个分散在不同位置的目录，运行时也能随时新增 / 移除。前端静态资源通过 `go:embed` 打进二进制，所以分发时不需要 Node.js，也不需要拷贝 `web/dist`。
+mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和回滚；文档由后台 Agent 通过 MCP/CLI 写入。服务只监听本机回环地址，文件读写、Markdown 渲染、文件监听全部由 Go 进程完成。一个工作区可以同时添加多个分散在不同位置的目录，运行时也能随时新增 / 移除。前端静态资源通过 `go:embed` 打进二进制，所以分发时不需要 Node.js，也不需要拷贝 `web/dist`。
 
 ## 特性
 
-- **实时预览**：编辑内容经 WebSocket 发到 Go，使用 goldmark 渲染（GFM 表格、任务列表、删除线、脚注、自动标题锚点），带 Chroma 代码高亮。
-- **双向文件同步**：用 Obsidian、VS Code 等外部编辑器修改文件时，`fsnotify` 会监听变化并把新内容推送到页面；页面内的自动保存也会实时更新预览。
+- **实时预览**：Agent 或外部编辑器写入后，Go 使用 goldmark 渲染（GFM 表格、任务列表、删除线、脚注、自动标题锚点），带 Chroma 代码高亮，并通过 WebSocket 推送页面。
+- **外部修改同步**：用 Obsidian、VS Code 等外部工具或 Agent 修改文件时，`fsnotify` 会监听变化并把新内容推送到页面。
 - **多目录工作区**：可同时添加多个目录（笔记可能散落在不同磁盘 / 文件夹），侧栏按目录分组展示；支持运行时添加 / 移除，移除只影响工作区、不删除磁盘文件。
-- **远程服务器（SSH）**：通过 SSH + SFTP 添加远程目录，像本地目录一样浏览、预览、编辑、保存远程 Markdown；支持图片、相对链接和每 15 秒轮询外部变更。
+- **远程服务器（SSH）**：通过 SSH + SFTP 添加远程目录，像本地目录一样浏览、预览和评审远程 Markdown；写入由 Agent 完成；支持图片、相对链接和每 15 秒轮询外部变更。
 - **Code Agent 集成**：内置 `mdlive agent` CLI 与 MCP stdio server，代码 Agent 可以发现、读取、写入本地和远程 Markdown，支持搜索和“最近修改”查询。
 - **文档结合代码仓库**：每篇文档可以关联一个或多个本机目录或 GitHub 仓库（浅克隆到本地缓存）；Agent 通过 MCP 读取代码文件、搜索符号、查看 Git 分支 / 未提交改动，从而按真实代码情况写文档。代码仓库只读，不会被修改。
 - **页面内代码浏览 + LSP 跳转**：在预览右上角 **代码** 中浏览仓库文件、查看只读源码；支持在代码中 `⌘/Ctrl + 点击` 符号或点 **跳转定义**，通过 gopls / TypeScript / Python / Rust 语言服务器跳转到定义位置。
@@ -17,9 +17,9 @@
 - **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，mdlive 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
 - **每文档独立 Agent 会话**：每篇文档有自己的 pi 会话，可以新建多个会话；顶部文档标题下方可切换当前会话，切换后新的评论任务使用所选会话，历史上下文互相隔离。
 - **讨论上下文与文档共识**：自动检测本机 Pi / Claude Code / Codex / Cursor 的会话，导入当前文档并提炼成结构化“文档共识”；之后评论修改自动参考共识，也可以在评论里手动勾选具体讨论片段；每轮 Agent 修改完成后会自动更新共识，减少与早期讨论的偏差。
-- **审阅模式**：`--preview` 隐藏编辑器，前台禁止手动保存 / 删除，只保留文件树、预览、评论、关联和局部回滚；后台 Agent 通过 MCP / CLI 继续写入。适合“前台看和审阅、后台 Agent 改稿”的流程。
+- **只读评审（默认）**：不渲染编辑器，前台禁止手动保存 / 删除，只保留文件树、预览、评论、关联和局部回滚；后台 Agent 通过 MCP / CLI 写入。`--preview` 作为兼容参数保留。
 - **前后端热重载**：`make debug` 在 React / CSS 改动后自动刷新页面；Go 代码改动由仓库内置的 supervisor 重新编译并热重启后端，浏览器 WebSocket 自动重连。调试模式默认是审阅模式（前台只读，Agent 可写）。
-- **文件树与搜索**：跨目录搜索、新建、导入、删除；每个目录独立递归监听。
+- **文件树与搜索**：跨目录搜索、切换文档；新建 / 导入 / 删除入口在前台禁用；每个目录独立递归监听。
 - **行内评论 / Review**：在预览中选中文字直接评论；评论锚定到 Markdown 位置，Code Agent 修改后可以回复修改前后内容，形成可追溯的审阅线程。可以把不同位置的评论标记为一组，Code Agent 会一起阅读并要求一起修改；如果后面的修改不如前面，还可以只回滚某条评论所在的段落。
 - **SQLite 持久化**：工作区目录和评论统一存储在本地 SQLite（`mdlive.db`），支持自动迁移旧 `roots.json`。
 - **安全保存**：原子写入（临时文件 + rename），保留原文件权限；每个文件只能在其所属目录内解析，拦截 `..` 和越界软链接。
@@ -86,7 +86,7 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 | `--no-state` | `false` | 不读取 / 保存额外目录配置 |
 | `--addr <host:port>` | `127.0.0.1:4571` | 监听地址；端口占用会自动递增重试 |
 | `--no-open` | `false` | 不自动打开浏览器 |
-| `--preview` | `false` | 审阅模式：隐藏编辑器，前台禁止保存 / 删除；Agent MCP/CLI 可写 |
+| `--preview` | `false` | 兼容保留：mdlive 默认就是审阅模式；前台禁止保存 / 删除，Agent MCP/CLI 可写 |
 | `--debug` | `false` | 调试模式：审阅模式 + 前端资源热更新 |
 | `--web-dir <path>` | `web/dist` | 调试模式下从磁盘加载的前端目录 |
 | `--dev` | `false` | 开发模式：即使 `web/dist` 尚未构建也启动后端 |
@@ -143,8 +143,8 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 
 连接成功后，远程目录会作为一个带 **远程** 标记的根目录出现在侧栏，支持：
 
-- 递归浏览远程 Markdown，打开 / 新建 / 导入 / 删除
-- 预览、编辑、自动保存（通过 SFTP 写回）
+- 递归浏览远程 Markdown，打开 / 预览 / 评审
+- 写入由 Agent 通过 SFTP 完成；前台不提供编辑器 / 保存
 - 远程图片经 `/raw/` 读取
 - 外部修改每 15 秒轮询一次，变化时推送 tree / 文档更新
 - 目录配置持久化，重启后自动重连
@@ -357,15 +357,15 @@ MCP 工具（共 13 个）：
 - `search_code`（跨代码文件搜索）
 - `changes`（最近修改）
 
-在已有 pi 会话中添加后需要 `/reload` 或新开会话。CLI/MCP 都通过本机 mdlive 服务操作工作区，因此需要 mdlive 正在运行；审阅模式（`--preview` / `make debug`）下前台写入会被拒绝，但 Agent CLI/MCP 会带 `agent` 标记，仍可写入。已经运行的旧 MCP 进程不会发送这个标记，需要重启 MCP（pi 中使用 `/reload` 或新开会话）。
+在已有 pi 会话中添加后需要 `/reload` 或新开会话。CLI/MCP 都通过本机 mdlive 服务操作工作区，因此需要 mdlive 正在运行；mdlive 默认前台只读，普通写请求会被拒绝，但 Agent CLI/MCP 会带 `agent` 标记，仍可写入。已经运行的旧 MCP 进程不会发送这个标记，需要重启 MCP（pi 中使用 `/reload` 或新开会话）。
 
-## 审阅模式（前台只读，Agent 可写）
+## 只读评审（默认，Agent 写入）
 
-把 mdlive 当成前台审阅窗口、后台由 Agent 改稿时：
+mdlive 现在默认就是前台审阅窗口、后台由 Agent 改稿：
 
 ```bash
-./bin/mdlive --preview ~/Documents/notes
-./bin/mdlive --preview ~/Documents/notes/当前笔记.md
+./bin/mdlive ~/Documents/notes
+./bin/mdlive ~/Documents/notes/当前笔记.md
 ```
 
 - 不渲染编辑器，不自动保存，也不显示新建 / 导入 / 删除入口。
@@ -455,21 +455,17 @@ make cross
 
 | 快捷键 | 功能 |
 | --- | --- |
-| `Mod+S` | 立即保存（也支持编辑器内保存） |
 | `Mod+B` | 显示 / 隐藏侧边栏 |
 | `Mod+K` | 聚焦文件搜索 |
-| `Mod+Shift+N` | 新建文档（审阅模式禁用） |
-| `Mod+\` | 分栏 / 仅编辑 / 仅预览 切换（审阅模式禁用） |
-| 拖动中间分隔条 | 调整分栏比例，双击恢复 50/50 |
 
 > `Mod` 在 macOS 上是 ⌘，在 Linux 上是 Ctrl。审阅模式下仅保留 `Mod+B`、`Mod+K` 等浏览快捷键。
 
 ## 工作方式
 
 ```text
-浏览器（React + CodeMirror）
-  │  REST：文件树 / 读取 / 保存 / 删除 / 服务端渲染兜底
-  │  WebSocket：订阅当前文档、编辑预览、外部修改推送
+浏览器（React）
+  │  REST：文件树 / 读取 / 评论 / 评审 / 服务端渲染兜底
+  │  WebSocket：订阅当前文档、Agent 写入、外部修改推送
   ▼
 Go 服务（标准库 net/http + gorilla/websocket）
   ├── goldmark：Markdown → HTML，Chroma 代码高亮
@@ -482,12 +478,12 @@ Go 服务（标准库 net/http + gorilla/websocket）
 开发调试（make debug）
   ├── vite build --watch
   ├── cmd/debugrun：监听 .go → go build → 热重启后端
-  └── mdlive --debug：磁盘 web/dist + 审阅模式
+  └── mdlive --debug：磁盘 web/dist + 只读评审
 ```
 
-- **预览渲染在 Go**：编辑时前端只发送原文，服务端返回 HTML；代码高亮和 GFM 扩展始终一致。
-- **即时反馈**：编辑停止约 80ms 后推送预览；WebSocket 断开时前端自动改用 `/api/render`，连接恢复后重新订阅。
-- **自动保存**：停止输入约 850ms 后写盘；`Mod+S` 立即保存。外部修改会覆盖编辑器内容并提示，多标签页编辑为尽力同步。
+- **预览渲染在 Go**：Agent / 外部写入后由服务端渲染 HTML；代码高亮和 GFM 扩展始终一致。
+- **即时反馈**：文件变化或 Agent 写入通过 WebSocket 推送；WebSocket 断开时前端自动改用 `/api/render`，连接恢复后重新订阅。
+- **写入由 Agent 完成**：浏览器不提供编辑器、自动保存或保存快捷键；Agent 修改文档后可选择局部回滚。
 - **图片**：Markdown 中相对路径图片会被重写为 `/raw/...`，由 Go 从该文件所属目录内安全读取；远程图片正常加载。
 
 ## 目录结构

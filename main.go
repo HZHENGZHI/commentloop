@@ -1,4 +1,4 @@
-// mdlive is a local Markdown editor with a live, server-rendered preview.
+// mdlive is a local review workspace with a live, server-rendered preview.
 package main
 
 import (
@@ -66,7 +66,7 @@ func main() {
 		noOpen    = flag.Bool("no-open", false, "不自动打开浏览器")
 		devMode   = flag.Bool("dev", false, "开发模式：前端未构建时也启动（配合 Vite）")
 		debugMode = flag.Bool("debug", false, "调试模式：审阅模式（前台只读、Agent 可写）+ 前端资源热更新")
-		preview   = flag.Bool("preview", false, "审阅模式（不显示编辑器，前台禁止保存；Agent 可通过 MCP/CLI 写入）")
+		preview   = flag.Bool("preview", false, "兼容保留：mdlive 默认就是审阅模式；前台只读，Agent 可通过 MCP/CLI 写入")
 		webDir    = flag.String("web-dir", "web/dist", "调试模式从磁盘加载的前端目录")
 		noState   = flag.Bool("no-state", false, "不读取 / 保存目录列表")
 		stateDir  = flag.String("state-dir", "", "目录列表的保存位置（默认：用户配置目录/mdlive）")
@@ -147,7 +147,11 @@ func main() {
 		}
 	}
 
-	readOnly := *preview || *debugMode
+	// mdlive is review-only: the browser is for reading, commenting and
+	// reviewing; documents are written by the background Agent through MCP/CLI.
+	// --preview is kept as a compatibility flag.
+	_ = *preview
+	readOnly := true
 	app, err := server.New(server.Options{
 		Root:        root,
 		ExtraRoots:  extraRoots,
