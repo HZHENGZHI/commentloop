@@ -85,23 +85,26 @@ func (s *Server) handleImportDiscussion(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
 		return
 	}
+	s.broadcastConsensus(canonical, "queued", "正在导入会话…")
 	location, err := s.resolveSessionPath(req.SessionPath)
 	if err != nil {
+		s.broadcastConsensus(canonical, "error", err.Error())
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	parsed, err := parseAgentSession(location.Agent, location.Path)
 	if err != nil {
+		s.broadcastConsensus(canonical, "error", "读取会话失败："+err.Error())
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "读取会话失败：" + err.Error()})
 		return
 	}
 	item, err := s.discussions.importSession(canonical, parsed, location.Path, location.SourceKind, location.Agent)
 	if err != nil {
+		s.broadcastConsensus(canonical, "error", "导入会话失败："+err.Error())
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "导入会话失败：" + err.Error()})
 		return
 	}
-	s.hub.broadcast(outMessage{Type: "consensus", Path: canonical})
-	consensus, genErr := s.generateConsensus(r.Context(), canonical, "import")
+	consensus, genErr := s.generateConsensus(r.Context(), canonical, "import", true)
 	resp := importDiscussionResponse{Discussion: item}
 	if genErr != nil {
 		resp.ConsensusError = genErr.Error()
@@ -126,9 +129,27 @@ func (s *Server) handleDeleteDiscussion(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	s.hub.broadcast(outMessage{Type: "consensus", Path: canonical})
-	if s.consensus != nil {
-		s.consensus.schedule(canonical)
+	remaining, err := s.discussions.list(canonical)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	// The deleted transcript may have contributed decisions to the old
+	// consensus. Clear it first, then rebuild from what remains; otherwise a
+	// failed rebuild would silently keep the deleted session's influence.
+	s.broadcastConsensus(canonical, "saving", "正在移除旧共识…")
+	if err := s.discussions.clearConsensus(canonical); err != nil {
+		s.broadcastConsensus(canonical, "error", err.Error())
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(remaining) == 0 {
+		s.broadcastConsensus(canonical, "done", "讨论已删除，共识已清空")
+	} else {
+		s.broadcastConsensus(canonical, "queued", "讨论已删除，正在从剩余讨论重建共识…")
+		if s.consensus != nil {
+			s.consensus.schedule(canonical, false)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -145,7 +166,7 @@ func (s *Server) handleRefreshConsensus(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
 		return
 	}
-	consensus, err := s.generateConsensus(r.Context(), canonical, "manual")
+	consensus, err := s.generateConsensus(r.Context(), canonical, "manual", true)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

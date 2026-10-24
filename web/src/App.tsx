@@ -69,6 +69,7 @@ import type {
   CommentMessage,
   CodeRepo,
   ConfigResponse,
+  ConsensusActivity,
   Discussion,
   DocStats,
   RootInfo,
@@ -170,6 +171,8 @@ export default function App() {
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
   const [discussionNonce, setDiscussionNonce] = useState(0);
+  const [consensusActivity, setConsensusActivity] =
+    useState<ConsensusActivity | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSession[]>([]);
   const [activeAgentSessionId, setActiveAgentSessionId] = useState("");
@@ -1011,7 +1014,20 @@ export default function App() {
         break;
       case "consensus":
         if (message.path === currentPathRef.current) {
-          setDiscussionNonce((value) => value + 1);
+          if (message.status) {
+            setConsensusActivity({
+              path: message.path,
+              status: message.status,
+              message: message.message,
+            });
+          }
+          if (
+            !message.status ||
+            message.status === "done" ||
+            message.status === "error"
+          ) {
+            setDiscussionNonce((value) => value + 1);
+          }
         }
         break;
       case "agent":
@@ -1145,6 +1161,7 @@ export default function App() {
     setCodeBrowserOpen(false);
     setDiscussionModalOpen(false);
     setAgentActivity(null);
+    setConsensusActivity(null);
   }, [currentPath]);
 
   useEffect(() => {
@@ -1157,6 +1174,18 @@ export default function App() {
     const timer = window.setTimeout(() => setAgentActivity(null), 6000);
     return () => window.clearTimeout(timer);
   }, [agentActivity]);
+
+  useEffect(() => {
+    if (
+      !consensusActivity ||
+      (consensusActivity.status !== "done" &&
+        consensusActivity.status !== "error")
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => setConsensusActivity(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [consensusActivity]);
 
   useEffect(() => {
     if (!currentPath) {
@@ -1579,7 +1608,11 @@ export default function App() {
                       >
                         <IconMessage size={13} />
                         讨论
-                        {discussions.length ? (
+                        {consensusActivity &&
+                        consensusActivity.status !== "done" &&
+                        consensusActivity.status !== "error" ? (
+                          <span className="spinner" />
+                        ) : discussions.length ? (
                           <span className="comments-badge">
                             {discussions.length}
                           </span>
@@ -1741,6 +1774,11 @@ export default function App() {
         <DiscussionModal
           docPath={currentPath}
           refreshKey={discussionNonce}
+          activity={
+            consensusActivity?.path === currentPath
+              ? consensusActivity
+              : undefined
+          }
           onClose={() => setDiscussionModalOpen(false)}
           onChanged={() => setDiscussionNonce((value) => value + 1)}
         />

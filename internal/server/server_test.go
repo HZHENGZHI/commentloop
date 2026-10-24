@@ -784,7 +784,7 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 		t.Fatalf("prompt missing consensus/context:\n%s", prompt)
 	}
 
-	app.consensus.schedule(path)
+	app.consensus.schedule(path, true)
 	deadline := time.Now().Add(4 * time.Second)
 	for {
 		consensus, ok := app.discussions.consensus(path)
@@ -795,6 +795,14 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 			t.Fatalf("consensus was not refreshed automatically")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+
+	rec = doJSON(t, app, http.MethodDelete, "/api/doc/discussions?path="+url.QueryEscape(path)+"&id="+url.QueryEscape(imported.Discussion.ID), nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete discussion status=%d body=%s", rec.Code, rec.Body)
+	}
+	if _, ok := app.discussions.consensus(path); ok {
+		t.Fatal("consensus survived deleting its last discussion")
 	}
 }
 

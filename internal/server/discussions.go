@@ -253,6 +253,11 @@ func (s *discussionStore) saveConsensus(docPath, content, source string) (Consen
 	return Consensus{Content: content, Source: source, Version: version, UpdatedAt: now}, nil
 }
 
+func (s *discussionStore) clearConsensus(docPath string) error {
+	_, err := s.db.Exec(`DELETE FROM doc_consensus WHERE doc_path=?`, docPath)
+	return err
+}
+
 func (s *discussionStore) hasContext(docPath string) bool {
 	if _, ok := s.consensus(docPath); ok {
 		return true

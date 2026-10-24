@@ -124,7 +124,12 @@ export type WsServerMessage =
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
-  | { type: "consensus"; path: string }
+  | {
+      type: "consensus";
+      path: string;
+      status?: ConsensusPhase;
+      message?: string;
+    }
   | {
       type: "agent";
       path?: string;
@@ -289,6 +294,20 @@ export interface Discussion {
   messageCount: number;
   createdAt: string;
   importedAt: string;
+}
+
+export type ConsensusPhase =
+  | "queued"
+  | "collecting"
+  | "summarizing"
+  | "saving"
+  | "done"
+  | "error";
+
+export interface ConsensusActivity {
+  path: string;
+  status: ConsensusPhase;
+  message?: string;
 }
 
 export interface Consensus {

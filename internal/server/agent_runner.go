@@ -149,7 +149,7 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 	}
 	r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))
 	if r.srv.consensus != nil {
-		r.srv.consensus.schedule(job.Path)
+		r.srv.consensus.schedule(job.Path, true)
 	}
 }
 

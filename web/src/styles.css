@@ -5278,3 +5278,123 @@ body.dragging-split * {
   font-size: 7.5px;
   font-style: normal;
 }
+
+.consensus-progress {
+  margin: 0 0 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.consensus-progress.done {
+  border-color: color-mix(in srgb, var(--success, #39a96b) 38%, var(--border));
+}
+
+.consensus-progress.error {
+  border-color: color-mix(in srgb, var(--danger, #d14949) 40%, var(--border));
+}
+
+.consensus-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.consensus-progress.done .consensus-progress-head {
+  color: var(--success, #39a96b);
+}
+
+.consensus-progress.error .consensus-progress-head {
+  color: var(--danger, #d14949);
+}
+
+.consensus-progress-bar {
+  height: 3px;
+  margin: 7px 0 6px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.consensus-progress-bar > span {
+  position: relative;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.45s ease;
+}
+
+.consensus-progress:not(.done):not(.error) .consensus-progress-bar > span::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  content: "";
+  animation: consensus-shimmer 1.15s linear infinite;
+}
+
+.consensus-progress.error .consensus-progress-bar > span {
+  background: var(--danger, #d14949);
+}
+
+.consensus-progress.done .consensus-progress-bar > span {
+  background: var(--success, #39a96b);
+}
+
+.consensus-progress-steps {
+  display: flex;
+  gap: 12px;
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.consensus-progress-steps span {
+  position: relative;
+}
+
+.consensus-progress-steps span.active {
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+
+.consensus-progress-steps span.done {
+  color: var(--text-secondary);
+}
+
+.consensus-progress-steps span.done::before {
+  margin-right: 3px;
+  color: var(--success, #39a96b);
+  content: "✓";
+}
+
+.consensus-progress.error .consensus-progress-steps span.active {
+  color: var(--danger, #d14949);
+}
+
+@keyframes consensus-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .consensus-progress-bar > span {
+    transition: none;
+  }
+
+  .consensus-progress:not(.done):not(.error) .consensus-progress-bar > span::after {
+    animation: none;
+  }
+}

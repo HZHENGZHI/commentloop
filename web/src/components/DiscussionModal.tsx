@@ -7,6 +7,8 @@ import {
   refreshConsensus,
 } from "../api";
 import type {
+  ConsensusActivity,
+  ConsensusPhase,
   DetectedAgent,
   DiscussionListResponse,
   DiscussionSession,
@@ -25,8 +27,59 @@ import {
 interface DiscussionModalProps {
   docPath: string;
   refreshKey?: number;
+  activity?: ConsensusActivity;
   onClose: () => void;
   onChanged: () => void;
+}
+
+const CONSENSUS_STEPS = ["整理讨论", "提炼共识", "保存结果"];
+
+function consensusStage(status: ConsensusPhase): number {
+  switch (status) {
+    case "summarizing":
+      return 1;
+    case "saving":
+    case "done":
+      return 2;
+    case "error":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function consensusLabel(status: ConsensusPhase): string {
+  switch (status) {
+    case "queued":
+      return "准备更新共识…";
+    case "collecting":
+      return "正在整理讨论内容…";
+    case "summarizing":
+      return "Agent 正在提炼共识…";
+    case "saving":
+      return "正在保存共识…";
+    case "done":
+      return "共识已更新";
+    case "error":
+      return "共识更新失败";
+  }
+}
+
+function consensusWidth(status: ConsensusPhase): string {
+  switch (status) {
+    case "collecting":
+      return "28%";
+    case "summarizing":
+      return "66%";
+    case "saving":
+      return "90%";
+    case "done":
+      return "100%";
+    case "error":
+      return "100%";
+    default:
+      return "8%";
+  }
 }
 
 function formatDate(value: string): string {
@@ -43,6 +96,7 @@ function formatDate(value: string): string {
 export function DiscussionModal({
   docPath,
   refreshKey = 0,
+  activity,
   onClose,
   onChanged,
 }: DiscussionModalProps) {
@@ -178,6 +232,24 @@ export function DiscussionModal({
     : sessions;
   const selectedAgent = agents.find((item) => item.id === agentFilter);
   const discussions = data?.discussions ?? [];
+  const effectiveActivity =
+    activity ??
+    (busy === "import"
+      ? { path: docPath, status: "queued" as const, message: "正在导入会话…" }
+      : busy === "refresh"
+        ? {
+            path: docPath,
+            status: "collecting" as const,
+            message: "正在准备刷新共识…",
+          }
+        : undefined);
+  const stage = effectiveActivity
+    ? consensusStage(effectiveActivity.status)
+    : -1;
+  const working =
+    effectiveActivity &&
+    effectiveActivity.status !== "done" &&
+    effectiveActivity.status !== "error";
 
   return (
     <div
@@ -239,6 +311,48 @@ export function DiscussionModal({
               刷新共识
             </button>
           </div>
+          {effectiveActivity ? (
+            <div
+              className={`consensus-progress ${effectiveActivity.status}`}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="consensus-progress-head">
+                {working ? (
+                  <span className="spinner" />
+                ) : effectiveActivity.status === "done" ? (
+                  <IconCheck size={13} />
+                ) : (
+                  <IconAlert size={13} />
+                )}
+                <span>
+                  {effectiveActivity.message ||
+                    consensusLabel(effectiveActivity.status)}
+                </span>
+              </div>
+              <div className="consensus-progress-bar">
+                <span
+                  style={{ width: consensusWidth(effectiveActivity.status) }}
+                />
+              </div>
+              <div className="consensus-progress-steps">
+                {CONSENSUS_STEPS.map((label, index) => (
+                  <span
+                    key={label}
+                    className={
+                      effectiveActivity.status === "done" || index < stage
+                        ? "done"
+                        : index === stage
+                          ? "active"
+                          : ""
+                    }
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {loading ? (
             <div className="discussion-empty">正在读取…</div>
           ) : data?.consensus ? (
