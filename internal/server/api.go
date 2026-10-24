@@ -203,10 +203,13 @@ func (s *Server) handleGetDoc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
-	if s.rejectReadOnly(w, r) {
+	create := r.Method == http.MethodPost
+	// Review mode still allows managing the document list: creating a new
+	// document and importing files are frontend actions. Editing an existing
+	// document (PUT) remains Agent-only.
+	if !create && s.rejectReadOnly(w, r) {
 		return
 	}
-	create := r.Method == http.MethodPost
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxDocSize+64*1024)
 	var req saveRequest
@@ -289,9 +292,6 @@ func (s *Server) persistDocument(ro *root, rel, canonical, content, origin strin
 }
 
 func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
-	if s.rejectReadOnly(w, r) {
-		return
-	}
 	ro, rel, err := s.resolveDocRef(r.URL.Query().Get("path"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})

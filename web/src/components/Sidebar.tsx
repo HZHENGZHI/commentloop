@@ -35,7 +35,6 @@ interface SidebarProps {
   tree: TreeResponse | null;
   currentPath: string | null;
   dirty: boolean;
-  readOnly: boolean;
   removingRootId: string | null;
   removingRootName: string;
   onOpen: (path: string) => void;
@@ -87,7 +86,6 @@ export function Sidebar({
   tree,
   currentPath,
   dirty,
-  readOnly,
   removingRootId,
   removingRootName,
   onOpen,
@@ -157,26 +155,24 @@ export function Sidebar({
         </span>
         <span className="tree-name">{file.name}</span>
         {active && dirty ? <span className="dirty-dot" title="未保存" /> : null}
-        {!readOnly ? (
-          <button
-            type="button"
-            className="row-action"
-            title={`删除 ${file.name}`}
-            aria-label={`删除 ${file.name}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (
-                window.confirm(
-                  `确定删除 “${displayFile(file)}”？此操作不可撤销。`,
-                )
-              ) {
-                onDelete(file.path);
-              }
-            }}
-          >
-            <IconTrash size={13} />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="row-action"
+          title={`删除 ${file.name}`}
+          aria-label={`删除 ${file.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (
+              window.confirm(
+                `确定删除 “${displayFile(file)}”？此操作不可撤销。`,
+              )
+            ) {
+              onDelete(file.path);
+            }
+          }}
+        >
+          <IconTrash size={13} />
+        </button>
       </div>
     );
   };
@@ -358,43 +354,37 @@ export function Sidebar({
           </span>
         </div>
         <div className="sidebar-tools">
-          {!readOnly ? (
-            <>
-              <button
-                type="button"
-                className="icon-btn small"
-                title="新建文档"
-                aria-label="新建文档"
-                onClick={onNew}
-              >
-                <IconPlus size={15} />
-              </button>
-              <button
-                type="button"
-                className="icon-btn small"
-                title="导入 Markdown 文件"
-                aria-label="导入 Markdown 文件"
-                onClick={() => importRef.current?.click()}
-              >
-                <IconUpload size={15} />
-              </button>
-              <input
-                ref={importRef}
-                type="file"
-                accept=".md,.markdown,.mdown,.mkd,text/markdown"
-                multiple
-                hidden
-                onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                  if (event.target.files?.length) {
-                    onImport(event.target.files);
-                  }
-                  event.target.value = "";
-                }}
-              />
-            </>
-          ) : (
-            <span className="readonly-tag">审阅</span>
-          )}
+          <button
+            type="button"
+            className="icon-btn small"
+            title="新建文档"
+            aria-label="新建文档"
+            onClick={onNew}
+          >
+            <IconPlus size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn small"
+            title="导入 Markdown 文件"
+            aria-label="导入 Markdown 文件"
+            onClick={() => importRef.current?.click()}
+          >
+            <IconUpload size={15} />
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".md,.markdown,.mdown,.mkd,text/markdown"
+            multiple
+            hidden
+            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              if (event.target.files?.length) {
+                onImport(event.target.files);
+              }
+              event.target.value = "";
+            }}
+          />
           <button
             type="button"
             className="icon-btn small"

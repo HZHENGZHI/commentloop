@@ -1278,7 +1278,7 @@ export default function App() {
         if (!previewOnly) handleManualSave();
       } else if (key === "n" && event.shiftKey) {
         event.preventDefault();
-        if (!previewOnly) requestNewDoc();
+        requestNewDoc();
       } else if (key === "\\") {
         event.preventDefault();
         if (!previewOnly) {
@@ -1468,17 +1468,15 @@ export default function App() {
           >
             {theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
-          {!previewOnly ? (
-            <button
-              type="button"
-              className="btn primary new-btn"
-              onClick={requestNewDoc}
-              title="新建文档 (⌘⇧N)"
-            >
-              <IconPlus size={15} />
-              <span>新建</span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="btn primary new-btn"
+            onClick={requestNewDoc}
+            title="新建文档 (⌘⇧N)"
+          >
+            <IconPlus size={15} />
+            <span>新建</span>
+          </button>
         </div>
       </header>
 
@@ -1494,7 +1492,6 @@ export default function App() {
           tree={tree}
           currentPath={currentPath}
           dirty={dirty}
-          readOnly={previewOnly}
           removingRootId={removingRoot?.id ?? null}
           removingRootName={removingRoot?.name ?? ""}
           onOpen={openFromSidebar}
@@ -1746,7 +1743,7 @@ export default function App() {
         </div>
       </footer>
 
-      {newModal && !previewOnly ? (
+      {newModal ? (
         <NewDocModal
           defaultDir={defaultDir}
           displayDir={displayDir}
@@ -1881,7 +1878,7 @@ function Welcome({
         </h1>
         <p className="welcome-lead">
           {readOnly
-            ? "审阅模式：前台只读，后台 Agent 负责写入；评论、关联和局部回滚在这里完成。"
+            ? "审阅模式：前台不编辑文档，但可以新建、导入、删除文档；评论、关联和局部回滚在这里完成。"
             : "本地文件、实时预览、自动保存。编辑在浏览器里，内容始终留在你的电脑上。"}
         </p>
 
@@ -1962,7 +1959,7 @@ function Welcome({
               {roots.length === 0
                 ? "还没有添加目录。添加一个包含 Markdown 文件的目录开始。"
                 : readOnly
-                  ? "已添加的目录还没有 Markdown 文件。后台 Agent 创建后，这里会自动出现。"
+                  ? "已添加的目录还没有 Markdown 文件，可以新建或导入文档。"
                   : "已添加的目录还没有 Markdown 文件，新建一篇开始写作。"}
             </p>
           </div>

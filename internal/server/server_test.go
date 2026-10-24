@@ -461,30 +461,34 @@ func TestPreviewOnlyBlocksWrites(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("read status = %d, want 200", rec.Code)
 	}
-	for _, tc := range []struct {
-		method  string
-		target  string
-		payload any
-	}{
-		{http.MethodPut, "/api/doc", saveRequest{Path: aPath, Content: "# edited"}},
-		{http.MethodPost, "/api/doc", saveRequest{Path: newPath, Content: "# new"}},
-		{http.MethodDelete, docURL(aPath), nil},
-	} {
-		rec := doJSON(t, app, tc.method, tc.target, tc.payload)
-		if rec.Code != http.StatusForbidden {
-			t.Errorf("%s %s status = %d, want 403", tc.method, tc.target, rec.Code)
-		}
+	// Editing an existing document remains Agent-only.
+	rec = doJSON(t, app, http.MethodPut, "/api/doc", saveRequest{Path: aPath, Content: "# edited"})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("PUT existing status = %d, want 403", rec.Code)
+	}
+	// Creating and deleting documents are still available to the review UI.
+	rec = doJSON(t, app, http.MethodPost, "/api/doc", saveRequest{Path: newPath, Content: "# new"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST new status = %d, body=%s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(filepath.Join(root, "new.md")); err != nil {
+		t.Fatalf("new document missing: %v", err)
+	}
+	rec = doJSON(t, app, http.MethodDelete, docURL(aPath), nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE existing status = %d, want 204", rec.Code)
+	}
+	if _, err := os.Stat(filepath.Join(root, "a.md")); !os.IsNotExist(err) {
+		t.Fatalf("delete did not remove a.md: %v", err)
 	}
 	rec = doJSON(t, app, http.MethodGet, "/api/config", nil)
 	config := decode[map[string]any](t, rec)
 	if config["previewOnly"] != true {
 		t.Fatalf("previewOnly = %v, want true", config["previewOnly"])
 	}
-	// The file must be untouched.
-	onDisk, _ := os.ReadFile(filepath.Join(root, "a.md"))
-	if string(onDisk) != "# A" {
-		t.Fatalf("read-only mode modified disk: %q", onDisk)
-	}
+	// Recreate the original for the WebSocket check; the review edit path must
+	// remain closed even though document creation/deletion are allowed.
+	mustWrite(t, filepath.Join(root, "a.md"), "# A")
 
 	// The WebSocket edit path is also closed in preview-only mode.
 	hs := httptest.NewServer(app)
