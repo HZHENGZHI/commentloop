@@ -4991,3 +4991,15 @@ body.dragging-split * {
 .code-browser-branch-empty.error {
   color: var(--danger);
 }
+
+.code-browser-no-branch {
+  flex: none;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-faint);
+  font-size: 8.5px;
+}

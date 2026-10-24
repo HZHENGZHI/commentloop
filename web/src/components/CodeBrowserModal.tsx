@@ -476,6 +476,14 @@ export function CodeBrowserModal({
                 </option>
               ))}
             </select>
+            {repo && repo.kind === "local" && !repo.branch ? (
+              <span
+                className="code-browser-no-branch"
+                title="这个本地目录不是 Git 仓库，无法切换分支；请关联仓库根目录或初始化 Git"
+              >
+                非 Git 仓库
+              </span>
+            ) : null}
             {repo && (repo.kind === "github" || repo.branch) ? (
               <div className="code-browser-branch-wrap">
                 <button

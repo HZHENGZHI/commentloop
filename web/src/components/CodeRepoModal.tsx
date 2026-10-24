@@ -25,6 +25,9 @@ interface CodeRepoModalProps {
 
 function repoMeta(repo: CodeRepo): string {
   const parts: string[] = [];
+  if (repo.kind === "local" && !repo.branch) {
+    return "非 Git 目录";
+  }
   if (repo.branch) parts.push(repo.branch);
   if (repo.head) parts.push(repo.head);
   if (repo.dirty) parts.push("有未提交改动");
