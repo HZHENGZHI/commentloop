@@ -124,7 +124,9 @@ func (s *server) handle(req request, version string) (any, *rpcError) {
 				"set refresh=true to force a remote rescan. When editing in response to review comments, " +
 				"read the full comment thread, honor the latest user feedback, then pass comment_ids and a " +
 				"short comment to write_file (or call reply_comment afterwards) so the user sees this round's " +
-				"before/after. The user is the only person who can resolve a comment: never mark a comment resolved " +
+				"before/after. Review prompts may include a document consensus and discussion excerpts imported by the user; " +
+				"use them to preserve earlier decisions, but the latest explicit user comment always wins. " +
+				"The user is the only person who can resolve a comment: never mark a comment resolved " +
 				"or pass a resolve flag, even when your edit addresses it. Leave it open for the user to confirm. " +
 				"The user can reply again and request another revision. write_file stores each full-document revision " +
 				"as a rollback snapshot, so the user can locally restore the commented paragraph to an earlier round " +

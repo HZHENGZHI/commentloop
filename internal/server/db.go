@@ -139,6 +139,38 @@ func migrateSchema(db *sql.DB) error {
 			session_id TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS doc_discussions (
+			id TEXT PRIMARY KEY,
+			doc_path TEXT NOT NULL,
+			title TEXT NOT NULL,
+			source_path TEXT NOT NULL,
+			source_kind TEXT NOT NULL,
+			agent TEXT NOT NULL DEFAULT 'pi',
+			cwd TEXT NOT NULL DEFAULT '',
+			session_id TEXT NOT NULL DEFAULT '',
+			message_count INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			imported_at TEXT NOT NULL,
+			UNIQUE(doc_path, source_path)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_discussions_doc ON doc_discussions(doc_path, imported_at);`,
+		`CREATE TABLE IF NOT EXISTS discussion_messages (
+			id TEXT PRIMARY KEY,
+			discussion_id TEXT NOT NULL REFERENCES doc_discussions(id) ON DELETE CASCADE,
+			seq INTEGER NOT NULL,
+			role TEXT NOT NULL,
+			body TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT '',
+			UNIQUE(discussion_id, seq)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_discussion_messages_discussion ON discussion_messages(discussion_id, seq);`,
+		`CREATE TABLE IF NOT EXISTS doc_consensus (
+			doc_path TEXT PRIMARY KEY,
+			content TEXT NOT NULL,
+			source TEXT NOT NULL DEFAULT '',
+			version INTEGER NOT NULL DEFAULT 1,
+			updated_at TEXT NOT NULL
+		);`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {
@@ -170,6 +202,12 @@ func migrateSchema(db *sql.DB) error {
 		return err
 	}
 	if err := ensureColumn(db, "comment_messages", "section_end", `ALTER TABLE comment_messages ADD COLUMN section_end INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "comments", "discussion_ids", `ALTER TABLE comments ADD COLUMN discussion_ids TEXT NOT NULL DEFAULT '[]'`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "doc_discussions", "agent", `ALTER TABLE doc_discussions ADD COLUMN agent TEXT NOT NULL DEFAULT 'pi'`); err != nil {
 		return err
 	}
 	for _, statement := range []string{

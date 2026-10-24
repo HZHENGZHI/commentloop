@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import type { Comment, CommentMessage } from "../types";
+import type { Comment, CommentMessage, Discussion } from "../types";
 import { LinkCommentsModal } from "./LinkCommentsModal";
+import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import {
   IconCheck,
   IconChevronDown,
@@ -19,7 +20,8 @@ interface CommentsPanelProps {
   onJump: (comment: Comment) => void;
   onResolve: (comment: Comment, resolved: boolean) => void;
   onDelete: (comment: Comment) => void;
-  onReply: (comment: Comment, body: string) => Promise<void>;
+  onReply: (comment: Comment, body: string, discussionIds: string[]) => Promise<void>;
+  discussions?: Discussion[];
   onGroup: (comment: Comment, memberIds: string[]) => Promise<void>;
   onRollback: (
     comment: Comment,
@@ -49,6 +51,7 @@ export function CommentsPanel({
   onResolve,
   onDelete,
   onReply,
+  discussions = [],
   onGroup,
   onRollback,
   onTrigger,
@@ -59,6 +62,7 @@ export function CommentsPanel({
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
+  const [replyDiscussions, setReplyDiscussions] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const unresolved = comments.filter((comment) => !comment.resolved).length;
   const allExpanded =
@@ -79,6 +83,7 @@ export function CommentsPanel({
       setReplyTo(null);
       setReplyText("");
       setReplyError(null);
+      setReplyDiscussions([]);
     }
   };
 
@@ -88,6 +93,7 @@ export function CommentsPanel({
       setReplyTo(null);
       setReplyText("");
       setReplyError(null);
+      setReplyDiscussions([]);
       return;
     }
     setExpanded(new Set(comments.map((comment) => comment.id)));
@@ -122,9 +128,10 @@ export function CommentsPanel({
     setReplyBusy(true);
     setReplyError(null);
     try {
-      await onReply(comment, replyText.trim());
+      await onReply(comment, replyText.trim(), replyDiscussions);
       setReplyTo(null);
       setReplyText("");
+      setReplyDiscussions([]);
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "回复失败");
     } finally {
@@ -427,6 +434,16 @@ export function CommentsPanel({
                 </button>
               ) : null}
 
+              {comment.discussionIds?.length ? (
+                <div className="comment-discussion-refs">
+                  已参考讨论：
+                  {comment.discussionIds
+                    .map((id) => discussions.find((item) => item.id === id)?.title)
+                    .filter(Boolean)
+                    .join("、") || `${comment.discussionIds.length} 个会话`}
+                </div>
+              ) : null}
+
               <div
                 className={`comment-status ${
                   comment.resolved
@@ -470,6 +487,11 @@ export function CommentsPanel({
                     rows={3}
                     autoFocus
                   />
+                  <DiscussionRefPicker
+                    discussions={discussions}
+                    selected={replyDiscussions}
+                    onChange={setReplyDiscussions}
+                  />
                   {replyError ? (
                     <p className="comment-reply-error">{replyError}</p>
                   ) : null}
@@ -481,6 +503,7 @@ export function CommentsPanel({
                         setReplyTo(null);
                         setReplyText("");
                         setReplyError(null);
+                        setReplyDiscussions([]);
                       }}
                     >
                       取消
@@ -503,6 +526,7 @@ export function CommentsPanel({
                     setReplyTo(comment.id);
                     setReplyText("");
                     setReplyError(null);
+                    setReplyDiscussions([]);
                   }}
                 >
                   <IconMessage size={12} />

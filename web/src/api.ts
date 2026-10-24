@@ -11,7 +11,12 @@ import type {
   CodeRepoListResponse,
   CodeFileList,
   CodeReadResult,
+  Consensus,
+  DetectedAgent,
+  DiscussionListResponse,
+  DiscussionSession,
   DocCodeRepoResponse,
+  ImportDiscussionResponse,
   LSPLocation,
   RemoteSessionRequest,
   RemoteSessionResponse,
@@ -175,6 +180,46 @@ export function checkCommand(command: string): Promise<CheckCommandResult> {
   });
 }
 
+export function fetchDocDiscussions(
+  path: string,
+): Promise<DiscussionListResponse> {
+  return request<DiscussionListResponse>(
+    `/api/doc/discussions?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export function fetchAvailableDiscussionSessions(
+  path: string,
+): Promise<{ sessions: DiscussionSession[]; agents: DetectedAgent[] }> {
+  return request<{ sessions: DiscussionSession[]; agents: DetectedAgent[] }>(
+    `/api/doc/discussions/available?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export function importDiscussionSession(
+  path: string,
+  sessionPath: string,
+): Promise<ImportDiscussionResponse> {
+  return request<ImportDiscussionResponse>("/api/doc/discussions", {
+    method: "POST",
+    body: JSON.stringify({ path, sessionPath }),
+  });
+}
+
+export function deleteDiscussion(path: string, id: string): Promise<void> {
+  return request<void>(
+    `/api/doc/discussions?path=${encodeURIComponent(path)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function refreshConsensus(path: string): Promise<Consensus> {
+  return request<Consensus>("/api/doc/consensus/refresh", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
+}
+
 export function fetchCodeRepos(): Promise<CodeRepoListResponse> {
   return request<CodeRepoListResponse>("/api/code/repos");
 }
@@ -292,10 +337,11 @@ export function createComment(
   path: string,
   quote: string,
   body: string,
+  discussionIds: string[] = [],
 ): Promise<Comment> {
   return request<Comment>("/api/comments", {
     method: "POST",
-    body: JSON.stringify({ path, quote, body }),
+    body: JSON.stringify({ path, quote, body, discussionIds }),
   });
 }
 
@@ -307,6 +353,7 @@ export function replyComment(
     before?: string;
     after?: string;
     author?: "user" | "agent";
+    discussionIds?: string[];
   },
 ): Promise<Comment> {
   return request<Comment>("/api/comments/reply", {
@@ -318,6 +365,7 @@ export function replyComment(
       before: options?.before ?? "",
       after: options?.after ?? "",
       author: options?.author ?? "agent",
+      discussionIds: options?.discussionIds ?? [],
     }),
   });
 }

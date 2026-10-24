@@ -148,6 +148,9 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		return
 	}
 	r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))
+	if r.srv.consensus != nil {
+		r.srv.consensus.schedule(job.Path)
+	}
 }
 
 func (r *sessionAgentWorker) ensureProcess(signature, command string, args []string) (*piRPC, error) {
@@ -593,6 +596,17 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		}
 	}
 	repos, _ := s.codeRepos.linked(path)
+	discussionIDs := append([]string{}, comment.DiscussionIDs...)
+	if comment.GroupID != "" {
+		for _, item := range s.comments.list(path, "") {
+			if item.GroupID == comment.GroupID {
+				discussionIDs = append(discussionIDs, item.DiscussionIDs...)
+			}
+		}
+	}
+	discussionIDs = normalizeDiscussionIDs(discussionIDs)
+	consensus, hasConsensus := s.discussions.consensus(path)
+	excerpts := s.discussions.excerpts(path, discussionIDs, comment.Quote, "")
 	var b strings.Builder
 	b.WriteString("You are the background Code Agent for mdlive. The user just submitted or updated a review comment. Act on it now via the mdlive MCP server.\n\n")
 	b.WriteString("Document: " + path + "\n")
@@ -606,6 +620,16 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		body := truncatePrompt(message.Body, 2000)
 		b.WriteString("- " + message.Author + ": " + body + "\n")
 	}
+	if hasConsensus && strings.TrimSpace(consensus.Content) != "" {
+		b.WriteString("\nDocument consensus (auto-maintained from prior discussions and edits):\n")
+		b.WriteString(truncatePrompt(consensus.Content, 8000))
+		b.WriteString("\n")
+	}
+	if excerpts != "" {
+		b.WriteString("\nDiscussion excerpts explicitly selected by the user for this comment:\n")
+		b.WriteString(excerpts)
+		b.WriteString("\n")
+	}
 	if len(repos) > 0 {
 		b.WriteString("\nLinked code repositories:\n")
 		for _, repo := range repos {
@@ -616,7 +640,7 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	b.WriteString("1. Use mdlive MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
 	b.WriteString("2. Read the document and the full comment thread with read_file/list_comments.\n")
 	b.WriteString("3. If code repositories are linked, inspect relevant code with list_code_files/search_code/read_code and consider Git state. Do not modify code.\n")
-	b.WriteString("4. Make a focused document edit that addresses the latest user feedback and preserves unrelated content.\n")
+	b.WriteString("4. Make a focused document edit that addresses the latest user feedback and preserves unrelated content. Use the document consensus and selected discussion excerpts to avoid drifting from earlier decisions. If they conflict with the latest user comment, the latest user comment wins; if the conflict is material, explain it instead of guessing.\n")
 	b.WriteString("5. Reply through write_file with comment_ids containing ALL related group IDs, plus a short comment. Do NOT resolve the comment; only the user can close it.\n")
 	b.WriteString("6. If you cannot proceed, reply through reply_comment explaining the blocker. Do not ask the user interactively.\n")
 	return b.String(), nil

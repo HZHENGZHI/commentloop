@@ -19,6 +19,7 @@ import {
   setActiveAgentSession,
   fetchDoc,
   fetchDocCodeRepos,
+  fetchDocDiscussions,
   fetchTree,
   removeRoot,
   renderPreview,
@@ -36,6 +37,7 @@ import { CommentModal } from "./components/CommentModal";
 import { CodeRepoModal } from "./components/CodeRepoModal";
 import { CodeBrowserModal } from "./components/CodeBrowserModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { DiscussionModal } from "./components/DiscussionModal";
 import { AgentSessionPicker } from "./components/AgentSessionPicker";
 import { Sidebar } from "./components/Sidebar";
 import { NewDocModal } from "./components/NewDocModal";
@@ -67,6 +69,7 @@ import type {
   CommentMessage,
   CodeRepo,
   ConfigResponse,
+  Discussion,
   DocStats,
   RootInfo,
   SaveStatus,
@@ -164,6 +167,9 @@ export default function App() {
   const [codeRepoModalOpen, setCodeRepoModalOpen] = useState(false);
   const [codeBrowserOpen, setCodeBrowserOpen] = useState(false);
   const [codeRepoNonce, setCodeRepoNonce] = useState(0);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
+  const [discussionNonce, setDiscussionNonce] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSession[]>([]);
   const [activeAgentSessionId, setActiveAgentSessionId] = useState("");
@@ -493,11 +499,11 @@ export default function App() {
   );
 
   const handleCreateComment = useCallback(
-    async (body: string) => {
+    async (body: string, discussionIds: string[] = []) => {
       const path = currentPathRef.current;
       const quote = commentQuote;
       if (!path || !quote) throw new Error("当前没有打开的文档");
-      await createComment(path, quote, body);
+      await createComment(path, quote, body, discussionIds);
       setCommentQuote(null);
       setCommentsOpen(true);
       setCommentsNonce((value) => value + 1);
@@ -521,10 +527,13 @@ export default function App() {
   );
 
   const handleReplyComment = useCallback(
-    async (comment: Comment, body: string) => {
+    async (comment: Comment, body: string, discussionIds: string[] = []) => {
       const path = currentPathRef.current;
       if (!path) throw new Error("当前没有打开的文档");
-      await replyComment(path, comment.id, body, { author: "user" });
+      await replyComment(path, comment.id, body, {
+        author: "user",
+        discussionIds,
+      });
       setCommentsNonce((value) => value + 1);
       toast("已回复，等待 Code Agent 继续修改", "success");
     },
@@ -1000,6 +1009,11 @@ export default function App() {
           setCommentsNonce((value) => value + 1);
         }
         break;
+      case "consensus":
+        if (message.path === currentPathRef.current) {
+          setDiscussionNonce((value) => value + 1);
+        }
+        break;
       case "agent":
         if (!message.path || message.path === currentPathRef.current) {
           const status =
@@ -1129,6 +1143,7 @@ export default function App() {
   useEffect(() => {
     setCodeRepoModalOpen(false);
     setCodeBrowserOpen(false);
+    setDiscussionModalOpen(false);
     setAgentActivity(null);
   }, [currentPath]);
 
@@ -1162,6 +1177,26 @@ export default function App() {
       alive = false;
     };
   }, [currentPath, codeRepoNonce]);
+
+  useEffect(() => {
+    if (!currentPath) {
+      setDiscussions([]);
+      return;
+    }
+    let alive = true;
+    fetchDocDiscussions(currentPath)
+      .then((result) => {
+        if (alive && currentPathRef.current === currentPath) {
+          setDiscussions(result.discussions ?? []);
+        }
+      })
+      .catch(() => {
+        // Discussion context is optional metadata.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [currentPath, discussionNonce]);
 
   useEffect(() => {
     if (!currentPath) {
@@ -1535,6 +1570,22 @@ export default function App() {
                         ) : null}
                       </button>
                     ) : null}
+                    {currentPath ? (
+                      <button
+                        type="button"
+                        className="comments-toggle discussion-toggle"
+                        onClick={() => setDiscussionModalOpen(true)}
+                        title="导入讨论并维护文档共识"
+                      >
+                        <IconMessage size={13} />
+                        讨论
+                        {discussions.length ? (
+                          <span className="comments-badge">
+                            {discussions.length}
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={`comments-toggle${commentsOpen ? " active" : ""}`}
@@ -1576,6 +1627,7 @@ export default function App() {
                     }
                     onDelete={(comment) => void handleDeleteComment(comment)}
                     agentName={config?.agentName || "Code Agent"}
+                    discussions={discussions}
                     onReply={handleReplyComment}
                     onGroup={handleGroupComments}
                     onRollback={(comment, message, round, side) =>
@@ -1672,6 +1724,7 @@ export default function App() {
         <CommentModal
           quote={commentQuote}
           agentName={config?.agentName || "Code Agent"}
+          discussions={discussions}
           onClose={() => setCommentQuote(null)}
           onSubmit={handleCreateComment}
         />
@@ -1681,6 +1734,14 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void handleSettingsSaved()}
+        />
+      ) : null}
+
+      {discussionModalOpen && currentPath ? (
+        <DiscussionModal
+          docPath={currentPath}
+          onClose={() => setDiscussionModalOpen(false)}
+          onChanged={() => setDiscussionNonce((value) => value + 1)}
         />
       ) : null}
 

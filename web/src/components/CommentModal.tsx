@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Discussion } from "../types";
+import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import { IconMessage, IconX } from "./Icons";
 
 interface CommentModalProps {
   quote: string;
   agentName?: string;
+  discussions?: Discussion[];
   onClose: () => void;
-  onSubmit: (body: string) => Promise<void>;
+  onSubmit: (body: string, discussionIds: string[]) => Promise<void>;
 }
 
 export function CommentModal({
   quote,
   agentName = "Code Agent",
+  discussions = [],
   onClose,
   onSubmit,
 }: CommentModalProps) {
   const [body, setBody] = useState("");
+  const [discussionIds, setDiscussionIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +42,7 @@ export function CommentModal({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(body.trim());
+      await onSubmit(body.trim(), discussionIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : "添加评论失败");
       setBusy(false);
@@ -85,6 +90,11 @@ export function CommentModal({
             }}
             placeholder={`写下你的意见，${agentName} 可以通过 MCP 读取并回复…`}
             rows={5}
+          />
+          <DiscussionRefPicker
+            discussions={discussions}
+            selected={discussionIds}
+            onChange={setDiscussionIds}
           />
           {error ? <p className="modal-error">{error}</p> : null}
           <div className="modal-actions">

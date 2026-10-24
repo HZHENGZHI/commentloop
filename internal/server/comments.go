@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -37,21 +38,22 @@ type docVersion struct {
 const maxDocVersionsPerPath = 30
 
 type Comment struct {
-	ID        string           `json:"id"`
-	Path      string           `json:"path"`
-	Quote     string           `json:"quote"`
-	Anchor    string           `json:"anchor,omitempty"`
-	GroupID   string           `json:"groupId,omitempty"`
-	Prefix    string           `json:"prefix,omitempty"`
-	Suffix    string           `json:"suffix,omitempty"`
-	Line      int              `json:"line"`
-	Start     int              `json:"start"`
-	End       int              `json:"end"`
-	Resolved  bool             `json:"resolved"`
-	Orphaned  bool             `json:"orphaned"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
-	Messages  []CommentMessage `json:"messages"`
+	ID            string           `json:"id"`
+	Path          string           `json:"path"`
+	Quote         string           `json:"quote"`
+	Anchor        string           `json:"anchor,omitempty"`
+	GroupID       string           `json:"groupId,omitempty"`
+	Prefix        string           `json:"prefix,omitempty"`
+	Suffix        string           `json:"suffix,omitempty"`
+	Line          int              `json:"line"`
+	Start         int              `json:"start"`
+	End           int              `json:"end"`
+	Resolved      bool             `json:"resolved"`
+	Orphaned      bool             `json:"orphaned"`
+	CreatedAt     time.Time        `json:"createdAt"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+	DiscussionIDs []string         `json:"discussionIds,omitempty"`
+	Messages      []CommentMessage `json:"messages"`
 }
 
 var (
@@ -84,7 +86,26 @@ func parseTime(value string) time.Time {
 	return parsed
 }
 
-func (s *commentStore) create(path, quote, prefix, suffix, body, content string) (*Comment, error) {
+func discussionIDsJSON(ids []string) string {
+	data, _ := json.Marshal(normalizeDiscussionIDs(ids))
+	return string(data)
+}
+
+func normalizeDiscussionIDs(ids []string) []string {
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+func (s *commentStore) create(path, quote, prefix, suffix, body, content string, discussionIDs []string) (*Comment, error) {
 	quote = strings.TrimSpace(quote)
 	body = strings.TrimSpace(body)
 	if quote == "" {
@@ -110,11 +131,12 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string)
 		return nil, err
 	}
 	defer tx.Rollback()
+	discussionJSON := discussionIDsJSON(discussionIDs)
 	if _, err := tx.Exec(`INSERT INTO comments
-		(id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,resolved,orphaned,created_at,updated_at)
-		VALUES (?,?,?,?,'',?,?,?,?,?,0,?,?,?)`,
+		(id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,resolved,orphaned,created_at,updated_at,discussion_ids)
+		VALUES (?,?,?,?,'',?,?,?,?,?,0,?,?,?,?)`,
 		comment.ID, path, quote, quote, prefix, suffix, line, start, end, boolInt(orphaned),
-		formatTime(now), formatTime(now)); err != nil {
+		formatTime(now), formatTime(now), discussionJSON); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec(`INSERT INTO comment_messages
@@ -127,6 +149,7 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string)
 		return nil, err
 	}
 	comment.Messages = []CommentMessage{message}
+	comment.DiscussionIDs = normalizeDiscussionIDs(discussionIDs)
 	return &comment, nil
 }
 
@@ -213,7 +236,7 @@ func (s *commentStore) get(path, id string) (Comment, bool) {
 
 func (s *commentStore) getByID(id string) (Comment, bool) {
 	row := s.db.QueryRow(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at FROM comments WHERE id=?`, id)
+		resolved,orphaned,created_at,updated_at,discussion_ids FROM comments WHERE id=?`, id)
 	comment, err := scanComment(row)
 	if err != nil {
 		return Comment{}, false
@@ -228,7 +251,7 @@ func (s *commentStore) getByID(id string) (Comment, bool) {
 
 func (s *commentStore) query(path string) ([]Comment, error) {
 	rows, err := s.db.Query(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at FROM comments WHERE path=? ORDER BY created_at,id`, path)
+		resolved,orphaned,created_at,updated_at,discussion_ids FROM comments WHERE path=? ORDER BY created_at,id`, path)
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +286,12 @@ type commentScanner interface {
 func scanComment(scanner commentScanner) (Comment, error) {
 	var comment Comment
 	var resolved, orphaned int
-	var createdAt, updatedAt string
+	var createdAt, updatedAt, discussionIDs string
 	err := scanner.Scan(
 		&comment.ID, &comment.Path, &comment.Quote, &comment.Anchor, &comment.GroupID,
 		&comment.Prefix, &comment.Suffix,
 		&comment.Line, &comment.Start, &comment.End, &resolved, &orphaned,
-		&createdAt, &updatedAt,
+		&createdAt, &updatedAt, &discussionIDs,
 	)
 	if err != nil {
 		return Comment{}, err
@@ -277,6 +300,9 @@ func scanComment(scanner commentScanner) (Comment, error) {
 	comment.Orphaned = orphaned != 0
 	comment.CreatedAt = parseTime(createdAt)
 	comment.UpdatedAt = parseTime(updatedAt)
+	if discussionIDs != "" && discussionIDs != "null" {
+		_ = json.Unmarshal([]byte(discussionIDs), &comment.DiscussionIDs)
+	}
 	return comment, nil
 }
 
@@ -301,7 +327,7 @@ func (s *commentStore) messages(commentID string) ([]CommentMessage, error) {
 	return out, rows.Err()
 }
 
-func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapshot, snapshot string, resolve bool) (*Comment, error) {
+func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapshot, snapshot string, resolve bool, discussionIDs []string) (*Comment, error) {
 	if author != "user" {
 		// Resolving a review is a user decision. An agent reply may add another
 		// revision, but it must never close the thread.

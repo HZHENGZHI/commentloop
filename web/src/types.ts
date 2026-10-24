@@ -124,6 +124,7 @@ export type WsServerMessage =
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
+  | { type: "consensus"; path: string }
   | {
       type: "agent";
       path?: string;
@@ -272,5 +273,62 @@ export interface Comment {
   orphaned: boolean;
   createdAt: string;
   updatedAt: string;
+  discussionIds?: string[];
   messages: CommentMessage[];
+}
+
+export interface Discussion {
+  id: string;
+  title: string;
+  sourcePath: string;
+  sourceKind: "mdlive" | "pi" | "claude" | "codex" | string;
+  agent: string;
+  agentName: string;
+  cwd?: string;
+  sessionId?: string;
+  messageCount: number;
+  createdAt: string;
+  importedAt: string;
+}
+
+export interface Consensus {
+  content: string;
+  source?: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface DiscussionListResponse {
+  path: string;
+  consensus?: Consensus;
+  discussions: Discussion[];
+}
+
+export interface DiscussionSession {
+  path: string;
+  title: string;
+  sourceKind: "mdlive" | "pi" | "claude" | "codex" | string;
+  agent: string;
+  agentName: string;
+  cwd?: string;
+  sessionId?: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+  imported?: boolean;
+}
+
+export interface DetectedAgent {
+  id: string;
+  name: string;
+  command: string;
+  installed: boolean;
+  supported: boolean;
+  count: number;
+}
+
+export interface ImportDiscussionResponse {
+  discussion: Discussion;
+  consensus?: Consensus;
+  consensusError?: string;
 }

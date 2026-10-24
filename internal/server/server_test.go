@@ -692,6 +692,112 @@ func TestLocalCodeRepoBranchSwitch(t *testing.T) {
 	}
 }
 
+func TestDiscussionImportAndCommentContext(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n\n使用字段 X。\n")
+	stateDir := t.TempDir()
+	sessionDir := filepath.Join(stateDir, "pi-sessions")
+	mustMkdir(t, sessionDir)
+	sessionPath := filepath.Join(sessionDir, "session.jsonl")
+	mustWrite(t, sessionPath, strings.Join([]string{
+		`{"type":"session","version":3,"id":"s1","timestamp":"2026-10-24T10:00:00Z","cwd":"/tmp/project"}`,
+		`{"type":"message","timestamp":1761300001000,"message":{"role":"user","content":[{"type":"text","text":"我们确定使用字段 X，不要再改成 Y。"}]}}`,
+		`{"type":"message","timestamp":1761300002000,"message":{"role":"assistant","content":[{"type":"text","text":"好的，字段 X 是最终方案。"}]}}`,
+	}, "\n")+"\n")
+	script := filepath.Join(t.TempDir(), "fake-pi")
+	mustWrite(t, script, "#!/bin/sh\nprintf '## 已确认决策\n- 使用字段 X\n'\n")
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	app, err := New(Options{
+		Root: root, StateDir: stateDir, WebFS: mapFS(), Version: "test", AllowRemote: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	settings := defaultAppSettings()
+	settings.Agent.Command = script
+	if err := app.settingsStore.save(settings); err != nil {
+		t.Fatal(err)
+	}
+	app.settings.set(settings)
+
+	path := canonical(app, "doc.md")
+	rec := doJSON(t, app, http.MethodGet, "/api/doc/discussions/available?path="+url.QueryEscape(path), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("available status=%d body=%s", rec.Code, rec.Body)
+	}
+	var available availableSessionsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &available); err != nil {
+		t.Fatal(err)
+	}
+	if len(available.Sessions) == 0 || available.Sessions[0].Title == "" {
+		t.Fatalf("available sessions = %+v", available.Sessions)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/doc/discussions", importDiscussionRequest{
+		Path: path, SessionPath: sessionPath,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import status=%d body=%s", rec.Code, rec.Body)
+	}
+	var imported importDiscussionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &imported); err != nil {
+		t.Fatal(err)
+	}
+	if imported.Consensus == nil || !strings.Contains(imported.Consensus.Content, "字段 X") {
+		t.Fatalf("consensus = %+v error=%s", imported.Consensus, imported.ConsensusError)
+	}
+	if imported.Discussion.MessageCount != 2 {
+		t.Fatalf("discussion = %+v", imported.Discussion)
+	}
+	if imported.Discussion.SourceKind != "mdlive" {
+		t.Fatalf("source kind = %q", imported.Discussion.SourceKind)
+	}
+	rec = doJSON(t, app, http.MethodGet, "/api/doc/discussions/available?path="+url.QueryEscape(path), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("available after import status=%d body=%s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &available); err != nil {
+		t.Fatal(err)
+	}
+	if len(available.Sessions) == 0 || !available.Sessions[0].Imported {
+		t.Fatalf("imported session not marked: %+v", available.Sessions)
+	}
+
+	commentRec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: path, Quote: "使用字段 X", Body: "按讨论继续改", DiscussionIDs: []string{imported.Discussion.ID},
+	})
+	if commentRec.Code != http.StatusOK {
+		t.Fatalf("comment status=%d body=%s", commentRec.Code, commentRec.Body)
+	}
+	comment := decode[Comment](t, commentRec)
+	if len(comment.DiscussionIDs) != 1 {
+		t.Fatalf("comment discussionIds = %+v", comment.DiscussionIDs)
+	}
+	prompt, err := app.buildReviewAgentPrompt(path, comment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt, "使用字段 X") || !strings.Contains(prompt, "Document consensus") {
+		t.Fatalf("prompt missing consensus/context:\n%s", prompt)
+	}
+
+	app.consensus.schedule(path)
+	deadline := time.Now().Add(4 * time.Second)
+	for {
+		consensus, ok := app.discussions.consensus(path)
+		if ok && consensus.Version > imported.Consensus.Version {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("consensus was not refreshed automatically")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestAgentSessions(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "sessions.md"), "# Sessions\n")

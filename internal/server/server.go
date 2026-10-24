@@ -72,6 +72,8 @@ type Server struct {
 	db             *sql.DB
 	persistedRoots []stateRoot
 	comments       *commentStore
+	discussions    *discussionStore
+	consensus      *consensusScheduler
 	codeRepos      *codeRepoStore
 	settingsStore  *settingsStore
 	settings       *settingsSnapshot
@@ -117,6 +119,7 @@ func New(opts Options) (*Server, error) {
 	s := &Server{
 		db:                  db,
 		comments:            newCommentStore(db),
+		discussions:         newDiscussionStore(db),
 		codeRepos:           newCodeRepoStore(db, opts.StateDir),
 		agentSessions:       newAgentSessionStore(db),
 		stateDir:            opts.StateDir,
@@ -156,6 +159,7 @@ func New(opts Options) (*Server, error) {
 	}
 	s.mux = s.routes()
 	s.agentRunner = newAgentRunner(s)
+	s.consensus = newConsensusScheduler(s)
 	return s, nil
 }
 
@@ -179,6 +183,9 @@ func (s *Server) Close() error {
 		}
 		if s.agentRunner != nil {
 			s.agentRunner.Close()
+		}
+		if s.consensus != nil {
+			s.consensus.close()
 		}
 		if s.db != nil {
 			_ = s.db.Close()
@@ -236,6 +243,11 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/settings/defaults", s.handleGetDefaultSettings)
 	mux.HandleFunc("PUT /api/settings", s.requireSameOrigin(s.handleSaveSettings))
 	mux.HandleFunc("POST /api/settings/check-command", s.requireSameOrigin(s.handleCheckCommand))
+	mux.HandleFunc("GET /api/doc/discussions", s.handleDocDiscussions)
+	mux.HandleFunc("GET /api/doc/discussions/available", s.handleAvailableDiscussionSessions)
+	mux.HandleFunc("POST /api/doc/discussions", s.requireSameOrigin(s.handleImportDiscussion))
+	mux.HandleFunc("DELETE /api/doc/discussions", s.requireSameOrigin(s.handleDeleteDiscussion))
+	mux.HandleFunc("POST /api/doc/consensus/refresh", s.requireSameOrigin(s.handleRefreshConsensus))
 	mux.HandleFunc("GET /api/doc/agent-sessions", s.handleGetAgentSessions)
 	mux.HandleFunc("POST /api/doc/agent-sessions", s.requireSameOrigin(s.handleCreateAgentSession))
 	mux.HandleFunc("POST /api/doc/agent-sessions/active", s.requireSameOrigin(s.handleSetActiveAgentSession))

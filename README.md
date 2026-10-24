@@ -16,6 +16,7 @@
 - **设置页**：顶部齿轮打开设置，可配置各语言的 LSP 服务器命令 / 参数 / 启用状态，以及后台 Code Agent 类型、显示名称和启动命令。
 - **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，mdlive 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
 - **每文档独立 Agent 会话**：每篇文档有自己的 pi 会话，可以新建多个会话；顶部文档标题下方可切换当前会话，切换后新的评论任务使用所选会话，历史上下文互相隔离。
+- **讨论上下文与文档共识**：自动检测本机 Pi / Claude Code / Codex / Cursor 的会话，导入当前文档并提炼成结构化“文档共识”；之后评论修改自动参考共识，也可以在评论里手动勾选具体讨论片段；每轮 Agent 修改完成后会自动更新共识，减少与早期讨论的偏差。
 - **审阅模式**：`--preview` 隐藏编辑器，前台禁止手动保存 / 删除，只保留文件树、预览、评论、关联和局部回滚；后台 Agent 通过 MCP / CLI 继续写入。适合“前台看和审阅、后台 Agent 改稿”的流程。
 - **前后端热重载**：`make debug` 在 React / CSS 改动后自动刷新页面；Go 代码改动由仓库内置的 supervisor 重新编译并热重启后端，浏览器 WebSocket 自动重连。调试模式默认是审阅模式（前台只读，Agent 可写）。
 - **文件树与搜索**：跨目录搜索、新建、导入、删除；每个目录独立递归监听。
@@ -157,6 +158,26 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 - 远程服务器启动时不可达会跳过该目录；网络恢复后重新添加或重启。
 - 远程根目录过大（例如整个 `/root`）时首次扫描可能较慢；建议添加具体的笔记目录。
 - 远程连接使用 Go 原生 SSH/SFTP 库，无需在远程安装 mdlive。
+
+## 讨论上下文与文档共识
+
+在预览右上角点击 **讨论**：
+
+1. 点 **导入会话**。mdlive 会检查本机已安装 / 有会话数据的 Agent，并按 Agent 分栏显示，不再靠手动筛选标题或目录：
+   - Pi：mdlive 状态目录和 `~/.pi/agent/sessions`
+   - Claude Code：`~/.claude/projects`
+   - Codex：`~/.codex/sessions` / `archived_sessions`
+   - Cursor：`~/.cursor/projects/*/agent-transcripts`
+   - 其他已安装但暂未实现读取的 Agent 会显示“暂未支持”
+2. 导入后会调用已配置的 pi Agent，从会话中提炼结构化共识：目标、已确认决策、约束与术语、已否决方案、待确认事项、最近修改。
+3. 共识会自动带入之后的评论修改 Prompt；不需要每次手动粘贴长对话。
+4. 每轮 Agent 成功完成评论修改后，mdlive 会在后台重新提炼共识（同一文档串行合并），并实时刷新页面。
+5. 新增评论或回复时，还可以展开 **参考讨论**，手动勾选特定导入会话；选中的会话会附带相关片段给 Agent。
+6. 如果当前评论和旧共识冲突，Prompt 明确要求以最新用户反馈为准；无法判断时由 Agent 说明冲突。
+
+共识会包含来源和版本号，保存在本机 SQLite；导入会话只保存对话文本（用户 / Agent 文本，跳过工具调用和系统提示），不会修改会话文件。
+
+会话读取只针对各 Agent 自己的 JSONL 记录：Pi、Claude Code、Codex（未压缩 rollout）、Cursor agent transcript。Codex 的 `.jsonl.zst` 压缩会话、GUI 数据库型会话和未列出的 Agent 暂不支持；需要先导出为普通 JSONL 或等待后续适配。
 
 ## 行内评论（Review）
 
@@ -522,6 +543,11 @@ mdlive/
 | POST | `/api/code/branch` | 切换本地 Git 或 GitHub 仓库分支 |
 | POST | `/api/lsp/definition` | 跳转定义（repo / path / line / character） |
 | GET / PUT | `/api/settings` | 读取 / 保存 LSP 与 Code Agent 设置 |
+| GET | `/api/doc/discussions?path=` | 文档共识 + 已导入讨论会话 |
+| GET | `/api/doc/discussions/available?path=` | 检测到的 Agent（Pi / Claude / Codex / Cursor）及可导入会话 |
+| POST | `/api/doc/discussions` | 导入会话并提炼共识（path + sessionPath） |
+| DELETE | `/api/doc/discussions?path=&id=` | 移除导入的讨论会话 |
+| POST | `/api/doc/consensus/refresh` | 手动重新提炼文档共识 |
 | GET | `/api/doc/agent-sessions?path=` | 文档的 Agent 会话列表 / 当前会话 |
 | POST | `/api/doc/agent-sessions` | 新建文档 Agent 会话 |
 | POST | `/api/doc/agent-sessions/active` | 切换文档当前 Agent 会话 |

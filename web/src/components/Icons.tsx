@@ -231,3 +231,20 @@ export const IconWifiOff = (p: IconProps) => (
     <path d="M2 2l20 20M8.5 16.43a6 6 0 0 1 7 0M5 12.55a11 11 0 0 1 4.2-2.5M2 8.82a15 15 0 0 1 4.1-2.6M19 12.55a11 11 0 0 0-3.2-2M22 8.82a15 15 0 0 0-5.6-2.9M12 20h.01" />
   </Svg>
 );
+
+export const IconDownload = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 4v11" />
+    <path d="m7 11 5 5 5-5" />
+    <path d="M5 20h14" />
+  </Svg>
+);
+
+export const IconRefresh = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 11a8 8 0 0 0-14.9-4.6L3 9" />
+    <path d="M3 4v5h5" />
+    <path d="M4 13a8 8 0 0 0 14.9 4.6L21 15" />
+    <path d="M21 20v-5h-5" />
+  </Svg>
+);
