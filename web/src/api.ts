@@ -18,6 +18,8 @@ import type {
   DocCodeRepoResponse,
   ImportDiscussionResponse,
   LSPLocation,
+  PromptTemplate,
+  PromptTemplateInput,
   RemoteSessionRequest,
   RemoteSessionResponse,
   ConfigResponse,
@@ -220,6 +222,42 @@ export function refreshConsensus(path: string): Promise<Consensus> {
   });
 }
 
+export function fetchPromptTemplates(): Promise<{ templates: PromptTemplate[] }> {
+  return request<{ templates: PromptTemplate[] }>("/api/prompt-templates");
+}
+
+export function createPromptTemplate(
+  input: PromptTemplateInput,
+): Promise<PromptTemplate> {
+  return request<PromptTemplate>("/api/prompt-templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updatePromptTemplate(
+  input: PromptTemplateInput,
+): Promise<PromptTemplate> {
+  return request<PromptTemplate>("/api/prompt-templates", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deletePromptTemplate(id: string): Promise<void> {
+  return request<void>(
+    `/api/prompt-templates?id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function resetPromptTemplate(id: string): Promise<PromptTemplate> {
+  return request<PromptTemplate>("/api/prompt-templates/reset", {
+    method: "POST",
+    body: JSON.stringify({ id }),
+  });
+}
+
 export function fetchCodeRepos(): Promise<CodeRepoListResponse> {
   return request<CodeRepoListResponse>("/api/code/repos");
 }
@@ -338,10 +376,11 @@ export function createComment(
   quote: string,
   body: string,
   discussionIds: string[] = [],
+  promptTemplateId = "",
 ): Promise<Comment> {
   return request<Comment>("/api/comments", {
     method: "POST",
-    body: JSON.stringify({ path, quote, body, discussionIds }),
+    body: JSON.stringify({ path, quote, body, discussionIds, promptTemplateId }),
   });
 }
 
@@ -354,6 +393,7 @@ export function replyComment(
     after?: string;
     author?: "user" | "agent";
     discussionIds?: string[];
+    promptTemplateId?: string;
   },
 ): Promise<Comment> {
   return request<Comment>("/api/comments/reply", {
@@ -366,6 +406,7 @@ export function replyComment(
       after: options?.after ?? "",
       author: options?.author ?? "agent",
       discussionIds: options?.discussionIds ?? [],
+      promptTemplateId: options?.promptTemplateId ?? "",
     }),
   });
 }

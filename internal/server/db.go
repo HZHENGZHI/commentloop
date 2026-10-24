@@ -166,6 +166,16 @@ func migrateSchema(db *sql.DB) error {
 			UNIQUE(discussion_id, seq)
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_discussion_messages_discussion ON discussion_messages(discussion_id, seq);`,
+		`CREATE TABLE IF NOT EXISTS prompt_templates (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			body TEXT NOT NULL,
+			allow_document_edit INTEGER NOT NULL DEFAULT 1,
+			builtin INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS doc_consensus (
 			doc_path TEXT PRIMARY KEY,
 			content TEXT NOT NULL,
@@ -207,6 +217,9 @@ func migrateSchema(db *sql.DB) error {
 		return err
 	}
 	if err := ensureColumn(db, "comments", "discussion_ids", `ALTER TABLE comments ADD COLUMN discussion_ids TEXT NOT NULL DEFAULT '[]'`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "comments", "prompt_template_id", `ALTER TABLE comments ADD COLUMN prompt_template_id TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
 	if err := ensureColumn(db, "doc_discussions", "agent", `ALTER TABLE doc_discussions ADD COLUMN agent TEXT NOT NULL DEFAULT 'pi'`); err != nil {

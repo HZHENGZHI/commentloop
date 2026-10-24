@@ -20,6 +20,7 @@ import {
   fetchDoc,
   fetchDocCodeRepos,
   fetchDocDiscussions,
+  fetchPromptTemplates,
   fetchTree,
   removeRoot,
   renderPreview,
@@ -72,6 +73,7 @@ import type {
   ConsensusActivity,
   Discussion,
   DocStats,
+  PromptTemplate,
   RootInfo,
   SaveStatus,
   Theme,
@@ -171,6 +173,8 @@ export default function App() {
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
   const [discussionNonce, setDiscussionNonce] = useState(0);
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
+  const [promptNonce, setPromptNonce] = useState(0);
   const [consensusActivity, setConsensusActivity] =
     useState<ConsensusActivity | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -502,11 +506,11 @@ export default function App() {
   );
 
   const handleCreateComment = useCallback(
-    async (body: string, discussionIds: string[] = []) => {
+    async (body: string, discussionIds: string[] = [], promptTemplateId = "") => {
       const path = currentPathRef.current;
       const quote = commentQuote;
       if (!path || !quote) throw new Error("当前没有打开的文档");
-      await createComment(path, quote, body, discussionIds);
+      await createComment(path, quote, body, discussionIds, promptTemplateId);
       setCommentQuote(null);
       setCommentsOpen(true);
       setCommentsNonce((value) => value + 1);
@@ -530,12 +534,13 @@ export default function App() {
   );
 
   const handleReplyComment = useCallback(
-    async (comment: Comment, body: string, discussionIds: string[] = []) => {
+    async (comment: Comment, body: string, discussionIds: string[] = [], promptTemplateId = "") => {
       const path = currentPathRef.current;
       if (!path) throw new Error("当前没有打开的文档");
       await replyComment(path, comment.id, body, {
         author: "user",
         discussionIds,
+        promptTemplateId,
       });
       setCommentsNonce((value) => value + 1);
       toast("已回复，等待 Code Agent 继续修改", "success");
@@ -1233,6 +1238,20 @@ export default function App() {
   }, [currentPath, discussionNonce]);
 
   useEffect(() => {
+    let alive = true;
+    fetchPromptTemplates()
+      .then((result) => {
+        if (alive) setPromptTemplates(result.templates ?? []);
+      })
+      .catch(() => {
+        // Prompt templates are optional; built-in defaults live on the server.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [promptNonce]);
+
+  useEffect(() => {
     if (!currentPath) {
       setAgentSessions([]);
       setActiveAgentSessionId("");
@@ -1663,6 +1682,7 @@ export default function App() {
                     onDelete={(comment) => void handleDeleteComment(comment)}
                     agentName={config?.agentName || "Code Agent"}
                     discussions={discussions}
+                    promptTemplates={promptTemplates}
                     onReply={handleReplyComment}
                     onGroup={handleGroupComments}
                     onRollback={(comment, message, round, side) =>
@@ -1760,6 +1780,7 @@ export default function App() {
           quote={commentQuote}
           agentName={config?.agentName || "Code Agent"}
           discussions={discussions}
+          promptTemplates={promptTemplates}
           onClose={() => setCommentQuote(null)}
           onSubmit={handleCreateComment}
         />
@@ -1769,6 +1790,7 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void handleSettingsSaved()}
+          onPromptsChanged={() => setPromptNonce((value) => value + 1)}
         />
       ) : null}
 

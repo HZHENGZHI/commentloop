@@ -696,6 +696,63 @@ func TestLocalCodeRepoBranchSwitch(t *testing.T) {
 	}
 }
 
+func TestPromptTemplatesAndCommentTask(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n\n需要分析需求。\n")
+	app, err := New(Options{Root: root, StateDir: t.TempDir(), WebFS: mapFS(), Version: "test", AllowRemote: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+
+	rec := doJSON(t, app, http.MethodGet, "/api/prompt-templates", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list templates status=%d body=%s", rec.Code, rec.Body)
+	}
+	var list struct {
+		Templates []PromptTemplate `json:"templates"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Templates) < 3 {
+		t.Fatalf("builtin templates = %+v", list.Templates)
+	}
+
+	rec = doJSON(t, app, http.MethodPost, "/api/prompt-templates", promptTemplateRequest{
+		Name: "接口评审", Description: "review API", Body: "重点检查接口兼容性和错误码。", AllowDocumentEdit: false,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create template status=%d body=%s", rec.Code, rec.Body)
+	}
+	custom := decode[PromptTemplate](t, rec)
+	if custom.Builtin || custom.AllowDocumentEdit {
+		t.Fatalf("custom template = %+v", custom)
+	}
+
+	path := canonical(app, "doc.md")
+	commentRec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: path, Quote: "需要分析需求", Body: "请先拆解", PromptTemplateID: custom.ID,
+	})
+	if commentRec.Code != http.StatusOK {
+		t.Fatalf("comment status=%d body=%s", commentRec.Code, commentRec.Body)
+	}
+	comment := decode[Comment](t, commentRec)
+	if comment.PromptTemplateID != custom.ID {
+		t.Fatalf("comment template = %q", comment.PromptTemplateID)
+	}
+	prompt, err := app.buildReviewAgentPrompt(path, comment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt, "接口评审") || !strings.Contains(prompt, "重点检查接口兼容性") {
+		t.Fatalf("custom template missing from prompt:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Do NOT call write_file") {
+		t.Fatalf("analysis mode instruction missing:\n%s", prompt)
+	}
+}
+
 func TestDiscussionImportAndCommentContext(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n\n使用字段 X。\n")

@@ -11,11 +11,13 @@ import type {
   CodeAgentSetting,
   LSPServerSetting,
 } from "../types";
-import { IconGitBranch, IconServer, IconSettings, IconX } from "./Icons";
+import { IconGitBranch, IconMessage, IconServer, IconSettings, IconX } from "./Icons";
+import { PromptTemplatesPanel } from "./PromptTemplatesPanel";
 
 interface SettingsModalProps {
   onClose: () => void;
   onSaved: (settings: AppSettings) => void;
+  onPromptsChanged?: () => void;
 }
 
 const AGENT_PRESETS: {
@@ -70,8 +72,8 @@ function setLSP(
   };
 }
 
-export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
-  const [tab, setTab] = useState<"lsp" | "agent">("lsp");
+export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsModalProps) {
+  const [tab, setTab] = useState<"lsp" | "agent" | "prompts">("lsp");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -216,6 +218,14 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
             <IconGitBranch size={14} />
             后台 Code Agent
           </button>
+          <button
+            type="button"
+            className={tab === "prompts" ? "active" : ""}
+            onClick={() => setTab("prompts")}
+          >
+            <IconMessage size={14} />
+            提示词
+          </button>
         </div>
 
         {loading ? (
@@ -302,6 +312,8 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
               ))}
             </div>
           </div>
+        ) : tab === "prompts" ? (
+          <PromptTemplatesPanel onChanged={() => onPromptsChanged?.()} />
         ) : (
           <div className="settings-body settings-agent">
             <div className="settings-intro">
@@ -408,17 +420,25 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
 
         {error ? <p className="modal-error">{error}</p> : null}
         <div className="modal-actions settings-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={!settings || saving}
-            onClick={() => void save()}
-          >
-            {saving ? "保存中…" : "保存设置"}
-          </button>
+          {tab === "prompts" ? (
+            <button type="button" className="btn ghost" onClick={onClose}>
+              关闭
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn ghost" onClick={onClose}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!settings || saving}
+                onClick={() => void save()}
+              >
+                {saving ? "保存中…" : "保存设置"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

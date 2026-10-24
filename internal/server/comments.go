@@ -38,22 +38,23 @@ type docVersion struct {
 const maxDocVersionsPerPath = 30
 
 type Comment struct {
-	ID            string           `json:"id"`
-	Path          string           `json:"path"`
-	Quote         string           `json:"quote"`
-	Anchor        string           `json:"anchor,omitempty"`
-	GroupID       string           `json:"groupId,omitempty"`
-	Prefix        string           `json:"prefix,omitempty"`
-	Suffix        string           `json:"suffix,omitempty"`
-	Line          int              `json:"line"`
-	Start         int              `json:"start"`
-	End           int              `json:"end"`
-	Resolved      bool             `json:"resolved"`
-	Orphaned      bool             `json:"orphaned"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
-	DiscussionIDs []string         `json:"discussionIds,omitempty"`
-	Messages      []CommentMessage `json:"messages"`
+	ID               string           `json:"id"`
+	Path             string           `json:"path"`
+	Quote            string           `json:"quote"`
+	Anchor           string           `json:"anchor,omitempty"`
+	GroupID          string           `json:"groupId,omitempty"`
+	Prefix           string           `json:"prefix,omitempty"`
+	Suffix           string           `json:"suffix,omitempty"`
+	Line             int              `json:"line"`
+	Start            int              `json:"start"`
+	End              int              `json:"end"`
+	Resolved         bool             `json:"resolved"`
+	Orphaned         bool             `json:"orphaned"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
+	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
+	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
+	Messages         []CommentMessage `json:"messages"`
 }
 
 var (
@@ -105,7 +106,7 @@ func normalizeDiscussionIDs(ids []string) []string {
 	return out
 }
 
-func (s *commentStore) create(path, quote, prefix, suffix, body, content string, discussionIDs []string) (*Comment, error) {
+func (s *commentStore) create(path, quote, prefix, suffix, body, content string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
 	quote = strings.TrimSpace(quote)
 	body = strings.TrimSpace(body)
 	if quote == "" {
@@ -133,10 +134,10 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string,
 	defer tx.Rollback()
 	discussionJSON := discussionIDsJSON(discussionIDs)
 	if _, err := tx.Exec(`INSERT INTO comments
-		(id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,resolved,orphaned,created_at,updated_at,discussion_ids)
-		VALUES (?,?,?,?,'',?,?,?,?,?,0,?,?,?,?)`,
+		(id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id)
+		VALUES (?,?,?,?,'',?,?,?,?,?,0,?,?,?,?,?)`,
 		comment.ID, path, quote, quote, prefix, suffix, line, start, end, boolInt(orphaned),
-		formatTime(now), formatTime(now), discussionJSON); err != nil {
+		formatTime(now), formatTime(now), discussionJSON, promptTemplateID); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec(`INSERT INTO comment_messages
@@ -150,6 +151,7 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string,
 	}
 	comment.Messages = []CommentMessage{message}
 	comment.DiscussionIDs = normalizeDiscussionIDs(discussionIDs)
+	comment.PromptTemplateID = promptTemplateID
 	return &comment, nil
 }
 
@@ -236,7 +238,7 @@ func (s *commentStore) get(path, id string) (Comment, bool) {
 
 func (s *commentStore) getByID(id string) (Comment, bool) {
 	row := s.db.QueryRow(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at,discussion_ids FROM comments WHERE id=?`, id)
+		resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id FROM comments WHERE id=?`, id)
 	comment, err := scanComment(row)
 	if err != nil {
 		return Comment{}, false
@@ -251,7 +253,7 @@ func (s *commentStore) getByID(id string) (Comment, bool) {
 
 func (s *commentStore) query(path string) ([]Comment, error) {
 	rows, err := s.db.Query(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at,discussion_ids FROM comments WHERE path=? ORDER BY created_at,id`, path)
+		resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id FROM comments WHERE path=? ORDER BY created_at,id`, path)
 	if err != nil {
 		return nil, err
 	}
@@ -286,12 +288,12 @@ type commentScanner interface {
 func scanComment(scanner commentScanner) (Comment, error) {
 	var comment Comment
 	var resolved, orphaned int
-	var createdAt, updatedAt, discussionIDs string
+	var createdAt, updatedAt, discussionIDs, promptTemplateID string
 	err := scanner.Scan(
 		&comment.ID, &comment.Path, &comment.Quote, &comment.Anchor, &comment.GroupID,
 		&comment.Prefix, &comment.Suffix,
 		&comment.Line, &comment.Start, &comment.End, &resolved, &orphaned,
-		&createdAt, &updatedAt, &discussionIDs,
+		&createdAt, &updatedAt, &discussionIDs, &promptTemplateID,
 	)
 	if err != nil {
 		return Comment{}, err
@@ -303,6 +305,7 @@ func scanComment(scanner commentScanner) (Comment, error) {
 	if discussionIDs != "" && discussionIDs != "null" {
 		_ = json.Unmarshal([]byte(discussionIDs), &comment.DiscussionIDs)
 	}
+	comment.PromptTemplateID = promptTemplateID
 	return comment, nil
 }
 
@@ -327,7 +330,7 @@ func (s *commentStore) messages(commentID string) ([]CommentMessage, error) {
 	return out, rows.Err()
 }
 
-func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapshot, snapshot string, resolve bool, discussionIDs []string) (*Comment, error) {
+func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapshot, snapshot string, resolve bool, discussionIDs []string, promptTemplateID string) (*Comment, error) {
 	if author != "user" {
 		// Resolving a review is a user decision. An agent reply may add another
 		// revision, but it must never close the thread.

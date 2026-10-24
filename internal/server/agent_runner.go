@@ -607,6 +607,30 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	discussionIDs = normalizeDiscussionIDs(discussionIDs)
 	consensus, hasConsensus := s.discussions.consensus(path)
 	excerpts := s.discussions.excerpts(path, discussionIDs, comment.Quote, "")
+	template, hasTemplate := s.prompts.get(comment.PromptTemplateID)
+	if !hasTemplate {
+		template, _ = s.prompts.get(defaultPromptTemplateID)
+	}
+	templateVars := map[string]string{
+		"doc_path":            path,
+		"comment_quote":       truncatePrompt(comment.Quote, 1500),
+		"comment_body":        truncatePrompt(lastUserMessage(comment), 2000),
+		"comment_thread":      "",
+		"consensus":           consensus.Content,
+		"discussion_excerpts": excerpts,
+		"group_comment_ids":   strings.Join(groupIDs, ", "),
+		"code_repos":          "",
+	}
+	var threadText strings.Builder
+	for _, message := range comment.Messages {
+		threadText.WriteString("- " + message.Author + ": " + truncatePrompt(message.Body, 2000) + "\n")
+	}
+	templateVars["comment_thread"] = strings.TrimSpace(threadText.String())
+	var repoText strings.Builder
+	for _, repo := range repos {
+		fmt.Fprintf(&repoText, "- id=%s name=%s path=%s\n", repo.ID, repo.Name, repo.Path)
+	}
+	templateVars["code_repos"] = strings.TrimSpace(repoText.String())
 	var b strings.Builder
 	b.WriteString("You are the background Code Agent for mdlive. The user just submitted or updated a review comment. Act on it now via the mdlive MCP server.\n\n")
 	b.WriteString("Document: " + path + "\n")
@@ -630,6 +654,11 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		b.WriteString(excerpts)
 		b.WriteString("\n")
 	}
+	if hasTemplate && strings.TrimSpace(template.Body) != "" {
+		b.WriteString("\nTask template: " + template.Name + "\n")
+		b.WriteString(renderPromptTemplate(template.Body, templateVars))
+		b.WriteString("\n")
+	}
 	if len(repos) > 0 {
 		b.WriteString("\nLinked code repositories:\n")
 		for _, repo := range repos {
@@ -640,10 +669,24 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	b.WriteString("1. Use mdlive MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
 	b.WriteString("2. Read the document and the full comment thread with read_file/list_comments.\n")
 	b.WriteString("3. If code repositories are linked, inspect relevant code with list_code_files/search_code/read_code and consider Git state. Do not modify code.\n")
-	b.WriteString("4. Make a focused document edit that addresses the latest user feedback and preserves unrelated content. Use the document consensus and selected discussion excerpts to avoid drifting from earlier decisions. If they conflict with the latest user comment, the latest user comment wins; if the conflict is material, explain it instead of guessing.\n")
-	b.WriteString("5. Reply through write_file with comment_ids containing ALL related group IDs, plus a short comment. Do NOT resolve the comment; only the user can close it.\n")
+	if hasTemplate && !template.AllowDocumentEdit {
+		b.WriteString("4. This is an analysis or diagnosis task. Do NOT call write_file and do NOT modify the document. Read the relevant document, comments, discussions, and code, then reply with your analysis.\n")
+		b.WriteString("5. Reply through reply_comment. Do NOT resolve the comment; only the user can close it.\n")
+	} else {
+		b.WriteString("4. Make a focused document edit that addresses the latest user feedback and preserves unrelated content. Use the document consensus and selected discussion excerpts to avoid drifting from earlier decisions. If they conflict with the latest user comment, the latest user comment wins; if the conflict is material, explain it instead of guessing.\n")
+		b.WriteString("5. Reply through write_file with comment_ids containing ALL related group IDs, plus a short comment. Do NOT resolve the comment; only the user can close it.\n")
+	}
 	b.WriteString("6. If you cannot proceed, reply through reply_comment explaining the blocker. Do not ask the user interactively.\n")
 	return b.String(), nil
+}
+
+func lastUserMessage(comment Comment) string {
+	for i := len(comment.Messages) - 1; i >= 0; i-- {
+		if comment.Messages[i].Author == "user" {
+			return comment.Messages[i].Body
+		}
+	}
+	return ""
 }
 
 func truncatePrompt(value string, limit int) string {

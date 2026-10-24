@@ -264,6 +264,25 @@ export interface CommentMessage {
   createdAt: string;
 }
 
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  description: string;
+  body: string;
+  allowDocumentEdit: boolean;
+  builtin: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptTemplateInput {
+  id?: string;
+  name: string;
+  description: string;
+  body: string;
+  allowDocumentEdit: boolean;
+}
+
 export interface Comment {
   id: string;
   path: string;
@@ -280,6 +299,7 @@ export interface Comment {
   createdAt: string;
   updatedAt: string;
   discussionIds?: string[];
+  promptTemplateId?: string;
   messages: CommentMessage[];
 }
 

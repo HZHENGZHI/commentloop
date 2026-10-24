@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Comment, CommentMessage, Discussion } from "../types";
+import type { Comment, CommentMessage, Discussion, PromptTemplate } from "../types";
 import { LinkCommentsModal } from "./LinkCommentsModal";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import {
@@ -20,8 +20,14 @@ interface CommentsPanelProps {
   onJump: (comment: Comment) => void;
   onResolve: (comment: Comment, resolved: boolean) => void;
   onDelete: (comment: Comment) => void;
-  onReply: (comment: Comment, body: string, discussionIds: string[]) => Promise<void>;
+  onReply: (
+    comment: Comment,
+    body: string,
+    discussionIds: string[],
+    promptTemplateId: string,
+  ) => Promise<void>;
   discussions?: Discussion[];
+  promptTemplates?: PromptTemplate[];
   onGroup: (comment: Comment, memberIds: string[]) => Promise<void>;
   onRollback: (
     comment: Comment,
@@ -52,6 +58,7 @@ export function CommentsPanel({
   onDelete,
   onReply,
   discussions = [],
+  promptTemplates = [],
   onGroup,
   onRollback,
   onTrigger,
@@ -63,6 +70,7 @@ export function CommentsPanel({
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
   const [replyDiscussions, setReplyDiscussions] = useState<string[]>([]);
+  const [replyTemplateId, setReplyTemplateId] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const unresolved = comments.filter((comment) => !comment.resolved).length;
   const allExpanded =
@@ -84,6 +92,7 @@ export function CommentsPanel({
       setReplyText("");
       setReplyError(null);
       setReplyDiscussions([]);
+      setReplyTemplateId("");
     }
   };
 
@@ -94,6 +103,7 @@ export function CommentsPanel({
       setReplyText("");
       setReplyError(null);
       setReplyDiscussions([]);
+      setReplyTemplateId("");
       return;
     }
     setExpanded(new Set(comments.map((comment) => comment.id)));
@@ -128,10 +138,11 @@ export function CommentsPanel({
     setReplyBusy(true);
     setReplyError(null);
     try {
-      await onReply(comment, replyText.trim(), replyDiscussions);
+      await onReply(comment, replyText.trim(), replyDiscussions, replyTemplateId);
       setReplyTo(null);
       setReplyText("");
       setReplyDiscussions([]);
+      setReplyTemplateId("");
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "回复失败");
     } finally {
@@ -434,6 +445,14 @@ export function CommentsPanel({
                 </button>
               ) : null}
 
+              {comment.promptTemplateId ? (
+                <div className="comment-discussion-refs">
+                  任务类型：
+                  {promptTemplates.find((item) => item.id === comment.promptTemplateId)
+                    ?.name || "自定义模板"}
+                </div>
+              ) : null}
+
               {comment.discussionIds?.length ? (
                 <div className="comment-discussion-refs">
                   已参考讨论：
@@ -487,6 +506,22 @@ export function CommentsPanel({
                     rows={3}
                     autoFocus
                   />
+                  {promptTemplates.length > 0 ? (
+                    <label className="comment-template-field">
+                      <span>任务类型</span>
+                      <select
+                        value={replyTemplateId}
+                        onChange={(event) => setReplyTemplateId(event.target.value)}
+                      >
+                        {promptTemplates.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                            {item.allowDocumentEdit ? "" : "（只分析）"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <DiscussionRefPicker
                     discussions={discussions}
                     selected={replyDiscussions}
@@ -504,6 +539,7 @@ export function CommentsPanel({
                         setReplyText("");
                         setReplyError(null);
                         setReplyDiscussions([]);
+                        setReplyTemplateId("");
                       }}
                     >
                       取消
@@ -527,6 +563,12 @@ export function CommentsPanel({
                     setReplyText("");
                     setReplyError(null);
                     setReplyDiscussions([]);
+                    setReplyTemplateId(
+                      comment.promptTemplateId ||
+                        promptTemplates.find((item) => item.allowDocumentEdit)?.id ||
+                        promptTemplates[0]?.id ||
+                        "",
+                    );
                   }}
                 >
                   <IconMessage size={12} />

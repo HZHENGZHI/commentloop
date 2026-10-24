@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { Discussion } from "../types";
+import type { Discussion, PromptTemplate } from "../types";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import { IconMessage, IconX } from "./Icons";
 
@@ -7,22 +7,38 @@ interface CommentModalProps {
   quote: string;
   agentName?: string;
   discussions?: Discussion[];
+  promptTemplates?: PromptTemplate[];
   onClose: () => void;
-  onSubmit: (body: string, discussionIds: string[]) => Promise<void>;
+  onSubmit: (
+    body: string,
+    discussionIds: string[],
+    promptTemplateId: string,
+  ) => Promise<void>;
 }
 
 export function CommentModal({
   quote,
   agentName = "Code Agent",
   discussions = [],
+  promptTemplates = [],
   onClose,
   onSubmit,
 }: CommentModalProps) {
   const [body, setBody] = useState("");
   const [discussionIds, setDiscussionIds] = useState<string[]>([]);
+  const [promptTemplateId, setPromptTemplateId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!promptTemplateId && promptTemplates.length > 0) {
+      const preferred =
+        promptTemplates.find((item) => item.allowDocumentEdit) ??
+        promptTemplates[0];
+      setPromptTemplateId(preferred?.id ?? "");
+    }
+  }, [promptTemplateId, promptTemplates]);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -42,7 +58,7 @@ export function CommentModal({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(body.trim(), discussionIds);
+      await onSubmit(body.trim(), discussionIds, promptTemplateId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "添加评论失败");
       setBusy(false);
@@ -91,6 +107,22 @@ export function CommentModal({
             placeholder={`写下你的意见，${agentName} 可以通过 MCP 读取并回复…`}
             rows={5}
           />
+          {promptTemplates.length > 0 ? (
+            <label className="comment-template-field">
+              <span>任务类型</span>
+              <select
+                value={promptTemplateId}
+                onChange={(event) => setPromptTemplateId(event.target.value)}
+              >
+                {promptTemplates.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {item.allowDocumentEdit ? "" : "（只分析）"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <DiscussionRefPicker
             discussions={discussions}
             selected={discussionIds}

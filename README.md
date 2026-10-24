@@ -17,6 +17,7 @@ mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和�
 - **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，mdlive 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
 - **每文档独立 Agent 会话**：每篇文档有自己的 pi 会话，可以新建多个会话；顶部文档标题下方可切换当前会话，切换后新的评论任务使用所选会话，历史上下文互相隔离。
 - **讨论上下文与文档共识**：自动检测本机 Pi / Claude Code / Codex / Cursor 的会话，导入当前文档并提炼成结构化“文档共识”；之后评论修改自动参考共识，也可以在评论里手动勾选具体讨论片段；每轮 Agent 修改完成后会自动更新共识，减少与早期讨论的偏差。
+- **任务提示词模板**：内置“文档评审修改 / 需求拆解 / Bug 排查”等任务类型，也支持自定义模板和变量；评论可以选择任务类型，让 Agent 按分析、排查或改稿的不同契约工作。
 - **评审模式（默认）**：不渲染编辑器，禁止编辑已有文档；保留文件树、新建 / 导入 / 删除文档、预览、评论、关联和局部回滚。文档内容由后台 Agent 通过 MCP / CLI 写入。`--preview` 作为兼容参数保留。
 - **前后端热重载**：`make debug` 在 React / CSS 改动后自动刷新页面；Go 代码改动由仓库内置的 supervisor 重新编译并热重启后端，浏览器 WebSocket 自动重连。调试模式默认是审阅模式（前台只读，Agent 可写）。
 - **文件树与搜索**：跨目录搜索、切换文档，保留新建 / 导入 / 删除文档入口；每个目录独立递归监听。
@@ -60,6 +61,41 @@ make build
 ```bash
 cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 ```
+
+## 任务提示词模板
+
+评论和 Agent 任务可以使用不同的任务模板，而不是所有评论都套同一条改稿提示词。
+
+内置：
+
+- **文档评审修改**：允许 Agent 修改文档
+- **需求拆解**：只分析需求、约束、验收标准和待确认问题，要求不修改文档
+- **Bug 排查**：先给出复现条件、原因证据和修复方案，要求不修改文档
+
+在 **设置 → 提示词** 中可以查看、编辑、恢复默认或新建自定义模板。模板支持变量：
+
+```text
+{{doc_path}}            文档路径
+{{comment_quote}}       评论选中的原文
+{{comment_body}}        最新用户回复
+{{comment_thread}}      完整评论线程
+{{group_comment_ids}}   关联组评论 ID
+{{consensus}}           文档共识
+{{discussion_excerpts}} 用户选中的讨论片段
+{{code_repos}}          关联代码仓库
+```
+
+创建评论或回复时可以手动选择任务类型。模板只控制任务指令，MCP 工具约束、不能 resolve 评论、路径沙箱等底层规则仍由 mdlive 强制附加。
+
+注意：目前“只分析”模式主要通过提示词约束 Agent 不调用 `write_file`；任务级写权限的服务端强校验还未实现。
+
+API：
+
+- `GET /api/prompt-templates`
+- `POST /api/prompt-templates`
+- `PUT /api/prompt-templates`
+- `DELETE /api/prompt-templates?id=`
+- `POST /api/prompt-templates/reset`
 
 ## Docker 镜像
 
@@ -617,6 +653,9 @@ mdlive/
 | POST | `/api/code/branch` | 切换本地 Git 或 GitHub 仓库分支 |
 | POST | `/api/lsp/definition` | 跳转定义（repo / path / line / character） |
 | GET / PUT | `/api/settings` | 读取 / 保存 LSP 与 Code Agent 设置 |
+| GET | `/api/prompt-templates` | 提示词模板列表 |
+| POST / PUT / DELETE | `/api/prompt-templates` | 新建 / 修改 / 删除提示词模板 |
+| POST | `/api/prompt-templates/reset` | 恢复内置模板默认内容 |
 | GET | `/api/doc/discussions?path=` | 文档共识 + 已导入讨论会话 |
 | GET | `/api/doc/discussions/available?path=` | 检测到的 Agent（Pi / Claude / Codex / Cursor）及可导入会话 |
 | POST | `/api/doc/discussions` | 导入会话并提炼共识（path + sessionPath） |

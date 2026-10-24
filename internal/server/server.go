@@ -5,6 +5,7 @@ package server
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -72,6 +73,7 @@ type Server struct {
 	db             *sql.DB
 	persistedRoots []stateRoot
 	comments       *commentStore
+	prompts        *promptTemplateStore
 	discussions    *discussionStore
 	discussionSync *discussionSyncService
 	consensus      *consensusScheduler
@@ -117,9 +119,15 @@ func New(opts Options) (*Server, error) {
 		loadedSettings = defaultAppSettings()
 	}
 
+	prompts := newPromptTemplateStore(db)
+	if err := prompts.ensureDefaults(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("初始化提示词模板失败: %w", err)
+	}
 	s := &Server{
 		db:                  db,
 		comments:            newCommentStore(db),
+		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
 		codeRepos:           newCodeRepoStore(db, opts.StateDir),
 		agentSessions:       newAgentSessionStore(db),
@@ -248,6 +256,11 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/settings/defaults", s.handleGetDefaultSettings)
 	mux.HandleFunc("PUT /api/settings", s.requireSameOrigin(s.handleSaveSettings))
 	mux.HandleFunc("POST /api/settings/check-command", s.requireSameOrigin(s.handleCheckCommand))
+	mux.HandleFunc("GET /api/prompt-templates", s.handleListPromptTemplates)
+	mux.HandleFunc("POST /api/prompt-templates", s.requireSameOrigin(s.handleCreatePromptTemplate))
+	mux.HandleFunc("PUT /api/prompt-templates", s.requireSameOrigin(s.handleUpdatePromptTemplate))
+	mux.HandleFunc("DELETE /api/prompt-templates", s.requireSameOrigin(s.handleDeletePromptTemplate))
+	mux.HandleFunc("POST /api/prompt-templates/reset", s.requireSameOrigin(s.handleResetPromptTemplate))
 	mux.HandleFunc("GET /api/doc/discussions", s.handleDocDiscussions)
 	mux.HandleFunc("GET /api/doc/discussions/available", s.handleAvailableDiscussionSessions)
 	mux.HandleFunc("POST /api/doc/discussions", s.requireSameOrigin(s.handleImportDiscussion))

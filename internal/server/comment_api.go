@@ -9,25 +9,27 @@ import (
 )
 
 type createCommentRequest struct {
-	Path          string   `json:"path"`
-	Quote         string   `json:"quote"`
-	Prefix        string   `json:"prefix"`
-	Suffix        string   `json:"suffix"`
-	Body          string   `json:"body"`
-	DiscussionIDs []string `json:"discussionIds"`
+	Path             string   `json:"path"`
+	Quote            string   `json:"quote"`
+	Prefix           string   `json:"prefix"`
+	Suffix           string   `json:"suffix"`
+	Body             string   `json:"body"`
+	DiscussionIDs    []string `json:"discussionIds"`
+	PromptTemplateID string   `json:"promptTemplateId"`
 }
 
 type replyCommentRequest struct {
-	Path           string   `json:"path"`
-	ID             string   `json:"id"`
-	Author         string   `json:"author"`
-	Body           string   `json:"body"`
-	Before         string   `json:"before"`
-	After          string   `json:"after"`
-	BeforeSnapshot string   `json:"beforeSnapshot"`
-	Snapshot       string   `json:"snapshot"`
-	Resolve        bool     `json:"resolve"`
-	DiscussionIDs  []string `json:"discussionIds"`
+	Path             string   `json:"path"`
+	ID               string   `json:"id"`
+	Author           string   `json:"author"`
+	Body             string   `json:"body"`
+	Before           string   `json:"before"`
+	After            string   `json:"after"`
+	BeforeSnapshot   string   `json:"beforeSnapshot"`
+	Snapshot         string   `json:"snapshot"`
+	Resolve          bool     `json:"resolve"`
+	DiscussionIDs    []string `json:"discussionIds"`
+	PromptTemplateID string   `json:"promptTemplateId"`
 }
 
 type resolveCommentRequest struct {
@@ -104,6 +106,20 @@ func (s *Server) handleGetComments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) validatePromptTemplateID(id string, useDefault bool) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		if useDefault {
+			return defaultPromptTemplateID, nil
+		}
+		return "", nil
+	}
+	if _, ok := s.prompts.get(id); !ok {
+		return "", fmt.Errorf("提示词模板不存在")
+	}
+	return id, nil
+}
+
 func (s *Server) validateDiscussionIDs(docPath string, ids []string) ([]string, error) {
 	out := make([]string, 0, len(ids))
 	for _, id := range normalizeDiscussionIDs(ids) {
@@ -132,7 +148,12 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	comment, err := s.comments.create(canonical, req.Quote, req.Prefix, req.Suffix, req.Body, content, discussionIDs)
+	templateID, err := s.validatePromptTemplateID(req.PromptTemplateID, true)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	comment, err := s.comments.create(canonical, req.Quote, req.Prefix, req.Suffix, req.Body, content, discussionIDs, templateID)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -177,8 +198,13 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	templateID, err := s.validatePromptTemplateID(req.PromptTemplateID, false)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	comment, err := s.comments.reply(canonical, req.ID, author, req.Body,
-		req.Before, req.After, req.BeforeSnapshot, snapshot, req.Resolve, discussionIDs)
+		req.Before, req.After, req.BeforeSnapshot, snapshot, req.Resolve, discussionIDs, templateID)
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
@@ -492,7 +518,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		body := fmt.Sprintf("已局部回滚到第 %d 次修改%s的该评论段落", item.round, sideLabel)
 		record, err := s.comments.reply(
 			canonical, item.comment.ID, "system", body, item.before, item.after, "", "",
-			false, nil,
+			false, nil, "",
 		)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "文档已局部回滚，但写入回滚记录失败：" + err.Error()})

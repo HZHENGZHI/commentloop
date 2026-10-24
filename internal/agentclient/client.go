@@ -378,17 +378,18 @@ type CommentMessage struct {
 }
 
 type Comment struct {
-	ID            string           `json:"id"`
-	Path          string           `json:"path"`
-	Quote         string           `json:"quote"`
-	GroupID       string           `json:"groupId,omitempty"`
-	Line          int              `json:"line"`
-	Resolved      bool             `json:"resolved"`
-	Orphaned      bool             `json:"orphaned"`
-	CreatedAt     time.Time        `json:"createdAt"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
-	DiscussionIDs []string         `json:"discussionIds,omitempty"`
-	Messages      []CommentMessage `json:"messages"`
+	ID               string           `json:"id"`
+	Path             string           `json:"path"`
+	Quote            string           `json:"quote"`
+	GroupID          string           `json:"groupId,omitempty"`
+	Line             int              `json:"line"`
+	Resolved         bool             `json:"resolved"`
+	Orphaned         bool             `json:"orphaned"`
+	CreatedAt        time.Time        `json:"createdAt"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
+	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
+	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
+	Messages         []CommentMessage `json:"messages"`
 }
 
 func (c *Client) ListComments(path string) ([]Comment, error) {
