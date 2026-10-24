@@ -626,9 +626,6 @@ export default function App() {
   const handleCodeRepoChanged = useCallback(
     (message: string) => {
       setCodeRepoNonce((value) => value + 1);
-      if (message.startsWith("已关联")) {
-        setCodeBrowserOpen(true);
-      }
       toast(message, "success");
     },
     [toast],
