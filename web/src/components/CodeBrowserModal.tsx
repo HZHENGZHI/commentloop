@@ -316,7 +316,8 @@ export function CodeBrowserModal({
   }, [onClose]);
 
   const openBranchMenu = async () => {
-    if (!repo || repo.kind !== "github") return;
+    if (!repo) return;
+    if (repo.kind !== "github" && !repo.branch) return;
     if (branchOpen) {
       setBranchOpen(false);
       return;
@@ -490,7 +491,7 @@ export function CodeBrowserModal({
                   type="button"
                   className={`code-browser-branch${branchOpen ? " active" : ""}`}
                   onClick={() => void openBranchMenu()}
-                  title="切换 GitHub 分支"
+                  title="切换分支"
                 >
                   <IconGitBranch size={11} />
                   {repo.branch || repo.remoteBranch || "分支"}
