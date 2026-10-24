@@ -261,6 +261,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("PUT /api/prompt-templates", s.requireSameOrigin(s.handleUpdatePromptTemplate))
 	mux.HandleFunc("DELETE /api/prompt-templates", s.requireSameOrigin(s.handleDeletePromptTemplate))
 	mux.HandleFunc("POST /api/prompt-templates/reset", s.requireSameOrigin(s.handleResetPromptTemplate))
+	mux.HandleFunc("POST /api/prompt-templates/optimize", s.requireSameOrigin(s.handleOptimizePromptTemplate))
 	mux.HandleFunc("GET /api/doc/discussions", s.handleDocDiscussions)
 	mux.HandleFunc("GET /api/doc/discussions/available", s.handleAvailableDiscussionSessions)
 	mux.HandleFunc("POST /api/doc/discussions", s.requireSameOrigin(s.handleImportDiscussion))

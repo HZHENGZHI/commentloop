@@ -258,6 +258,13 @@ export function resetPromptTemplate(id: string): Promise<PromptTemplate> {
   });
 }
 
+export function optimizePromptTemplate(input: PromptTemplateInput): Promise<{ body: string }> {
+  return request<{ body: string }>("/api/prompt-templates/optimize", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function fetchCodeRepos(): Promise<CodeRepoListResponse> {
   return request<CodeRepoListResponse>("/api/code/repos");
 }

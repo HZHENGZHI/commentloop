@@ -72,7 +72,7 @@ cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 - **需求拆解**：只分析需求、约束、验收标准和待确认问题，要求不修改文档
 - **Bug 排查**：先给出复现条件、原因证据和修复方案，要求不修改文档
 
-在 **设置 → 提示词** 中可以查看、编辑、恢复默认或新建自定义模板。模板支持变量：
+在 **设置 → 提示词** 中可以查看、编辑、恢复默认或新建自定义模板。写一个大概的草稿后，点 **AI 优化**，会用当前配置的 pi Agent 把提示词重写成更具体的任务指令；优化结果不会自动保存，可以撤销后再保存。模板支持变量：
 
 ```text
 {{doc_path}}            文档路径
@@ -96,6 +96,7 @@ API：
 - `PUT /api/prompt-templates`
 - `DELETE /api/prompt-templates?id=`
 - `POST /api/prompt-templates/reset`
+- `POST /api/prompt-templates/optimize`（AI 优化草稿）
 
 ## Docker 镜像
 

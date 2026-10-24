@@ -16,6 +16,13 @@ type promptTemplateRequest struct {
 	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
 }
 
+type optimizePromptRequest struct {
+	Name              string `json:"name"`
+	Description       string `json:"description"`
+	Body              string `json:"body"`
+	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
+}
+
 func (s *Server) handleListPromptTemplates(w http.ResponseWriter, _ *http.Request) {
 	items, err := s.prompts.list()
 	if err != nil {
@@ -79,6 +86,21 @@ func (s *Server) handleDeletePromptTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleOptimizePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var req optimizePromptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	body, err := s.optimizePromptTemplate(r.Context(), req.Name, req.Description, req.Body, req.AllowDocumentEdit)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"body": body})
 }
 
 func (s *Server) handleResetPromptTemplate(w http.ResponseWriter, r *http.Request) {

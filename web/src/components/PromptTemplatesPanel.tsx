@@ -3,11 +3,12 @@ import {
   createPromptTemplate,
   deletePromptTemplate,
   fetchPromptTemplates,
+  optimizePromptTemplate,
   resetPromptTemplate,
   updatePromptTemplate,
 } from "../api";
 import type { PromptTemplate } from "../types";
-import { IconPlus, IconRefresh, IconTrash } from "./Icons";
+import { IconPlus, IconRefresh, IconSparkles, IconTrash } from "./Icons";
 
 interface PromptTemplatesPanelProps {
   onChanged: () => void;
@@ -33,6 +34,9 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
   const [allowDocumentEdit, setAllowDocumentEdit] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizedOriginal, setOptimizedOriginal] = useState("");
+  const [optimizeNote, setOptimizeNote] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -65,6 +69,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     setDescription(selected.description);
     setBody(selected.body);
     setAllowDocumentEdit(selected.allowDocumentEdit);
+    setOptimizedOriginal("");
+    setOptimizeNote("");
   }, [selected]);
 
   const newTemplate = () => {
@@ -86,6 +92,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
         : await createPromptTemplate(payload);
       await load();
       setSelected(saved);
+      setOptimizedOriginal("");
+      setOptimizeNote("");
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存提示词模板失败");
@@ -109,6 +117,33 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const optimize = async () => {
+    setOptimizing(true);
+    setError("");
+    setOptimizeNote("");
+    try {
+      const result = await optimizePromptTemplate({
+        name,
+        description,
+        body,
+        allowDocumentEdit,
+      });
+      setOptimizedOriginal(body);
+      setBody(result.body);
+      setOptimizeNote("AI 已优化，保存模板后生效。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI 优化失败");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const undoOptimize = () => {
+    setBody(optimizedOriginal);
+    setOptimizedOriginal("");
+    setOptimizeNote("");
   };
 
   const reset = async () => {
@@ -180,7 +215,19 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
             />
           </label>
           <label className="settings-field">
-            <span>模板内容</span>
+            <span className="prompt-template-label-row">
+              模板内容
+              <button
+                type="button"
+                className="prompt-optimize-btn"
+                onClick={() => void optimize()}
+                disabled={optimizing || saving || (!body.trim() && !description.trim())}
+                title="让配置的 pi Agent 把草稿优化成更清晰的任务提示词"
+              >
+                {optimizing ? <span className="spinner" /> : <IconSparkles size={12} />}
+                {optimizing ? "AI 优化中…" : "AI 优化"}
+              </button>
+            </span>
             <textarea
               className="prompt-template-textarea"
               value={body}
@@ -200,6 +247,14 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
               <em>关闭后模板会要求 Agent 只回复分析，不调用 write_file；服务端强制权限暂未实现</em>
             </span>
           </label>
+          {optimizeNote ? (
+            <div className="prompt-optimize-note">
+              <span>{optimizeNote}</span>
+              <button type="button" className="settings-text-btn" onClick={undoOptimize}>
+                撤销优化
+              </button>
+            </div>
+          ) : null}
           <p className="settings-note prompt-template-vars">
             可用变量：{VARIABLES.map((item) => `{{${item}}}`).join(" ")}
           </p>

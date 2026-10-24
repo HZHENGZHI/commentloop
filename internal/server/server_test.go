@@ -730,6 +730,33 @@ func TestPromptTemplatesAndCommentTask(t *testing.T) {
 		t.Fatalf("custom template = %+v", custom)
 	}
 
+	script := filepath.Join(t.TempDir(), "fake-pi-optimize")
+	mustWrite(t, script, "#!/bin/sh\nprintf '优化后的接口评审提示词，保留 {{doc_path}}。\\n'\n")
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := defaultAppSettings()
+	settings.Agent.Command = script
+	if err := app.settingsStore.save(settings); err != nil {
+		t.Fatal(err)
+	}
+	app.settings.set(settings)
+	rec = doJSON(t, app, http.MethodPost, "/api/prompt-templates/optimize", optimizePromptRequest{
+		Name: custom.Name, Description: custom.Description, Body: "优化我", AllowDocumentEdit: false,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("optimize status=%d body=%s", rec.Code, rec.Body)
+	}
+	var optimized struct {
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &optimized); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(optimized.Body, "优化后的接口评审提示词") || !strings.Contains(optimized.Body, "{{doc_path}}") {
+		t.Fatalf("optimized = %q", optimized.Body)
+	}
+
 	path := canonical(app, "doc.md")
 	commentRec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
 		Path: path, Quote: "需要分析需求", Body: "请先拆解", PromptTemplateID: custom.ID,
