@@ -66,8 +66,9 @@ type Config struct {
 }
 
 type Client struct {
-	base string
-	http *http.Client
+	base         string
+	http         *http.Client
+	agentSession string
 }
 
 type Resolved struct {
@@ -103,8 +104,9 @@ func normalizeURL(value string) string {
 
 func New(baseURL string) *Client {
 	return &Client{
-		base: normalizeURL(baseURL),
-		http: &http.Client{Timeout: 120 * time.Second},
+		base:         normalizeURL(baseURL),
+		http:         &http.Client{Timeout: 120 * time.Second},
+		agentSession: strings.TrimSpace(os.Getenv("MDLIVE_AGENT_SESSION")),
 	}
 }
 
@@ -299,12 +301,7 @@ func rootNames(tree Tree) string {
 }
 
 func (c *Client) getJSON(path string, out any) error {
-	res, err := c.http.Get(c.base + path)
-	if err != nil {
-		return fmt.Errorf("无法连接 mdlive 服务 %s：%w（请先启动 ./bin/mdlive）", c.base, err)
-	}
-	defer res.Body.Close()
-	return decodeResponse(res, out)
+	return c.sendJSON(http.MethodGet, path, nil, out)
 }
 
 func (c *Client) postJSON(path string, body, out any) error {
@@ -332,6 +329,9 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 	// Mark requests made by the Agent CLI/MCP. In preview/review mode the
 	// frontend stays read-only while the background agent may still write.
 	req.Header.Set("X-Mdlive-Agent", "1")
+	if c.agentSession != "" {
+		req.Header.Set("X-Mdlive-Agent-Session", c.agentSession)
+	}
 	res, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("无法连接 mdlive 服务 %s：%w", c.base, err)

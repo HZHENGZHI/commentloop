@@ -18,9 +18,10 @@ import (
 )
 
 type reviewAgentJob struct {
-	Path      string
-	CommentID string
-	Prompt    string
+	Path              string
+	CommentID         string
+	Prompt            string
+	AllowDocumentEdit bool
 }
 
 type sessionAgentWorker struct {
@@ -137,6 +138,8 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		r.srv.broadcastAgent(job.Path, "error", fmt.Sprintf("%s 启动失败：%v", agent.Name, err))
 		return
 	}
+	r.srv.agentCaps.set(r.session.ID, job.AllowDocumentEdit)
+	defer r.srv.agentCaps.clear(r.session.ID)
 	r.srv.broadcastAgent(job.Path, "working", fmt.Sprintf("%s 正在处理评论…", agent.Name))
 	progress := func(message string) {
 		r.srv.broadcastAgent(job.Path, "working", message)
@@ -171,7 +174,7 @@ func (r *sessionAgentWorker) ensureProcess(signature, command string, args []str
 		old.close()
 	}
 
-	proc, err := startPiRPC(command, args, r.srv.primaryPath, r.srv.agentBaseURL)
+	proc, err := startPiRPC(command, args, r.srv.primaryPath, r.srv.agentBaseURL, r.session.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -366,13 +369,16 @@ type piRPC struct {
 	stderr   logBuffer
 }
 
-func startPiRPC(command string, args []string, cwd, baseURL string) (*piRPC, error) {
+func startPiRPC(command string, args []string, cwd, baseURL, agentSessionID string) (*piRPC, error) {
 	cmd := exec.Command(command, args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
 	if baseURL != "" {
 		cmd.Env = append(os.Environ(), "MDLIVE_URL="+baseURL)
+	}
+	if agentSessionID != "" {
+		cmd.Env = append(cmd.Env, "MDLIVE_AGENT_SESSION="+agentSessionID)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -573,8 +579,13 @@ func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("无法创建 Agent 会话：%w", err)
 	}
+	comment, ok := s.comments.get(path, commentID)
+	if !ok {
+		return fmt.Errorf("评论不存在")
+	}
 	if s.agentRunner == nil || !s.agentRunner.enqueue(session, reviewAgentJob{
 		Path: path, CommentID: commentID, Prompt: prompt,
+		AllowDocumentEdit: s.commentAllowsDocumentEdit(comment),
 	}) {
 		return fmt.Errorf("后台 Agent 未启动")
 	}
@@ -609,7 +620,15 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	excerpts := s.discussions.excerpts(path, discussionIDs, comment.Quote, "")
 	template, hasTemplate := s.prompts.get(comment.PromptTemplateID)
 	if !hasTemplate {
-		template, _ = s.prompts.get(defaultPromptTemplateID)
+		if comment.PromptTemplateID != "" {
+			template = PromptTemplate{
+				Name: "已删除的模板", AllowDocumentEdit: false,
+				Body: "原任务模板已删除。请只分析当前评论并提供建议，不要修改文档。",
+			}
+			hasTemplate = true
+		} else {
+			template, _ = s.prompts.get(defaultPromptTemplateID)
+		}
 	}
 	templateVars := map[string]string{
 		"doc_path":            path,

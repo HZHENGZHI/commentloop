@@ -76,6 +76,7 @@ type Server struct {
 	prompts        *promptTemplateStore
 	discussions    *discussionStore
 	discussionSync *discussionSyncService
+	agentCaps      *agentCapabilityStore
 	consensus      *consensusScheduler
 	codeRepos      *codeRepoStore
 	settingsStore  *settingsStore
@@ -129,6 +130,7 @@ func New(opts Options) (*Server, error) {
 		comments:            newCommentStore(db),
 		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
+		agentCaps:           newAgentCapabilityStore(),
 		codeRepos:           newCodeRepoStore(db, opts.StateDir),
 		agentSessions:       newAgentSessionStore(db),
 		stateDir:            opts.StateDir,

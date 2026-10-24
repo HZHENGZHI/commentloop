@@ -696,6 +696,47 @@ func TestLocalCodeRepoBranchSwitch(t *testing.T) {
 	}
 }
 
+func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n")
+	app, err := New(Options{Root: root, StateDir: t.TempDir(), WebFS: mapFS(), Version: "test", AllowRemote: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	path := canonical(app, "doc.md")
+	headers := map[string]string{
+		"X-Mdlive-Agent":         "1",
+		"X-Mdlive-Agent-Session": "session-analysis",
+	}
+	app.agentCaps.set("session-analysis", false)
+	rec := doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("analysis PUT status=%d body=%s", rec.Code, rec.Body)
+	}
+	rec = doJSONHeaders(t, app, http.MethodPost, "/api/doc", saveRequest{Path: canonical(app, "new.md"), Content: "# new"}, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("analysis POST status=%d body=%s", rec.Code, rec.Body)
+	}
+	rec = doJSONHeaders(t, app, http.MethodDelete, docURL(path), nil, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("analysis DELETE status=%d body=%s", rec.Code, rec.Body)
+	}
+	app.agentCaps.set("session-analysis", true)
+	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit PUT status=%d body=%s", rec.Code, rec.Body)
+	}
+	// An external Agent CLI without the managed session header keeps its
+	// existing permission behavior.
+	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# manual"}, map[string]string{
+		"X-Mdlive-Agent": "1",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("manual agent PUT status=%d body=%s", rec.Code, rec.Body)
+	}
+}
+
 func TestPromptTemplatesAndCommentTask(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n\n需要分析需求。\n")

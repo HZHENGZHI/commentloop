@@ -87,7 +87,7 @@ cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 
 创建评论或回复时可以手动选择任务类型。模板只控制任务指令，MCP 工具约束、不能 resolve 评论、路径沙箱等底层规则仍由 mdlive 强制附加。
 
-注意：目前“只分析”模式主要通过提示词约束 Agent 不调用 `write_file`；任务级写权限的服务端强校验还未实现。
+“只分析”模式不只靠提示词：自动 Agent 运行时会带上受管会话标识，mdlive 在 Go 后端按当前任务拒绝 `write_file` / 文档新建 / 删除请求，只允许通过 `reply_comment` 回复分析结果。没有受管会话标识的手动 Agent CLI/MCP 仍保持原有写入权限。
 
 API：
 

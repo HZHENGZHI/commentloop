@@ -132,6 +132,9 @@ func (s *Server) validateDiscussionIDs(docPath string, ids []string) ([]string, 
 }
 
 func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentWrite(w, r) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req createCommentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

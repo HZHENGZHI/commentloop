@@ -244,7 +244,7 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
             />
             <span>
               允许 Agent 修改文档
-              <em>关闭后模板会要求 Agent 只回复分析，不调用 write_file；服务端强制权限暂未实现</em>
+              <em>关闭后模板会要求 Agent 只回复分析；受管 Agent 会话的 write_file 会被服务端拦截</em>
             </span>
           </label>
           {optimizeNote ? (
