@@ -3682,10 +3682,16 @@ body.dragging-split * {
 }
 
 /* ===== Code repositories ===== */
+.code-repo-backdrop {
+  align-items: flex-start;
+  padding-top: max(20px, 8vh);
+}
+
 .code-repo-modal {
   width: min(680px, 100%);
   max-height: min(86vh, 820px);
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .code-repo-hint {

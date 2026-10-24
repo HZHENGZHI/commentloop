@@ -59,8 +59,8 @@ export function CodeRepoModal({
   const [browseError, setBrowseError] = useState<string | null>(null);
   const browseSeq = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const [all, linked] = await Promise.all([
@@ -72,12 +72,12 @@ export function CodeRepoModal({
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取代码仓库失败");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [docPath]);
 
   useEffect(() => {
-    void load();
+    void load(true);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -187,7 +187,7 @@ export function CodeRepoModal({
 
   return (
     <div
-      className="modal-backdrop comment-backdrop"
+      className="modal-backdrop comment-backdrop code-repo-backdrop"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
