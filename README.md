@@ -11,7 +11,7 @@
 - **多目录工作区**：可同时添加多个目录（笔记可能散落在不同磁盘 / 文件夹），侧栏按目录分组展示；支持运行时添加 / 移除，移除只影响工作区、不删除磁盘文件。
 - **远程服务器（SSH）**：通过 SSH + SFTP 添加远程目录，像本地目录一样浏览、预览、编辑、保存远程 Markdown；支持图片、相对链接和每 15 秒轮询外部变更。
 - **Code Agent 集成**：内置 `mdlive agent` CLI 与 MCP stdio server，代码 Agent 可以发现、读取、写入本地和远程 Markdown，支持搜索和“最近修改”查询。
-- **文档结合代码仓库**：每篇文档可以关联一个或多个本地代码仓库；Agent 通过 MCP 读取代码文件、搜索符号、查看 Git 分支 / 未提交改动，从而按真实代码情况写文档。代码仓库只读，不会被修改。
+- **文档结合代码仓库**：每篇文档可以关联一个或多个本机目录或 GitHub 仓库（浅克隆到本地缓存）；Agent 通过 MCP 读取代码文件、搜索符号、查看 Git 分支 / 未提交改动，从而按真实代码情况写文档。代码仓库只读，不会被修改。
 - **页面内代码浏览 + LSP 跳转**：在预览右上角 **代码** 中浏览仓库文件、查看只读源码；支持在代码中 `⌘/Ctrl + 点击` 符号或点 **跳转定义**，通过 gopls / TypeScript / Python / Rust 语言服务器跳转到定义位置。
 - **设置页**：顶部齿轮打开设置，可配置各语言的 LSP 服务器命令 / 参数 / 启用状态，以及后台 Code Agent 类型、显示名称和启动命令。
 - **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，mdlive 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
@@ -245,7 +245,15 @@ Agent 代码工具：
 - `read_code`：按行读取文件（单文件上限 1 MiB）
 - `search_code`：大小写不敏感文本搜索，返回路径、行号和匹配行
 
-代码仓库是**只读**的；mdlive 不会修改代码。关联关系保存在本机 SQLite，不写入 Markdown。当前只支持本机代码目录（不支持远程 SSH 代码仓库）。
+代码仓库是**只读**的；mdlive 不会修改代码。关联关系保存在本机 SQLite，不写入 Markdown。GitHub 私有仓库可以使用 SSH 地址（需要已配置 SSH key），或在本机设置 `GITHUB_TOKEN` / `GH_TOKEN`，或先 `gh auth login`。
+
+### 切换 GitHub 分支
+
+代码浏览窗口顶部会显示当前分支。点击分支按钮可以读取远程分支列表并随时切换：
+
+- 切换后会拉取该分支并更新代码浏览文件树 / 源码
+- LSP 连接会重置，下次跳转按新分支代码分析
+- 分支切换只影响 mdlive 的 GitHub 克隆缓存，不会修改你的本地仓库或远程仓库
 
 ### 页面内代码浏览与 LSP
 
@@ -508,6 +516,8 @@ mdlive/
 | GET | `/api/code/files?repo=&query=&limit=` | 仓库源码文件列表 |
 | GET | `/api/code/file?repo=&path=&start=&end=` | 读取仓库文件 |
 | GET | `/api/code/search?repo=&q=&limit=` | 搜索仓库源码 |
+| GET | `/api/code/branches?id=` | GitHub 仓库远程分支列表 |
+| POST | `/api/code/branch` | 切换 GitHub 仓库分支（更新缓存） |
 | POST | `/api/lsp/definition` | 跳转定义（repo / path / line / character） |
 | GET / PUT | `/api/settings` | 读取 / 保存 LSP 与 Code Agent 设置 |
 | GET | `/api/doc/agent-sessions?path=` | 文档的 Agent 会话列表 / 当前会话 |
@@ -539,7 +549,8 @@ mdlive/
 - 单文档上限 8 MiB；文件树最多展示 5000 个 Markdown 文件；远程附件读取上限 64 MiB。
 - 评论是 mdlive 本地审阅数据，不随 Markdown 文件同步；换机器/清空配置后不会带上。评论高亮依赖浏览器 Custom Highlight API（Chrome / Safari 支持；不支持时仍可在评论面板查看原文）。
 - 评论关联组目前只在同一个 Markdown 文档内建立；跨文档关联尚未支持。删除组内评论后，若组内只剩一条，关联会自动解除。
-- 代码仓库目前只支持本机目录，不支持远程 SSH / SFTP 代码仓库；代码只读，单文件读取上限 1 MiB，搜索有结果数和扫描量上限。
+- 代码仓库支持本机目录和 GitHub（HTTPS / SSH 浅克隆缓存）；不支持远程 SSH/SFTP 工作区中的代码目录直接作为代码仓库。代码只读，单文件读取上限 1 MiB，搜索有结果数和扫描量上限。
+- GitHub 私有仓库需要可用凭据（SSH key、`GITHUB_TOKEN` / `GH_TOKEN` 或 `gh auth login`）；首次克隆可能较慢，仓库缓存占用磁盘空间。
 - LSP 跳转需要本机已安装对应语言服务器；CodeMirror 代码浏览本身不依赖 LSP。只支持跳到代码仓库内的文件，仓库外定义仅提示路径。
 - 设置页中的 pi 自动运行会真实启动模型调用；其他 Agent 类型的命令目前只用于显示和检查，仍由外部客户端通过 MCP 接入。
 - 自动运行默认关闭；启用前请确认本机 pi 的模型、MCP 配置可用。只支持 pi，且同一会话内多条评论串行处理。
