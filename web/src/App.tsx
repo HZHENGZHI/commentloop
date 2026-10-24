@@ -1740,6 +1740,7 @@ export default function App() {
       {discussionModalOpen && currentPath ? (
         <DiscussionModal
           docPath={currentPath}
+          refreshKey={discussionNonce}
           onClose={() => setDiscussionModalOpen(false)}
           onChanged={() => setDiscussionNonce((value) => value + 1)}
         />

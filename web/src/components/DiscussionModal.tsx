@@ -24,6 +24,7 @@ import {
 
 interface DiscussionModalProps {
   docPath: string;
+  refreshKey?: number;
   onClose: () => void;
   onChanged: () => void;
 }
@@ -41,6 +42,7 @@ function formatDate(value: string): string {
 
 export function DiscussionModal({
   docPath,
+  refreshKey = 0,
   onClose,
   onChanged,
 }: DiscussionModalProps) {
@@ -55,17 +57,21 @@ export function DiscussionModal({
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
   const sessionsSeq = useRef(0);
+  const loadSeq = useRef(0);
 
   const load = useCallback(async (showLoading = false) => {
+    const seq = ++loadSeq.current;
     if (showLoading) setLoading(true);
     setError("");
     try {
       const next = await fetchDocDiscussions(docPath);
+      if (seq !== loadSeq.current) return;
       setData(next);
     } catch (err) {
+      if (seq !== loadSeq.current) return;
       setError(err instanceof Error ? err.message : "读取讨论上下文失败");
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading && seq === loadSeq.current) setLoading(false);
     }
   }, [docPath]);
 
@@ -95,6 +101,10 @@ export function DiscussionModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [load, onClose]);
 
+  useEffect(() => {
+    if (refreshKey > 0) void load();
+  }, [refreshKey, load]);
+
   const openSessions = () => {
     const next = !sessionsOpen;
     setSessionsOpen(next);
@@ -121,6 +131,11 @@ export function DiscussionModal({
     setError("");
     try {
       const result = await importDiscussionSession(docPath, session.path);
+      if (result.consensus) {
+        setData((current) =>
+          current ? { ...current, consensus: result.consensus } : current,
+        );
+      }
       setSessions((current) =>
         current.map((item) =>
           item.path === session.path ? { ...item, imported: true } : item,
