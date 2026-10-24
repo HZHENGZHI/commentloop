@@ -32,6 +32,8 @@ type Discussion struct {
 	Cwd          string    `json:"cwd,omitempty"`
 	SessionID    string    `json:"sessionId,omitempty"`
 	MessageCount int       `json:"messageCount"`
+	SourceMTime  int64     `json:"-"`
+	SourceSize   int64     `json:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
 	ImportedAt   time.Time `json:"importedAt"`
 }
@@ -88,7 +90,7 @@ func newDiscussionStore(db *sql.DB) *discussionStore {
 }
 
 func (s *discussionStore) list(docPath string) ([]Discussion, error) {
-	rows, err := s.db.Query(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,created_at,imported_at
+	rows, err := s.db.Query(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at
 		FROM doc_discussions WHERE doc_path=? ORDER BY imported_at,id`, docPath)
 	if err != nil {
 		return nil, err
@@ -99,7 +101,8 @@ func (s *discussionStore) list(docPath string) ([]Discussion, error) {
 		var item Discussion
 		var createdAt, importedAt string
 		if err := rows.Scan(&item.ID, &item.DocPath, &item.Title, &item.SourcePath, &item.SourceKind,
-			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount, &createdAt, &importedAt); err != nil {
+			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount,
+			&item.SourceMTime, &item.SourceSize, &createdAt, &importedAt); err != nil {
 			return nil, err
 		}
 		item.AgentName = sessionAgentName(item.Agent)
@@ -113,10 +116,11 @@ func (s *discussionStore) list(docPath string) ([]Discussion, error) {
 func (s *discussionStore) get(docPath, id string) (Discussion, bool) {
 	var item Discussion
 	var createdAt, importedAt string
-	err := s.db.QueryRow(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,created_at,imported_at
+	err := s.db.QueryRow(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at
 		FROM doc_discussions WHERE id=? AND doc_path=?`, id, docPath).
 		Scan(&item.ID, &item.DocPath, &item.Title, &item.SourcePath, &item.SourceKind,
-			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount, &createdAt, &importedAt)
+			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount,
+			&item.SourceMTime, &item.SourceSize, &createdAt, &importedAt)
 	if err != nil {
 		return Discussion{}, false
 	}
@@ -140,8 +144,16 @@ func discussionID(sourcePath string) string {
 }
 
 func (s *discussionStore) importSession(docPath string, parsed parsedSession, sourcePath, sourceKind, agent string) (Discussion, error) {
+	mtime, size := sessionFileStamp(sourcePath)
 	if existing, ok := s.bySource(docPath, sourcePath); ok {
-		return existing, nil
+		if err := s.updateSessionMessages(existing.ID, existing.DocPath, parsed, sourcePath, sourceKind, agent, mtime, size); err != nil {
+			return Discussion{}, err
+		}
+		item, ok := s.get(existing.DocPath, existing.ID)
+		if !ok {
+			return Discussion{}, os.ErrNotExist
+		}
+		return item, nil
 	}
 	now := time.Now()
 	item := Discussion{
@@ -164,10 +176,11 @@ func (s *discussionStore) importSession(docPath string, parsed parsedSession, so
 	}
 	defer tx.Rollback()
 	if _, err := tx.Exec(`INSERT INTO doc_discussions
-		(id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,created_at,imported_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		(id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		item.ID, item.DocPath, item.Title, item.SourcePath, item.SourceKind, item.Agent, item.Cwd,
-		item.SessionID, item.MessageCount, formatTime(item.CreatedAt), formatTime(item.ImportedAt)); err != nil {
+		item.SessionID, item.MessageCount, item.SourceMTime, item.SourceSize,
+		formatTime(item.CreatedAt), formatTime(item.ImportedAt)); err != nil {
 		return Discussion{}, err
 	}
 	for i, message := range parsed.Messages {
@@ -182,6 +195,50 @@ func (s *discussionStore) importSession(docPath string, parsed parsedSession, so
 		return Discussion{}, err
 	}
 	return item, nil
+}
+
+func sessionFileStamp(path string) (int64, int64) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, 0
+	}
+	return info.ModTime().UnixNano(), info.Size()
+}
+
+func (s *discussionStore) updateSessionMessages(id, docPath string, parsed parsedSession, sourcePath, sourceKind, agent string, mtime, size int64) error {
+	now := time.Now()
+	item := Discussion{
+		ID: id, DocPath: docPath, Title: parsed.Title, SourcePath: sourcePath,
+		SourceKind: sourceKind, Agent: agent, Cwd: parsed.Cwd, SessionID: parsed.SessionID,
+		MessageCount: len(parsed.Messages), SourceMTime: mtime, SourceSize: size,
+		CreatedAt: parsed.CreatedAt, ImportedAt: now,
+	}
+	if item.Title == "" {
+		item.Title = filepath.Base(sourcePath)
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE doc_discussions SET title=?,source_path=?,source_kind=?,agent=?,cwd=?,session_id=?,
+		message_count=?,source_mtime=?,source_size=? WHERE id=? AND doc_path=?`,
+		item.Title, item.SourcePath, item.SourceKind, item.Agent, item.Cwd, item.SessionID,
+		item.MessageCount, item.SourceMTime, item.SourceSize, id, docPath); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM discussion_messages WHERE discussion_id=?`, id); err != nil {
+		return err
+	}
+	for i, message := range parsed.Messages {
+		if _, err := tx.Exec(`INSERT INTO discussion_messages
+			(id,discussion_id,seq,role,body,created_at) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("%s_%d", id, i), id, i, message.Role, message.Body,
+			formatTime(message.CreatedAt)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *discussionStore) delete(docPath, id string) error {

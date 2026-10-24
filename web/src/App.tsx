@@ -1012,6 +1012,11 @@ export default function App() {
           setCommentsNonce((value) => value + 1);
         }
         break;
+      case "discussions":
+        if (message.path === currentPathRef.current) {
+          setDiscussionNonce((value) => value + 1);
+        }
+        break;
       case "consensus":
         if (message.path === currentPathRef.current) {
           if (message.status) {

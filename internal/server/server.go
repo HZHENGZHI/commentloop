@@ -73,6 +73,7 @@ type Server struct {
 	persistedRoots []stateRoot
 	comments       *commentStore
 	discussions    *discussionStore
+	discussionSync *discussionSyncService
 	consensus      *consensusScheduler
 	codeRepos      *codeRepoStore
 	settingsStore  *settingsStore
@@ -160,6 +161,7 @@ func New(opts Options) (*Server, error) {
 	s.mux = s.routes()
 	s.agentRunner = newAgentRunner(s)
 	s.consensus = newConsensusScheduler(s)
+	s.discussionSync = newDiscussionSyncService(s)
 	return s, nil
 }
 
@@ -183,6 +185,9 @@ func (s *Server) Close() error {
 		}
 		if s.agentRunner != nil {
 			s.agentRunner.Close()
+		}
+		if s.discussionSync != nil {
+			s.discussionSync.close()
 		}
 		if s.consensus != nil {
 			s.consensus.close()

@@ -124,6 +124,7 @@ export type WsServerMessage =
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
+  | { type: "discussions"; path: string }
   | {
       type: "consensus";
       path: string;

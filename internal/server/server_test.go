@@ -784,8 +784,30 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 		t.Fatalf("prompt missing consensus/context:\n%s", prompt)
 	}
 
-	app.consensus.schedule(path, true)
+	// Continuing the original session is picked up by the poller and updates
+	// both the stored transcript and the consensus.
+	file, err := os.OpenFile(sessionPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(`{"type":"message","timestamp":1761300003000,"message":{"role":"user","content":[{"type":"text","text":"补充：字段 X 只用于新接口。"}]}}` + "\n"); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	app.discussionSync.syncAll()
 	deadline := time.Now().Add(4 * time.Second)
+	for {
+		discussion, ok := app.discussions.get(path, imported.Discussion.ID)
+		if ok && discussion.MessageCount >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("session changes were not synced")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	deadline = time.Now().Add(4 * time.Second)
 	for {
 		consensus, ok := app.discussions.consensus(path)
 		if ok && consensus.Version > imported.Consensus.Version {

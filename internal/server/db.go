@@ -149,6 +149,8 @@ func migrateSchema(db *sql.DB) error {
 			cwd TEXT NOT NULL DEFAULT '',
 			session_id TEXT NOT NULL DEFAULT '',
 			message_count INTEGER NOT NULL DEFAULT 0,
+			source_mtime INTEGER NOT NULL DEFAULT 0,
+			source_size INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			imported_at TEXT NOT NULL,
 			UNIQUE(doc_path, source_path)
@@ -208,6 +210,12 @@ func migrateSchema(db *sql.DB) error {
 		return err
 	}
 	if err := ensureColumn(db, "doc_discussions", "agent", `ALTER TABLE doc_discussions ADD COLUMN agent TEXT NOT NULL DEFAULT 'pi'`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "doc_discussions", "source_mtime", `ALTER TABLE doc_discussions ADD COLUMN source_mtime INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "doc_discussions", "source_size", `ALTER TABLE doc_discussions ADD COLUMN source_size INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
 	for _, statement := range []string{
