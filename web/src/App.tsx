@@ -1696,7 +1696,7 @@ export default function App() {
           onManageRepos={() => setCodeRepoModalOpen(true)}
           onBranchChanged={() => {
             setCodeRepoNonce((value) => value + 1);
-            toast("已切换 GitHub 分支", "success");
+            toast("已切换分支", "success");
           }}
         />
       ) : null}
