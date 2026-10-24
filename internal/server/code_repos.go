@@ -469,6 +469,31 @@ func (s *codeRepoStore) githubBranches(ctx context.Context, id string) ([]string
 	return coderepo.ListGitHubBranches(ctx, source, item.Path, githubToken())
 }
 
+func (s *codeRepoStore) branches(ctx context.Context, id string) ([]string, error) {
+	item, ok := s.get(id)
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	if item.Kind == "github" {
+		return s.githubBranches(ctx, id)
+	}
+	return coderepo.LocalBranches(ctx, item.Path)
+}
+
+func (s *codeRepoStore) switchBranch(ctx context.Context, id, branch string) (codeRepoRecord, error) {
+	item, ok := s.get(id)
+	if !ok {
+		return codeRepoRecord{}, os.ErrNotExist
+	}
+	if item.Kind == "github" {
+		return s.switchGitHubBranch(ctx, id, branch)
+	}
+	if err := coderepo.SwitchLocalBranch(ctx, item.Path, branch); err != nil {
+		return codeRepoRecord{}, err
+	}
+	return item, nil
+}
+
 type switchBranchRequest struct {
 	ID     string `json:"id"`
 	Branch string `json:"branch"`
@@ -482,7 +507,7 @@ func (s *Server) handleCodeRepoBranches(w http.ResponseWriter, r *http.Request) 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	branches, err := s.codeRepos.githubBranches(ctx, item.ID)
+	branches, err := s.codeRepos.branches(ctx, item.ID)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -499,7 +524,7 @@ func (s *Server) handleSwitchCodeRepoBranch(w http.ResponseWriter, r *http.Reque
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	if _, err := s.codeRepos.switchGitHubBranch(ctx, req.ID, req.Branch); err != nil {
+	if _, err := s.codeRepos.switchBranch(ctx, req.ID, req.Branch); err != nil {
 		if os.IsNotExist(err) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
 			return

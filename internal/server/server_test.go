@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -612,6 +613,83 @@ func countLines(t *testing.T, path string) int {
 		return 0
 	}
 	return strings.Count(string(data), "\n")
+}
+
+func TestLocalCodeRepoBranchSwitch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	codeDir := t.TempDir()
+	gitRun := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-C", codeDir}, args...)...)
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	gitRun("init", "-b", "main")
+	mustWrite(t, filepath.Join(codeDir, "branch.txt"), "main branch\n")
+	gitRun("add", ".")
+	gitRun("commit", "-m", "main")
+	gitRun("checkout", "-b", "feature")
+	mustWrite(t, filepath.Join(codeDir, "branch.txt"), "feature branch\n")
+	gitRun("add", ".")
+	gitRun("commit", "-m", "feature")
+	gitRun("checkout", "main")
+
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n")
+	app, err := New(Options{
+		Root: root, StateDir: t.TempDir(), WebFS: mapFS(),
+		Version: "test", AllowRemote: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	docPath := canonical(app, "doc.md")
+	rec := doJSON(t, app, http.MethodPost, "/api/doc/code-repos", docCodeRepoRequest{
+		DocPath: docPath, RepoPath: codeDir,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("link local repo status=%d body=%s", rec.Code, rec.Body)
+	}
+	repo := decode[codeRepoRecord](t, rec)
+	rec = doJSON(t, app, http.MethodGet, "/api/code/branches?id="+repo.ID, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("branches status=%d body=%s", rec.Code, rec.Body)
+	}
+	branches := decode[struct {
+		Branches []string `json:"branches"`
+	}](t, rec)
+	if !sameStrings(branches.Branches, []string{"feature", "main"}) {
+		t.Fatalf("branches = %v", branches.Branches)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/code/branch", switchBranchRequest{
+		ID: repo.ID, Branch: "feature",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("switch branch status=%d body=%s", rec.Code, rec.Body)
+	}
+	switched := decode[codeRepoRecord](t, rec)
+	if switched.Branch != "feature" {
+		t.Fatalf("switched branch = %q", switched.Branch)
+	}
+	content, err := os.ReadFile(filepath.Join(codeDir, "branch.txt"))
+	if err != nil || string(content) != "feature branch\n" {
+		t.Fatalf("local branch content = %q, err=%v", content, err)
+	}
+	// Dirty local repositories are protected from branch switching.
+	mustWrite(t, filepath.Join(codeDir, "dirty.txt"), "dirty\n")
+	rec = doJSON(t, app, http.MethodPost, "/api/code/branch", switchBranchRequest{
+		ID: repo.ID, Branch: "main",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("dirty switch status=%d, want 400", rec.Code)
+	}
 }
 
 func TestAgentSessions(t *testing.T) {

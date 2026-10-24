@@ -247,13 +247,15 @@ Agent 代码工具：
 
 代码仓库是**只读**的；mdlive 不会修改代码。关联关系保存在本机 SQLite，不写入 Markdown。GitHub 私有仓库可以使用 SSH 地址（需要已配置 SSH key），或在本机设置 `GITHUB_TOKEN` / `GH_TOKEN`，或先 `gh auth login`。
 
-### 切换 GitHub 分支
+### 切换分支（本地 / GitHub）
 
-代码浏览窗口顶部会显示当前分支。点击分支按钮可以读取远程分支列表并随时切换：
+代码浏览窗口顶部会显示当前分支。点击分支按钮可以读取分支列表并随时切换：
 
-- 切换后会拉取该分支并更新代码浏览文件树 / 源码
-- LSP 连接会重置，下次跳转按新分支代码分析
-- 分支切换只影响 mdlive 的 GitHub 克隆缓存，不会修改你的本地仓库或远程仓库
+- **GitHub 仓库**：读取远程分支列表，拉取后更新 mdlive 克隆缓存；不会修改远程仓库
+- **本地 Git 仓库**：列出本地分支，执行 `git checkout`；切换前会二次确认
+- 本地仓库有未提交改动时会拒绝切换，避免把未提交内容带到另一个分支
+- 切换后会更新代码浏览文件树 / 源码，并重置 LSP 连接
+- 本地分支切换会改变该仓库的工作区，但不会修改 Markdown 文档
 
 ### 页面内代码浏览与 LSP
 
@@ -516,8 +518,8 @@ mdlive/
 | GET | `/api/code/files?repo=&query=&limit=` | 仓库源码文件列表 |
 | GET | `/api/code/file?repo=&path=&start=&end=` | 读取仓库文件 |
 | GET | `/api/code/search?repo=&q=&limit=` | 搜索仓库源码 |
-| GET | `/api/code/branches?id=` | GitHub 仓库远程分支列表 |
-| POST | `/api/code/branch` | 切换 GitHub 仓库分支（更新缓存） |
+| GET | `/api/code/branches?id=` | 本地 / GitHub 仓库分支列表 |
+| POST | `/api/code/branch` | 切换本地 Git 或 GitHub 仓库分支 |
 | POST | `/api/lsp/definition` | 跳转定义（repo / path / line / character） |
 | GET / PUT | `/api/settings` | 读取 / 保存 LSP 与 Code Agent 设置 |
 | GET | `/api/doc/agent-sessions?path=` | 文档的 Agent 会话列表 / 当前会话 |
@@ -549,7 +551,8 @@ mdlive/
 - 单文档上限 8 MiB；文件树最多展示 5000 个 Markdown 文件；远程附件读取上限 64 MiB。
 - 评论是 mdlive 本地审阅数据，不随 Markdown 文件同步；换机器/清空配置后不会带上。评论高亮依赖浏览器 Custom Highlight API（Chrome / Safari 支持；不支持时仍可在评论面板查看原文）。
 - 评论关联组目前只在同一个 Markdown 文档内建立；跨文档关联尚未支持。删除组内评论后，若组内只剩一条，关联会自动解除。
-- 代码仓库支持本机目录和 GitHub（HTTPS / SSH 浅克隆缓存）；不支持远程 SSH/SFTP 工作区中的代码目录直接作为代码仓库。代码只读，单文件读取上限 1 MiB，搜索有结果数和扫描量上限。
+- 代码仓库支持本机 Git / 非 Git 目录和 GitHub（HTTPS / SSH 浅克隆缓存）；不支持远程 SSH/SFTP 工作区中的代码目录直接作为代码仓库。代码只读，单文件读取上限 1 MiB，搜索有结果数和扫描量上限。
+- 本地 Git 仓库分支切换会改变本地工作区，并拒绝有未提交改动的仓库；只对代码仓库缓存执行分支切换。
 - GitHub 私有仓库需要可用凭据（SSH key、`GITHUB_TOKEN` / `GH_TOKEN` 或 `gh auth login`）；首次克隆可能较慢，仓库缓存占用磁盘空间。
 - LSP 跳转需要本机已安装对应语言服务器；CodeMirror 代码浏览本身不依赖 LSP。只支持跳到代码仓库内的文件，仓库外定义仅提示路径。
 - 设置页中的 pi 自动运行会真实启动模型调用；其他 Agent 类型的命令目前只用于显示和检查，仍由外部客户端通过 MCP 接入。

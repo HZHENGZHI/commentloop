@@ -336,6 +336,14 @@ export function CodeBrowserModal({
 
   const switchBranch = async (branch: string) => {
     if (!repo || branch === repo.branch || branchBusy) return;
+    if (
+      repo.kind !== "github" &&
+      !window.confirm(
+        `切换本地仓库分支会更新工作区文件为「${branch}」。\n\n本地仓库有未提交改动时会被拒绝。继续？`,
+      )
+    ) {
+      return;
+    }
     setBranchBusy(true);
     setBranchError("");
     try {
@@ -468,7 +476,7 @@ export function CodeBrowserModal({
                 </option>
               ))}
             </select>
-            {repo?.kind === "github" ? (
+            {repo && (repo.kind === "github" || repo.branch) ? (
               <div className="code-browser-branch-wrap">
                 <button
                   type="button"
