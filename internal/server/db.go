@@ -172,6 +172,8 @@ func migrateSchema(db *sql.DB) error {
 			description TEXT NOT NULL DEFAULT '',
 			body TEXT NOT NULL,
 			allow_document_edit INTEGER NOT NULL DEFAULT 1,
+			allow_code_read INTEGER NOT NULL DEFAULT 1,
+			allow_comment_reply INTEGER NOT NULL DEFAULT 1,
 			builtin INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
@@ -220,6 +222,12 @@ func migrateSchema(db *sql.DB) error {
 		return err
 	}
 	if err := ensureColumn(db, "comments", "prompt_template_id", `ALTER TABLE comments ADD COLUMN prompt_template_id TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "prompt_templates", "allow_code_read", `ALTER TABLE prompt_templates ADD COLUMN allow_code_read INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "prompt_templates", "allow_comment_reply", `ALTER TABLE prompt_templates ADD COLUMN allow_comment_reply INTEGER NOT NULL DEFAULT 1`); err != nil {
 		return err
 	}
 	if err := ensureColumn(db, "doc_discussions", "agent", `ALTER TABLE doc_discussions ADD COLUMN agent TEXT NOT NULL DEFAULT 'pi'`); err != nil {

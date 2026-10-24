@@ -10,22 +10,28 @@ import (
 // comment task for an agent session. A prompt can ask an analysis-only task
 // not to write, but the server must enforce it for requests that carry the
 // managed agent session header.
+type agentCapabilities struct {
+	WriteDocs     bool
+	ReadCode      bool
+	ReplyComments bool
+}
+
 type agentCapabilityStore struct {
 	mu     sync.RWMutex
-	byTask map[string]bool
+	byTask map[string]agentCapabilities
 }
 
 func newAgentCapabilityStore() *agentCapabilityStore {
-	return &agentCapabilityStore{byTask: make(map[string]bool)}
+	return &agentCapabilityStore{byTask: make(map[string]agentCapabilities)}
 }
 
-func (s *agentCapabilityStore) set(session string, allowDocumentEdit bool) {
+func (s *agentCapabilityStore) set(session string, capabilities agentCapabilities) {
 	session = strings.TrimSpace(session)
 	if session == "" {
 		return
 	}
 	s.mu.Lock()
-	s.byTask[session] = allowDocumentEdit
+	s.byTask[session] = capabilities
 	s.mu.Unlock()
 }
 
@@ -39,45 +45,61 @@ func (s *agentCapabilityStore) clear(session string) {
 	s.mu.Unlock()
 }
 
-func (s *agentCapabilityStore) lookup(session string) (allow, known bool) {
+func (s *agentCapabilityStore) lookup(session string) (agentCapabilities, bool) {
 	session = strings.TrimSpace(session)
 	if session == "" {
-		return true, false
+		return agentCapabilities{WriteDocs: true, ReadCode: true, ReplyComments: true}, false
 	}
 	s.mu.RLock()
-	allow, known = s.byTask[session]
+	capabilities, known := s.byTask[session]
 	s.mu.RUnlock()
-	return
+	return capabilities, known
 }
 
 // rejectAgentWrite blocks document mutations during an analysis-only task.
 // Requests without a managed session header (manual Agent CLI/MCP) keep the
 // existing Agent permission behavior.
 func (s *Server) rejectAgentWrite(w http.ResponseWriter, r *http.Request) bool {
+	return s.rejectAgentCapability(w, r, func(c agentCapabilities) bool { return c.WriteDocs }, "当前任务模板不允许修改文档")
+}
+
+func (s *Server) rejectAgentCodeRead(w http.ResponseWriter, r *http.Request) bool {
+	return s.rejectAgentCapability(w, r, func(c agentCapabilities) bool { return c.ReadCode }, "当前任务模板不允许读取代码仓库")
+}
+
+func (s *Server) rejectAgentCommentReply(w http.ResponseWriter, r *http.Request) bool {
+	return s.rejectAgentCapability(w, r, func(c agentCapabilities) bool { return c.ReplyComments }, "当前任务模板不允许回复评论")
+}
+
+func (s *Server) rejectAgentCapability(w http.ResponseWriter, r *http.Request, allowed func(agentCapabilities) bool, message string) bool {
 	session := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Session"))
 	if session == "" {
 		return false
 	}
-	allow, known := s.agentCaps.lookup(session)
-	if known && !allow {
-		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "当前任务模板只允许分析，不能修改文档；请用 reply_comment 回复分析结果",
-		})
+	capabilities, known := s.agentCaps.lookup(session)
+	if known && !allowed(capabilities) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
 		return true
 	}
 	return false
 }
 
-func (s *Server) commentAllowsDocumentEdit(comment Comment) bool {
+func (s *Server) commentCapabilities(comment Comment) agentCapabilities {
 	if comment.PromptTemplateID == "" {
 		template, _ := s.prompts.get(defaultPromptTemplateID)
-		return template.AllowDocumentEdit
+		return agentCapabilities{
+			WriteDocs: template.AllowDocumentEdit, ReadCode: template.AllowCodeRead,
+			ReplyComments: template.AllowCommentReply,
+		}
 	}
 	template, ok := s.prompts.get(comment.PromptTemplateID)
 	if !ok {
-		// A deleted custom template must fail closed, not fall back to a
-		// template that permits writing.
-		return false
+		// A deleted custom template fails closed for writes, but keeps the
+		// ability to read code and reply so the analysis can still land.
+		return agentCapabilities{WriteDocs: false, ReadCode: true, ReplyComments: true}
 	}
-	return template.AllowDocumentEdit
+	return agentCapabilities{
+		WriteDocs: template.AllowDocumentEdit, ReadCode: template.AllowCodeRead,
+		ReplyComments: template.AllowCommentReply,
+	}
 }

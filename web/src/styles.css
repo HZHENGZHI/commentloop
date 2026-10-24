@@ -5576,3 +5576,23 @@ body.dragging-split * {
   color: var(--accent-strong);
   font-size: 8.5px;
 }
+
+.prompt-template-tools {
+  margin: 8px 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.prompt-template-tools-title {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.prompt-template-tools .prompt-template-allow {
+  margin-top: 3px;
+}

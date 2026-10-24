@@ -18,10 +18,10 @@ import (
 )
 
 type reviewAgentJob struct {
-	Path              string
-	CommentID         string
-	Prompt            string
-	AllowDocumentEdit bool
+	Path         string
+	CommentID    string
+	Prompt       string
+	Capabilities agentCapabilities
 }
 
 type sessionAgentWorker struct {
@@ -138,7 +138,7 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		r.srv.broadcastAgent(job.Path, "error", fmt.Sprintf("%s 启动失败：%v", agent.Name, err))
 		return
 	}
-	r.srv.agentCaps.set(r.session.ID, job.AllowDocumentEdit)
+	r.srv.agentCaps.set(r.session.ID, job.Capabilities)
 	defer r.srv.agentCaps.clear(r.session.ID)
 	r.srv.broadcastAgent(job.Path, "working", fmt.Sprintf("%s 正在处理评论…", agent.Name))
 	progress := func(message string) {
@@ -585,7 +585,7 @@ func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
 	}
 	if s.agentRunner == nil || !s.agentRunner.enqueue(session, reviewAgentJob{
 		Path: path, CommentID: commentID, Prompt: prompt,
-		AllowDocumentEdit: s.commentAllowsDocumentEdit(comment),
+		Capabilities: s.commentCapabilities(comment),
 	}) {
 		return fmt.Errorf("后台 Agent 未启动")
 	}
@@ -623,6 +623,7 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		if comment.PromptTemplateID != "" {
 			template = PromptTemplate{
 				Name: "已删除的模板", AllowDocumentEdit: false,
+				AllowCodeRead: true, AllowCommentReply: true,
 				Body: "原任务模板已删除。请只分析当前评论并提供建议，不要修改文档。",
 			}
 			hasTemplate = true
@@ -630,6 +631,8 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 			template, _ = s.prompts.get(defaultPromptTemplateID)
 		}
 	}
+	allowCodeRead := !hasTemplate || template.AllowCodeRead
+	allowCommentReply := !hasTemplate || template.AllowCommentReply
 	templateVars := map[string]string{
 		"doc_path":            path,
 		"comment_quote":       truncatePrompt(comment.Quote, 1500),
@@ -648,6 +651,9 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	var repoText strings.Builder
 	for _, repo := range repos {
 		fmt.Fprintf(&repoText, "- id=%s name=%s path=%s\n", repo.ID, repo.Name, repo.Path)
+	}
+	if !allowCodeRead {
+		repoText.Reset()
 	}
 	templateVars["code_repos"] = strings.TrimSpace(repoText.String())
 	var b strings.Builder
@@ -678,7 +684,7 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		b.WriteString(renderPromptTemplate(template.Body, templateVars))
 		b.WriteString("\n")
 	}
-	if len(repos) > 0 {
+	if allowCodeRead && len(repos) > 0 {
 		b.WriteString("\nLinked code repositories:\n")
 		for _, repo := range repos {
 			fmt.Fprintf(&b, "- id=%s name=%s path=%s\n", repo.ID, repo.Name, repo.Path)
@@ -687,7 +693,11 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	b.WriteString("\nInstructions:\n")
 	b.WriteString("1. Use mdlive MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
 	b.WriteString("2. Read the document and the full comment thread with read_file/list_comments.\n")
-	b.WriteString("3. If code repositories are linked, inspect relevant code with list_code_files/search_code/read_code and consider Git state. Do not modify code.\n")
+	if allowCodeRead {
+		b.WriteString("3. If code repositories are linked, inspect relevant code with list_code_files/search_code/read_code and consider Git state. Do not modify code.\n")
+	} else {
+		b.WriteString("3. Do not inspect linked code repositories for this task.\n")
+	}
 	if hasTemplate && !template.AllowDocumentEdit {
 		b.WriteString("4. This is an analysis or diagnosis task. Do NOT call write_file and do NOT modify the document. Read the relevant document, comments, discussions, and code, then reply with your analysis.\n")
 		b.WriteString("5. Reply through reply_comment. Do NOT resolve the comment; only the user can close it.\n")
@@ -695,7 +705,12 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		b.WriteString("4. Make a focused document edit that addresses the latest user feedback and preserves unrelated content. Use the document consensus and selected discussion excerpts to avoid drifting from earlier decisions. If they conflict with the latest user comment, the latest user comment wins; if the conflict is material, explain it instead of guessing.\n")
 		b.WriteString("5. Reply through write_file with comment_ids containing ALL related group IDs, plus a short comment. Do NOT resolve the comment; only the user can close it.\n")
 	}
-	b.WriteString("6. If you cannot proceed, reply through reply_comment explaining the blocker. Do not ask the user interactively.\n")
+	if !allowCommentReply {
+		b.WriteString("5b. Do not call reply_comment for this task; the task template disables comment replies.\n")
+		b.WriteString("6. If you cannot proceed, stop without modifying comments. Do not ask the user interactively.\n")
+	} else {
+		b.WriteString("6. If you cannot proceed, reply through reply_comment explaining the blocker. Do not ask the user interactively.\n")
+	}
 	return b.String(), nil
 }
 

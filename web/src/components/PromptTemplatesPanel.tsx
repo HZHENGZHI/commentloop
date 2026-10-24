@@ -32,6 +32,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
   const [description, setDescription] = useState("");
   const [body, setBody] = useState("");
   const [allowDocumentEdit, setAllowDocumentEdit] = useState(true);
+  const [allowCodeRead, setAllowCodeRead] = useState(true);
+  const [allowCommentReply, setAllowCommentReply] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
@@ -69,6 +71,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     setDescription(selected.description);
     setBody(selected.body);
     setAllowDocumentEdit(selected.allowDocumentEdit);
+    setAllowCodeRead(selected.allowCodeRead);
+    setAllowCommentReply(selected.allowCommentReply);
     setOptimizedOriginal("");
     setOptimizeNote("");
   }, [selected]);
@@ -79,6 +83,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     setDescription("");
     setBody("");
     setAllowDocumentEdit(false);
+    setAllowCodeRead(true);
+    setAllowCommentReply(true);
     setError("");
   };
 
@@ -86,7 +92,14 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     setSaving(true);
     setError("");
     try {
-      const payload = { name, description, body, allowDocumentEdit };
+      const payload = {
+        name,
+        description,
+        body,
+        allowDocumentEdit,
+        allowCodeRead,
+        allowCommentReply,
+      };
       const saved = selected
         ? await updatePromptTemplate({ ...payload, id: selected.id })
         : await createPromptTemplate(payload);
@@ -129,6 +142,8 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
         description,
         body,
         allowDocumentEdit,
+        allowCodeRead,
+        allowCommentReply,
       });
       setOptimizedOriginal(body);
       setBody(result.body);
@@ -236,17 +251,37 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
               rows={9}
             />
           </label>
-          <label className="settings-auto-run prompt-template-allow">
-            <input
-              type="checkbox"
-              checked={allowDocumentEdit}
-              onChange={(event) => setAllowDocumentEdit(event.target.checked)}
-            />
-            <span>
-              允许 Agent 修改文档
-              <em>关闭后模板会要求 Agent 只回复分析；受管 Agent 会话的 write_file 会被服务端拦截</em>
-            </span>
-          </label>
+          <div className="prompt-template-tools">
+            <span className="prompt-template-tools-title">工具权限</span>
+            <label className="settings-auto-run prompt-template-allow">
+              <input type="checkbox" checked disabled />
+              <span>读取文档<em>必需：文件树、文档、评论和共识</em></span>
+            </label>
+            <label className="settings-auto-run prompt-template-allow">
+              <input
+                type="checkbox"
+                checked={allowCodeRead}
+                onChange={(event) => setAllowCodeRead(event.target.checked)}
+              />
+              <span>读取代码仓库<em>代码列表、源码读取、代码搜索和 Git 信息</em></span>
+            </label>
+            <label className="settings-auto-run prompt-template-allow">
+              <input
+                type="checkbox"
+                checked={allowCommentReply}
+                onChange={(event) => setAllowCommentReply(event.target.checked)}
+              />
+              <span>回复评论<em>通过 reply_comment 把分析或修改结果返回给用户</em></span>
+            </label>
+            <label className="settings-auto-run prompt-template-allow">
+              <input
+                type="checkbox"
+                checked={allowDocumentEdit}
+                onChange={(event) => setAllowDocumentEdit(event.target.checked)}
+              />
+              <span>修改文档<em>关闭后 write_file / 新建 / 删除会被服务端拦截</em></span>
+            </label>
+          </div>
           {optimizeNote ? (
             <div className="prompt-optimize-note">
               <span>{optimizeNote}</span>

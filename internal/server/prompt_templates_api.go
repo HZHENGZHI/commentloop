@@ -14,6 +14,8 @@ type promptTemplateRequest struct {
 	Description       string `json:"description"`
 	Body              string `json:"body"`
 	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
+	AllowCodeRead     bool   `json:"allowCodeRead"`
+	AllowCommentReply bool   `json:"allowCommentReply"`
 }
 
 type optimizePromptRequest struct {
@@ -21,6 +23,8 @@ type optimizePromptRequest struct {
 	Description       string `json:"description"`
 	Body              string `json:"body"`
 	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
+	AllowCodeRead     bool   `json:"allowCodeRead"`
+	AllowCommentReply bool   `json:"allowCommentReply"`
 }
 
 func (s *Server) handleListPromptTemplates(w http.ResponseWriter, _ *http.Request) {
@@ -39,7 +43,8 @@ func (s *Server) handleCreatePromptTemplate(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
-	item, err := s.prompts.create(req.Name, req.Description, req.Body, req.AllowDocumentEdit)
+	item, err := s.prompts.create(req.Name, req.Description, req.Body,
+		req.AllowDocumentEdit, req.AllowCodeRead, req.AllowCommentReply)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -59,7 +64,8 @@ func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少模板 ID"})
 		return
 	}
-	item, err := s.prompts.update(req.ID, req.Name, req.Description, req.Body, req.AllowDocumentEdit)
+	item, err := s.prompts.update(req.ID, req.Name, req.Description, req.Body,
+		req.AllowDocumentEdit, req.AllowCodeRead, req.AllowCommentReply)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "模板不存在"})
@@ -95,7 +101,8 @@ func (s *Server) handleOptimizePromptTemplate(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
-	body, err := s.optimizePromptTemplate(r.Context(), req.Name, req.Description, req.Body, req.AllowDocumentEdit)
+	body, err := s.optimizePromptTemplate(r.Context(), req.Name, req.Description, req.Body,
+		req.AllowDocumentEdit, req.AllowCodeRead, req.AllowCommentReply)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

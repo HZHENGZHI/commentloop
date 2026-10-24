@@ -709,7 +709,9 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 		"X-Mdlive-Agent":         "1",
 		"X-Mdlive-Agent-Session": "session-analysis",
 	}
-	app.agentCaps.set("session-analysis", false)
+	app.agentCaps.set("session-analysis", agentCapabilities{
+		WriteDocs: false, ReadCode: true, ReplyComments: true,
+	})
 	rec := doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("analysis PUT status=%d body=%s", rec.Code, rec.Body)
@@ -722,7 +724,16 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("analysis DELETE status=%d body=%s", rec.Code, rec.Body)
 	}
-	app.agentCaps.set("session-analysis", true)
+	app.agentCaps.set("session-analysis", agentCapabilities{
+		WriteDocs: false, ReadCode: false, ReplyComments: true,
+	})
+	rec = doJSONHeaders(t, app, http.MethodGet, "/api/code/repos", nil, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("analysis code read status=%d body=%s", rec.Code, rec.Body)
+	}
+	app.agentCaps.set("session-analysis", agentCapabilities{
+		WriteDocs: true, ReadCode: true, ReplyComments: true,
+	})
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("edit PUT status=%d body=%s", rec.Code, rec.Body)
@@ -808,6 +819,10 @@ func TestPromptTemplatesAndCommentTask(t *testing.T) {
 	comment := decode[Comment](t, commentRec)
 	if comment.PromptTemplateID != custom.ID {
 		t.Fatalf("comment template = %q", comment.PromptTemplateID)
+	}
+	caps := app.commentCapabilities(comment)
+	if caps.WriteDocs || caps.ReadCode || caps.ReplyComments {
+		t.Fatalf("custom capabilities = %+v", caps)
 	}
 	prompt, err := app.buildReviewAgentPrompt(path, comment.ID)
 	if err != nil {

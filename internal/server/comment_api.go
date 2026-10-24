@@ -187,6 +187,9 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 		// A user replying with further feedback reopens the review thread.
 		_, _ = s.comments.resolve(canonical, req.ID, false)
 	}
+	if author == "agent" && s.rejectAgentCommentReply(w, r) {
+		return
+	}
 	snapshot := req.Snapshot
 	if author == "agent" && strings.TrimSpace(snapshot) == "" {
 		// Older MCP/CLI clients (and manual reply_comment calls) do not send a

@@ -192,6 +192,9 @@ func (s *Server) codeRepoForID(id string) (codeRepoRecord, bool) {
 }
 
 func (s *Server) handleListCodeRepos(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	items, err := s.codeRepos.list()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -204,6 +207,9 @@ func (s *Server) handleListCodeRepos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDocCodeRepos(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少文档路径"})
@@ -305,6 +311,9 @@ func (s *Server) handleDeleteCodeRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCodeRepoInfo(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
@@ -318,6 +327,9 @@ func (s *Server) handleCodeRepoInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCodeRepoFiles(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
@@ -333,6 +345,9 @@ func (s *Server) handleCodeRepoFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCodeRepoFile(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
@@ -349,6 +364,9 @@ func (s *Server) handleCodeRepoFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCodeRepoSearch(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
@@ -500,6 +518,9 @@ type switchBranchRequest struct {
 }
 
 func (s *Server) handleCodeRepoBranches(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCodeRead(w, r) {
+		return
+	}
 	item, ok := s.codeRepos.get(r.URL.Query().Get("id"))
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})

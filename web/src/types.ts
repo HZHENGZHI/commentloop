@@ -270,6 +270,8 @@ export interface PromptTemplate {
   description: string;
   body: string;
   allowDocumentEdit: boolean;
+  allowCodeRead: boolean;
+  allowCommentReply: boolean;
   builtin: boolean;
   createdAt: string;
   updatedAt: string;
@@ -281,6 +283,8 @@ export interface PromptTemplateInput {
   description: string;
   body: string;
   allowDocumentEdit: boolean;
+  allowCodeRead: boolean;
+  allowCommentReply: boolean;
 }
 
 export interface Comment {

@@ -14,7 +14,7 @@ import (
 
 const promptOptimizeTimeout = 2 * time.Minute
 
-func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, body string, allowEdit bool) (string, error) {
+func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool) (string, error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	body = strings.TrimSpace(body)
@@ -35,12 +35,22 @@ func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, 
 	if !allowEdit {
 		mode = "只分析，不能修改文档"
 	}
+	codeMode := "允许读取代码仓库"
+	if !allowCodeRead {
+		codeMode = "禁止读取代码仓库"
+	}
+	replyMode := "允许回复评论"
+	if !allowCommentReply {
+		replyMode = "禁止回复评论"
+	}
 	prompt := fmt.Sprintf(`你是提示词工程专家。请优化下面这个 mdlive 后台 Code Agent 的任务提示词。
 
 这个 Agent 通过 mdlive MCP 读取文档、评论、讨论共识和代码仓库，并按用户评论工作。
 任务名称：%s
 任务说明：%s
 执行模式：%s
+代码权限：%s
+回复权限：%s
 
 当前提示词（可能只是粗略草稿）：
 ---BEGIN---
@@ -56,7 +66,7 @@ func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, 
 6. 不要要求 Agent 交互式提问，不要输出解释、前言或代码围栏。
 7. 使用中文 Markdown，控制在 2000 字以内。
 
-只输出优化后的提示词正文。`, name, description, mode, truncatePromptText(body, 8000))
+只输出优化后的提示词正文。`, name, description, mode, codeMode, replyMode, truncatePromptText(body, 8000))
 	runCtx, cancel := context.WithTimeout(ctx, promptOptimizeTimeout)
 	defer cancel()
 	args = append(args,
