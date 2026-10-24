@@ -61,6 +61,48 @@ make build
 cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 ```
 
+## Docker 镜像
+
+已发布多架构镜像：
+
+```text
+docker.io/iankkk/mdlive:0.1.0
+docker.io/iankkk/mdlive:latest
+```
+
+支持 `linux/arm64` 和 `linux/amd64`。镜像是只读评审模式，固定以前台 `run` 启动，适合交给 Docker / Apple container 管理：
+
+```bash
+docker run -d --name mdlive \
+  -p 127.0.0.1:4571:4571 \
+  -v "$HOME/Documents/notes:/notes" \
+  -v mdlive-data:/data \
+  iankkk/mdlive:latest
+```
+
+- `/notes`：要评审的 Markdown 目录
+- `/data`：SQLite、discovery 和日志；建议使用命名 volume
+- 容器用户 UID/GID 为 `10001:10001`；如果用 bind mount 且需要可写，注意宿主机目录权限
+- `docker stop mdlive` / `docker rm mdlive` 管理容器；镜像内的进程本身用 `mdlive run` 前台运行
+
+Apple container 同理：
+
+```bash
+container run -d --name mdlive \
+  -p 127.0.0.1:4571:4571 \
+  -v "$HOME/Documents/notes:/notes" \
+  -v mdlive-data:/data \
+  iankkk/mdlive:latest
+```
+
+本地重新构建：
+
+```bash
+make cross
+container build --platform linux/arm64 --platform linux/amd64 \
+  -t iankkk/mdlive:0.1.0 -t iankkk/mdlive:latest .
+```
+
 ## 后台运行（start / stop / status）
 
 默认启动就是后台进程；也可以显式使用生命周期命令：
