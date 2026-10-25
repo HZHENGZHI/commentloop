@@ -501,6 +501,7 @@ const en: Record<string, string> = {
   "需求拆解": "Requirements breakdown",
   "文档评审修改": "Document review",
   "默认会话": "Default session",
+  "未命名会话": "Unnamed session",
   "前": "before",
   "后": "after",
   "只把这个评论对应的段落恢复为「第 {{round}} 次修改{{side}}」的内容？\n\n其他位置的修改会保留。": "Restore only the paragraph for this comment to the {{side}} of revision {{round}}?\n\nChanges elsewhere will be preserved.",

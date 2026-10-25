@@ -39,6 +39,15 @@ const EXACT: Record<string, string> = {
   "后台 Agent 未启动": "Background agent is not running.",
   "任务不存在": "Job not found.",
   "评论任务": "Comment task",
+  "无法解析消息": "Could not parse the message.",
+  "路径无效": "Invalid path.",
+  "无法读取文件": "Could not read the file.",
+  "审阅模式下前台不能编辑；请让后台 Agent 修改": "The review UI is read-only; ask the background agent to make changes.",
+  "尚未打开文档": "No document is open.",
+  "文档路径不匹配": "Document path does not match.",
+  "文档过大，实时预览已暂停": "The document is too large; live preview is paused.",
+  "未知消息类型": "Unknown message type.",
+  "目录已添加，但写入本地配置失败": "Directory added, but the local configuration could not be saved.",
 };
 
 const PREFIXES: Array<[string, string]> = [
@@ -49,6 +58,7 @@ const PREFIXES: Array<[string, string]> = [
   ["外部 Agent 失败：", "External agent failed: "],
   ["导入会话失败：", "Failed to import session: "],
   ["读取会话失败：", "Failed to read sessions: "],
+  ["已连接，但读取远程文件失败：", "Connected, but failed to read remote files: "],
 ];
 
 export function localizeServerMessage(
@@ -70,12 +80,14 @@ export function localizeServerMessage(
   if (failed) return `${failed[1]} failed: ${failed[2]}`;
   const started = message.match(/^(.+) 启动失败：(.*)$/s);
   if (started) return `${started[1]} failed to start: ${started[2]}`;
-  if (/[\\u4e00-\\u9fff]/.test(message)) {
+  if (/[\u4e00-\u9fff]/.test(message)) {
     return status === "error"
       ? "Agent failed."
       : status === "done"
         ? "Agent finished."
-        : "Agent is working…";
+        : status === "warning"
+          ? "Completed with a warning."
+          : "Agent is working…";
   }
   return message;
 }

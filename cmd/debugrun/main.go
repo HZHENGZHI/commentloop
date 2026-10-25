@@ -40,8 +40,8 @@ type supervisor struct {
 func main() {
 	root := flag.String("root", ".", "project root to build and watch")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "用法: debugrun [选项] -- <commentloop 参数...>\n\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "构建 commentloop，监听 .go 变更并在编译成功后热重启后端。\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: debugrun [options] -- <commentloop args...>\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Build Commentloop, watch .go changes, and hot-restart the backend after a successful build.\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -51,7 +51,7 @@ func main() {
 
 	absRoot, err := filepath.Abs(*root)
 	if err != nil {
-		log.Fatalf("无效 root: %v", err)
+		log.Fatalf("invalid root: %v", err)
 	}
 	goCmd := os.Getenv("GO")
 	if goCmd == "" {
@@ -59,7 +59,7 @@ func main() {
 	}
 	tmpDir, err := os.MkdirTemp("", "commentloop-debug-*")
 	if err != nil {
-		log.Fatalf("创建临时目录失败: %v", err)
+		log.Fatalf("could not create temp directory: %v", err)
 	}
 
 	s := &supervisor{
@@ -76,10 +76,10 @@ func main() {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	log.Printf("项目根目录: %s", s.root)
-	log.Printf("监听 .go / go.mod / go.sum，修改并编译成功后自动热重启后端")
+	log.Printf("project root: %s", s.root)
+	log.Printf("watching .go / go.mod / go.sum; rebuild and restart the backend after changes")
 	if err := s.buildAndRun(); err != nil {
-		log.Fatalf("初始构建 / 启动失败:\n%v", err)
+		log.Fatalf("initial build/start failed:\n%v", err)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -87,7 +87,7 @@ func main() {
 	defer signal.Stop(sigCh)
 
 	if err := s.watch(sigCh); err != nil {
-		log.Printf("监听失败: %v", err)
+		log.Printf("watch failed: %v", err)
 	}
 }
 
@@ -108,7 +108,7 @@ func (s *supervisor) build() (string, error) {
 	s.buildSeq++
 	out := filepath.Join(s.tmpDir, fmt.Sprintf("commentloop-%d", s.buildSeq))
 
-	log.Printf("编译中…")
+	log.Printf("building…")
 	cmd := exec.Command(s.goCmd, "build", "-o", out, ".")
 	cmd.Dir = s.root
 	var buf bytes.Buffer
@@ -139,7 +139,7 @@ func (s *supervisor) startChild(bin string) error {
 	go func() {
 		done <- cmd.Wait()
 	}()
-	log.Printf("后端已启动 (pid %d)", cmd.Process.Pid)
+	log.Printf("backend started (pid %d)", cmd.Process.Pid)
 	return nil
 }
 
@@ -166,20 +166,20 @@ func (s *supervisor) stopChild() {
 }
 
 func (s *supervisor) restart() {
-	log.Printf("检测到 Go 源码变化，重新编译…")
+	log.Printf("Go source changed; rebuilding…")
 	bin, err := s.build()
 	if err != nil {
-		log.Printf("编译失败，旧后端继续运行:\n%v", err)
+		log.Printf("build failed; keeping the old backend running:\n%v", err)
 		return
 	}
 	s.stopChild()
 	if err := s.startChild(bin); err != nil {
-		log.Printf("新后端启动失败: %v", err)
+		log.Printf("new backend failed to start: %v", err)
 		_ = os.Remove(bin)
 		return
 	}
 	s.bin = bin
-	log.Printf("后端热重启完成")
+	log.Printf("backend hot restart complete")
 }
 
 func (s *supervisor) watch(sigCh <-chan os.Signal) error {
@@ -203,7 +203,7 @@ func (s *supervisor) watch(sigCh <-chan os.Signal) error {
 	for {
 		select {
 		case <-sigCh:
-			log.Printf("正在退出…")
+			log.Printf("shutting down…")
 			return nil
 
 		case ev, ok := <-w.Events:
@@ -240,9 +240,9 @@ func (s *supervisor) watch(sigCh <-chan os.Signal) error {
 
 		case err := <-s.childOut:
 			if err != nil {
-				log.Printf("后端进程退出: %v", err)
+				log.Printf("backend exited: %v", err)
 			} else {
-				log.Printf("后端进程退出")
+				log.Printf("backend exited")
 			}
 			if s.bin != "" {
 				_ = os.Remove(s.bin)
@@ -255,7 +255,7 @@ func (s *supervisor) watch(sigCh <-chan os.Signal) error {
 			if !ok {
 				return nil
 			}
-			log.Printf("监听错误: %v", err)
+			log.Printf("watch error: %v", err)
 		}
 	}
 }
@@ -278,7 +278,7 @@ func (s *supervisor) addDirs(root string) error {
 			}
 		}
 		if e := s.watcher.Add(p); e != nil {
-			log.Printf("监听 %s 失败: %v", p, e)
+			log.Printf("watch %s failed: %v", p, e)
 		}
 		return nil
 	})

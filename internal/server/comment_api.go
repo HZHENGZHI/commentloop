@@ -534,6 +534,13 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 			sideLabel = "前"
 		}
 		body := fmt.Sprintf("已局部回滚到第 %d 次修改%s的该评论段落", item.round, sideLabel)
+		if promptLanguage(r) == "en" {
+			sideLabel = "after"
+			if side == "before" {
+				sideLabel = "before"
+			}
+			body = fmt.Sprintf("Rolled back this comment paragraph to the %s side of revision %d.", sideLabel, item.round)
+		}
 		record, err := s.comments.reply(
 			canonical, item.comment.ID, "system", body, item.before, item.after, "", "",
 			false, nil, "",

@@ -743,7 +743,7 @@ export default function App() {
       if (!currentPathRef.current) initialPickRef.current = false;
       await refreshTree();
       toast(i18n.t("已添加目录 “{{name}}”", { name: result.root.name }), "success");
-      if (result.warning) toast(result.warning, "warn");
+      if (result.warning) toast(localizeServerMessage(result.warning, "warning"), "warn");
     },
     [refreshTree, toast],
   );
@@ -760,7 +760,7 @@ export default function App() {
         }),
         "success",
       );
-      if (result.warning) toast(result.warning, "warn");
+      if (result.warning) toast(localizeServerMessage(result.warning, "warning"), "warn");
     },
     [refreshTree, toast],
   );
@@ -872,8 +872,10 @@ export default function App() {
             imported += 1;
             break;
           } catch (error) {
+            const message = errorMessage(error);
             if (
-              errorMessage(error).includes("已存在") &&
+              (message.includes("已存在") ||
+                message.toLowerCase().includes("already exists")) &&
               attempt < 50
             ) {
               attempt += 1;
@@ -1094,7 +1096,7 @@ export default function App() {
         }
         break;
       case "error":
-        toast(message.message, "error");
+        toast(localizeServerMessage(message.message || "", "error"), "error");
         break;
       case "subscribed":
       case "unsubscribed":
