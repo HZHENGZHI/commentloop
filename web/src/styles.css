@@ -5608,11 +5608,11 @@ body.dragging-split * {
 /* Mermaid diagrams are hydrated from fenced mermaid blocks in the preview. */
 .mermaid-block {
   margin: 1.4em 0;
-  padding: 14px 16px;
+  padding: 16px 18px;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface-2, rgba(127, 127, 127, 0.04));
+  background: var(--surface-2);
 }
 .mermaid-diagram {
   display: flex;
@@ -5623,6 +5623,11 @@ body.dragging-split * {
   display: block;
   max-width: 100%;
   height: auto;
+  filter: none !important;
+}
+
+.mermaid-diagram svg * {
+  filter: none !important;
 }
 .mermaid-error {
   color: #b42318;
