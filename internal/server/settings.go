@@ -129,6 +129,10 @@ func normalizeAgent(agent codeAgentSettings) codeAgentSettings {
 	agent.Name = strings.TrimSpace(agent.Name)
 	agent.Command = strings.TrimSpace(agent.Command)
 	agent.Args = cleanStrings(agent.Args)
+	agent.Runner = strings.TrimSpace(agent.Runner)
+	if agent.Runner != "external" {
+		agent.Runner = "embedded"
+	}
 	if agent.Type == "" {
 		agent.Type = "custom"
 	}
