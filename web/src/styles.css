@@ -5596,3 +5596,10 @@ body.dragging-split * {
 .prompt-template-tools .prompt-template-allow {
   margin-top: 3px;
 }
+
+.lang-btn {
+  width: 36px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}

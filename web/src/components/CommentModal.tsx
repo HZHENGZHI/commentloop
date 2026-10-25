@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { Discussion, PromptTemplate } from "../types";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import { IconMessage, IconX } from "./Icons";
@@ -24,6 +25,7 @@ export function CommentModal({
   onClose,
   onSubmit,
 }: CommentModalProps) {
+  const { t } = useTranslation();
   const [body, setBody] = useState("");
   const [discussionIds, setDiscussionIds] = useState<string[]>([]);
   const [promptTemplateId, setPromptTemplateId] = useState("");
@@ -52,7 +54,7 @@ export function CommentModal({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!body.trim()) {
-      setError("请输入评论内容");
+      setError(t("请输入评论内容"));
       return;
     }
     setBusy(true);
@@ -60,7 +62,7 @@ export function CommentModal({
     try {
       await onSubmit(body.trim(), discussionIds, promptTemplateId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "添加评论失败");
+      setError(err instanceof Error ? err.message : t("添加评论失败"));
       setBusy(false);
     }
   };
@@ -72,28 +74,28 @@ export function CommentModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal comment-modal" role="dialog" aria-modal="true" aria-label="添加评论">
+      <div className="modal comment-modal" role="dialog" aria-modal="true" aria-label={t("添加评论")}>
         <div className="modal-head">
           <div className="modal-title">
             <IconMessage size={17} />
-            添加评论
+            {t("添加评论")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
         <form onSubmit={submit}>
           <div className="comment-quote">
-            <span>选中内容</span>
+            <span>{t("选中内容")}</span>
             <blockquote>{quote}</blockquote>
           </div>
           <label className="modal-label" htmlFor="comment-body">
-            评论内容
+            {t("评论内容")}
           </label>
           <textarea
             id="comment-body"
@@ -104,20 +106,20 @@ export function CommentModal({
               setBody(event.target.value);
               setError(null);
             }}
-            placeholder={`写下你的意见，${agentName} 可以通过 MCP 读取并回复…`}
+            placeholder={t("写下你的意见，{{agent}} 可以通过 MCP 读取并回复…", { agent: agentName })}
             rows={5}
           />
           {promptTemplates.length > 0 ? (
             <label className="comment-template-field">
-              <span>任务类型</span>
+              <span>{t("任务类型")}</span>
               <select
                 value={promptTemplateId}
                 onChange={(event) => setPromptTemplateId(event.target.value)}
               >
                 {promptTemplates.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.allowDocumentEdit ? "" : "（只分析）"}
+                    {t(item.name)}
+                    {item.allowDocumentEdit ? "" : t("（只分析）")}
                   </option>
                 ))}
               </select>
@@ -131,10 +133,10 @@ export function CommentModal({
           {error ? <p className="modal-error">{error}</p> : null}
           <div className="modal-actions">
             <button type="button" className="btn ghost" onClick={onClose}>
-              取消
+              {t("取消")}
             </button>
             <button type="submit" className="btn primary" disabled={busy}>
-              {busy ? "添加中…" : "添加评论"}
+              {busy ? t("添加中…") : t("添加评论")}
             </button>
           </div>
         </form>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { AgentSession } from "../types";
 import { IconCheck, IconChevronDown, IconMessage, IconPlus } from "./Icons";
 
@@ -10,10 +11,10 @@ interface AgentSessionPickerProps {
   onCreate: () => Promise<void>;
 }
 
-function sessionTime(value: string): string {
+function sessionTime(value: string, locale: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -28,6 +29,7 @@ export function AgentSessionPicker({
   onSwitch,
   onCreate,
 }: AgentSessionPickerProps) {
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -84,17 +86,17 @@ export function AgentSessionPicker({
         type="button"
         className={`agent-session-trigger${open ? " active" : ""}`}
         onClick={() => setOpen((value) => !value)}
-        title="切换这个文档的 Agent 会话"
+        title={t("切换这个文档的 Agent 会话")}
         aria-expanded={open}
       >
         <IconMessage size={10} />
-        <span>{active?.title ?? "会话"}</span>
+        <span>{active?.title ? t(active.title) : t("会话")}</span>
         <IconChevronDown size={10} />
       </button>
       {open ? (
         <div className="agent-session-menu">
           <div className="agent-session-head">
-            <span>Agent 会话</span>
+            <span>{t("Agent 会话")}</span>
             <button
               type="button"
               className="agent-session-new"
@@ -102,7 +104,7 @@ export function AgentSessionPicker({
               disabled={busy || working}
             >
               <IconPlus size={11} />
-              新建
+              {t("新建")}
             </button>
           </div>
           <div className="agent-session-list">
@@ -117,17 +119,17 @@ export function AgentSessionPicker({
                 disabled={working}
               >
                 <span className="agent-session-title">
-                  {item.title}
+                  {t(item.title)}
                   {item.id === activeId ? <IconCheck size={11} /> : null}
                 </span>
                 <span className="agent-session-time">
-                  {sessionTime(item.createdAt)}
+                  {sessionTime(item.createdAt, i18n.language)}
                 </span>
               </button>
             ))}
           </div>
           <p className="agent-session-hint">
-            每个会话独立保存上下文；切换后新的评论任务使用所选会话。
+            {t("每个会话独立保存上下文；切换后新的评论任务使用所选会话。")}
           </p>
         </div>
       ) : null}

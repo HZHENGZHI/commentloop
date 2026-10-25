@@ -6,6 +6,8 @@ import {
   type MouseEvent,
   type RefObject,
 } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import type { Comment } from "../types";
 import {
   findQuoteRange,
@@ -33,6 +35,7 @@ export function Preview({
   onOpenDoc,
   onRequestComment,
 }: PreviewProps) {
+  const { t } = useTranslation();
   const articleRef = useRef<HTMLElement>(null);
   const scrollPos = useRef(0);
   const [selection, setSelection] = useState<{
@@ -160,7 +163,7 @@ export function Preview({
       const button = document.createElement("button");
       button.type = "button";
       button.className = "commentloop-copy";
-      button.textContent = "复制";
+      button.textContent = i18n.t("复制");
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -219,8 +222,8 @@ export function Preview({
         />
       ) : (
         <div className="preview-blank">
-          <p className="preview-blank-title">空白文档</p>
-          <p>开始输入 Markdown，预览会实时出现在这里。</p>
+          <p className="preview-blank-title">{t("空白文档")}</p>
+          <p>{t("开始输入 Markdown，预览会实时出现在这里。")}</p>
         </div>
       )}
       {selection ? (
@@ -235,7 +238,7 @@ export function Preview({
             setSelection(null);
           }}
         >
-          评论
+          {t("评论选中内容")}
         </button>
       ) : null}
     </div>
@@ -262,8 +265,8 @@ async function copyText(text: string, button: HTMLButtonElement) {
       area.remove();
     }
   }
-  button.textContent = "已复制";
+  button.textContent = i18n.t("已复制");
   window.setTimeout(() => {
-    button.textContent = "复制";
+    button.textContent = i18n.t("复制");
   }, 1500);
 }

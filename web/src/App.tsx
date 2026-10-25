@@ -61,6 +61,8 @@ import {
   IconSettings,
   IconSun,
 } from "./components/Icons";
+import { useTranslation } from "react-i18next";
+import i18n from "./i18n";
 import { applyTheme, currentTheme } from "./theme";
 import { useWebSocket } from "./useWebSocket";
 import type {
@@ -117,7 +119,7 @@ function readLocal(key: string): string | null {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "未知错误";
+  return error instanceof Error ? error.message : i18n.t("未知错误");
 }
 
 function loadViewMode(): ViewMode {
@@ -147,6 +149,7 @@ function suffixedName(name: string, n: number): string {
 }
 
 export default function App() {
+  const { t, i18n: i18nHook } = useTranslation();
   const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [tree, setTree] = useState<TreeResponse | null>(null);
@@ -209,7 +212,7 @@ export default function App() {
     : (defaultRoot?.name ?? "");
   const currentLocation = currentFile
     ? [currentFile.rootName, currentFile.dir].filter(Boolean).join(" / ")
-    : "根目录";
+    : t("根目录");
   const currentRootLocation = currentRoot
     ? currentRoot.kind === "remote"
       ? `${currentRoot.remote}:${currentRoot.path}`
@@ -351,7 +354,7 @@ export default function App() {
           setHtml(result.html);
           setStatus("saved");
           statusRef.current = "saved";
-          if (options?.manual) toast("已保存", "success");
+          if (options?.manual) toast(i18n.t("已保存"), "success");
         } else {
           setStatus("dirty");
           statusRef.current = "dirty";
@@ -360,7 +363,7 @@ export default function App() {
         if (seq !== saveSeqRef.current) return;
         setStatus("dirty");
         statusRef.current = "dirty";
-        toast(`保存失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("保存失败：{{error}}", { error: errorMessage(error) }), "error");
       }
     },
     [previewOnly, toast],
@@ -426,7 +429,7 @@ export default function App() {
     async (path: string) => {
       const cleanPath = path.replace(/^\/+/, "");
       if (!isMarkdownPath(cleanPath)) {
-        toast("只能打开 Markdown 文件", "warn");
+        toast(i18n.t("只能打开 Markdown 文件"), "warn");
         return;
       }
       if (currentPathRef.current === cleanPath) return;
@@ -444,7 +447,7 @@ export default function App() {
             savedContentRef.current = result.content;
           } catch (error) {
             toast(
-              `当前文档尚未保存，已取消切换：${errorMessage(error)}`,
+              i18n.t("当前文档尚未保存，已取消切换：{{error}}", { error: errorMessage(error) }),
               "error",
             );
             return;
@@ -482,7 +485,7 @@ export default function App() {
         }, 0);
       } catch (error) {
         if (seq !== openSeqRef.current) return;
-        toast(`打开失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("打开失败：{{error}}", { error: errorMessage(error) }), "error");
       } finally {
         if (seq === openSeqRef.current) setLoading(false);
       }
@@ -509,12 +512,12 @@ export default function App() {
     async (body: string, discussionIds: string[] = [], promptTemplateId = "") => {
       const path = currentPathRef.current;
       const quote = commentQuote;
-      if (!path || !quote) throw new Error("当前没有打开的文档");
+      if (!path || !quote) throw new Error(i18n.t("当前没有打开的文档"));
       await createComment(path, quote, body, discussionIds, promptTemplateId);
       setCommentQuote(null);
       setCommentsOpen(true);
       setCommentsNonce((value) => value + 1);
-      toast("评论已添加", "success");
+      toast(i18n.t("评论已添加"), "success");
     },
     [commentQuote, toast],
   );
@@ -527,7 +530,7 @@ export default function App() {
         await resolveComment(path, comment.id, resolved);
         setCommentsNonce((value) => value + 1);
       } catch (error) {
-        toast(`更新评论失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("更新评论失败：{{error}}", { error: errorMessage(error) }), "error");
       }
     },
     [toast],
@@ -536,14 +539,14 @@ export default function App() {
   const handleReplyComment = useCallback(
     async (comment: Comment, body: string, discussionIds: string[] = [], promptTemplateId = "") => {
       const path = currentPathRef.current;
-      if (!path) throw new Error("当前没有打开的文档");
+      if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       await replyComment(path, comment.id, body, {
         author: "user",
         discussionIds,
         promptTemplateId,
       });
       setCommentsNonce((value) => value + 1);
-      toast("已回复，等待 Code Agent 继续修改", "success");
+      toast(i18n.t("已回复，等待 Code Agent 继续修改"), "success");
     },
     [toast],
   );
@@ -551,7 +554,7 @@ export default function App() {
   const handleGroupComments = useCallback(
     async (comment: Comment, memberIds: string[]) => {
       const path = currentPathRef.current;
-      if (!path) throw new Error("当前没有打开的文档");
+      if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       await groupComments(path, comment.id, memberIds);
       setCommentsNonce((value) => value + 1);
       toast(
@@ -573,7 +576,7 @@ export default function App() {
     ) => {
       const path = currentPathRef.current;
       if (!path) {
-        toast("当前没有打开的文档", "error");
+        toast(i18n.t("当前没有打开的文档"), "error");
         return;
       }
       const sideLabel = side === "before" ? "前" : "后";
@@ -601,13 +604,13 @@ export default function App() {
 
   const handleCreateAgentSession = useCallback(async () => {
     const path = currentPathRef.current;
-    if (!path) throw new Error("当前没有打开的文档");
+    if (!path) throw new Error(i18n.t("当前没有打开的文档"));
     try {
       await createAgentSession(path);
       setSessionsNonce((value) => value + 1);
-      toast("已新建 Agent 会话", "success");
+      toast(i18n.t("已新建 Agent 会话"), "success");
     } catch (error) {
-      toast(`新建会话失败：${errorMessage(error)}`, "error");
+      toast(i18n.t("新建会话失败：{{error}}", { error: errorMessage(error) }), "error");
       throw error;
     }
   }, [toast]);
@@ -615,14 +618,14 @@ export default function App() {
   const handleSwitchAgentSession = useCallback(
     async (id: string) => {
       const path = currentPathRef.current;
-      if (!path) throw new Error("当前没有打开的文档");
+      if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       try {
         await setActiveAgentSession(path, id);
         setActiveAgentSessionId(id);
         setSessionsNonce((value) => value + 1);
-        toast("已切换 Agent 会话", "success");
+        toast(i18n.t("已切换 Agent 会话"), "success");
       } catch (error) {
-        toast(`切换会话失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("切换会话失败：{{error}}", { error: errorMessage(error) }), "error");
         throw error;
       }
     },
@@ -637,7 +640,7 @@ export default function App() {
     } catch {
       // Keep the last known config; the next page load will refresh it.
     }
-    toast("设置已保存", "success");
+    toast(i18n.t("设置已保存"), "success");
   }, [toast]);
 
   const handleCodeRepoChanged = useCallback(
@@ -651,13 +654,13 @@ export default function App() {
   const handleTriggerCommentAgent = useCallback(
     async (comment: Comment) => {
       const path = currentPathRef.current;
-      if (!path) throw new Error("当前没有打开的文档");
+      if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       try {
         await triggerCommentAgent(path, comment.id);
         setCommentsNonce((value) => value + 1);
-        toast("已通知后台 Agent 处理该评论", "success");
+        toast(i18n.t("已通知后台 Agent 处理该评论"), "success");
       } catch (error) {
-        toast(`启动 Agent 失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("启动 Agent 失败：{{error}}", { error: errorMessage(error) }), "error");
         throw error;
       }
     },
@@ -668,13 +671,13 @@ export default function App() {
     async (comment: Comment) => {
       const path = currentPathRef.current;
       if (!path) return;
-      if (!window.confirm("删除这条评论？")) return;
+      if (!window.confirm(i18n.t("删除这条评论？"))) return;
       try {
         await deleteComment(path, comment.id);
         setCommentsNonce((value) => value + 1);
-        toast("评论已删除", "success");
+        toast(i18n.t("评论已删除"), "success");
       } catch (error) {
-        toast(`删除评论失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("删除评论失败：{{error}}", { error: errorMessage(error) }), "error");
       }
     },
     [toast],
@@ -685,7 +688,7 @@ export default function App() {
       if (viewMode === "editor") setViewMode("split");
       window.setTimeout(() => {
         if (!scrollToQuote(previewRef.current, comment.anchor || comment.quote)) {
-          toast("未能在预览中定位这段文字", "warn");
+          toast(i18n.t("未能在预览中定位这段文字"), "warn");
         }
       }, 40);
     },
@@ -699,14 +702,14 @@ export default function App() {
       try {
         await deleteDoc(path);
         await refreshTree();
-        toast("文件已删除", "success");
+        toast(i18n.t("文件已删除"), "success");
         if (removingCurrent) {
           clearCurrent();
           initialPickRef.current = false;
         }
       } catch (error) {
         initialPickRef.current = false;
-        toast(`删除失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("删除失败：{{error}}", { error: errorMessage(error) }), "error");
       }
     },
     [clearCurrent, refreshTree, toast],
@@ -714,7 +717,7 @@ export default function App() {
 
   const requestNewDoc = useCallback(() => {
     if (!roots.length) {
-      toast("请先添加一个目录", "info");
+      toast(i18n.t("请先添加一个目录"), "info");
       setAddRootOpen(true);
       return;
     }
@@ -743,7 +746,9 @@ export default function App() {
       if (!currentPathRef.current) initialPickRef.current = false;
       await refreshTree();
       toast(
-        `已连接远程服务器 “${result.root.remote ?? result.root.name}”`,
+        i18n.t("已连接远程服务器 “{{name}}”", {
+          name: result.root.remote ?? result.root.name,
+        }),
         "success",
       );
       if (result.warning) toast(result.warning, "warn");
@@ -796,7 +801,7 @@ export default function App() {
         }
       } catch (error) {
         if (removingCurrent) initialPickRef.current = false;
-        toast(`移除目录失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("移除目录失败：{{error}}", { error: errorMessage(error) }), "error");
       } finally {
         // Keep the spinner visible long enough to be perceivable even when the
         // server responds immediately.
@@ -806,7 +811,7 @@ export default function App() {
         }
         setRemovingRoot(null);
         if (removed) {
-          toast(`已移除目录 “${root.name}”`, "success");
+          toast(i18n.t("已移除目录 “{{name}}”", { name: root.name }), "success");
         }
       }
     },
@@ -819,7 +824,7 @@ export default function App() {
       setNewModal(false);
       await refreshTree();
       await openDoc(result.path);
-      toast("文档已创建", "success");
+      toast(i18n.t("文档已创建"), "success");
     },
     [openDoc, refreshTree, toast],
   );
@@ -830,14 +835,14 @@ export default function App() {
         isMarkdownPath(file.name),
       );
       if (!candidates.length) {
-        toast("请选择 Markdown 文件", "warn");
+        toast(i18n.t("请选择 Markdown 文件"), "warn");
         return;
       }
       const targetRoot = currentFile
         ? roots.find((root) => root.id === currentFile.rootId)
         : primaryRoot;
       if (!targetRoot) {
-        toast("请先添加一个目录", "warn");
+        toast(i18n.t("请先添加一个目录"), "warn");
         return;
       }
       let firstPath: string | null = null;
@@ -862,7 +867,7 @@ export default function App() {
               target = `${targetRoot.id}/${suffixedName(base, attempt)}`;
               continue;
             }
-            toast(`导入 ${file.name} 失败：${errorMessage(error)}`, "error");
+            toast(i18n.t("导入 {{file}} 失败：{{error}}", { file: file.name, error: errorMessage(error) }), "error");
             break;
           }
         }
@@ -870,7 +875,7 @@ export default function App() {
       await refreshTree();
       if (firstPath) await openDoc(firstPath);
       if (imported > 0) {
-        toast(`已导入 ${imported} 个文件`, "success");
+        toast(i18n.t("已导入 {{count}} 个文件", { count: imported }), "success");
       }
     },
     [currentFile, openDoc, primaryRoot, refreshTree, roots, toast],
@@ -970,7 +975,7 @@ export default function App() {
         }
         if (message.origin === "rollback") {
           if (incomingContent !== contentRef.current && dirty) {
-            toast("评论段落已局部回滚，未保存的本地改动已被覆盖", "warn");
+            toast(i18n.t("评论段落已局部回滚，未保存的本地改动已被覆盖"), "warn");
           }
           applySavedDoc(incomingContent, incomingHtml);
           break;
@@ -984,7 +989,7 @@ export default function App() {
             break;
           }
           if (dirty) {
-            toast("文件已被外部修改，已载入磁盘上的新内容", "warn");
+            toast(i18n.t("文件已被外部修改，已载入磁盘上的新内容"), "warn");
           }
           applySavedDoc(incomingContent, incomingHtml);
           break;
@@ -1052,7 +1057,7 @@ export default function App() {
                   : "working";
           setAgentActivity({
             status,
-            message: message.message || "后台 Agent 正在处理…",
+            message: message.message || i18n.t("后台 Agent 正在处理…"),
           });
           if (status === "queued" || status === "done" || status === "error") {
             toast(
@@ -1067,7 +1072,7 @@ export default function App() {
         break;
       case "gone":
         if (message.path === currentPathRef.current) {
-          toast("文件已被删除或移动", "warn");
+          toast(i18n.t("文件已被删除或移动"), "warn");
           initialPickRef.current = true;
           clearCurrent();
           void refreshTree().finally(() => {
@@ -1096,7 +1101,7 @@ export default function App() {
         if (alive) setConfig(next);
       })
       .catch((error) => {
-        if (alive) toast(`无法读取配置：${errorMessage(error)}`, "error");
+        if (alive) toast(i18n.t("无法读取配置：{{error}}", { error: errorMessage(error) }), "error");
       })
       .finally(() => {
         if (alive) setConfigLoaded(true);
@@ -1110,7 +1115,7 @@ export default function App() {
   useEffect(() => {
     if (config?.debug && !config.hotReload) {
       toast(
-        "调试模式未找到 web/dist，前端热更新不可用；已回退到内嵌资源",
+        i18n.t("调试模式未找到 web/dist，前端热更新不可用；已回退到内嵌资源"),
         "warn",
       );
     }
@@ -1142,7 +1147,7 @@ export default function App() {
     if (!tree || !currentPath || tree.truncated) return;
     if (tree.files.some((file) => file.path === currentPath)) return;
     initialPickRef.current = false;
-    toast("当前文件已不在工作区中，正在切换", "warn");
+    toast(i18n.t("当前文件已不在工作区中，正在切换"), "warn");
     clearCurrent();
   }, [tree, currentPath, clearCurrent, toast]);
 
@@ -1356,8 +1361,8 @@ export default function App() {
   useEffect(() => {
     document.title = currentPath
       ? `${baseName(currentPath)} · Commentloop`
-      : "Commentloop · AI 协作审阅";
-  }, [currentPath]);
+      : t("Commentloop · AI 协作审阅");
+  }, [currentPath, t]);
 
   useEffect(() => {
     if (previewOnly || viewMode === "preview") return;
@@ -1368,7 +1373,7 @@ export default function App() {
   if (!configLoaded) {
     return (
       <div className="boot-screen">
-        <div className="boot-mark">M</div>
+        <div className="boot-mark">C</div>
         <div className="boot-title">Commentloop</div>
         <span className="spinner" />
       </div>
@@ -1377,10 +1382,10 @@ export default function App() {
 
   const connectionLabel =
     connection === "open"
-      ? "实时同步"
+      ? t("实时同步")
       : connection === "connecting"
-        ? "连接中…"
-        : "重新连接中…";
+        ? t("连接中…")
+        : t("重新连接中…");
 
   const dirty = status !== "saved";
 
@@ -1392,8 +1397,8 @@ export default function App() {
             type="button"
             className="icon-btn"
             onClick={() => setSidebarOpen((value) => !value)}
-            title={sidebarOpen ? "隐藏侧边栏 (⌘B)" : "显示侧边栏 (⌘B)"}
-            aria-label="切换侧边栏"
+            title={sidebarOpen ? t("隐藏侧边栏 (⌘B)") : t("显示侧边栏 (⌘B)")}
+            aria-label={t("切换侧边栏")}
             aria-pressed={sidebarOpen}
           >
             <IconPanelLeft size={17} />
@@ -1408,8 +1413,8 @@ export default function App() {
               className="mode-pill debug"
               title={
                 config?.hotReload
-                  ? "调试模式：前端资源变化后自动刷新"
-                  : "调试模式：热更新目录不可用"
+                  ? t("调试模式：前端资源变化后自动刷新")
+                  : t("调试模式：热更新目录不可用")
               }
             >
               DEBUG
@@ -1418,9 +1423,9 @@ export default function App() {
           {previewOnly ? (
             <span
               className="mode-pill readonly"
-              title="审阅模式：前台只读；后台 Agent 可写入，评论与局部回滚可用"
+              title={t("审阅模式：前台只读；后台 Agent 可写入，评论与局部回滚可用")}
             >
-              审阅模式
+              {t("审阅模式")}
             </span>
           ) : null}
         </div>
@@ -1442,7 +1447,7 @@ export default function App() {
               </span>
             </>
           ) : (
-            <span className="doc-name empty">未打开文档</span>
+            <span className="doc-name empty">{t("未打开文档")}</span>
           )}
         </div>
 
@@ -1451,14 +1456,14 @@ export default function App() {
             <SaveIndicator status={status} />
           ) : null}
           {!previewOnly ? (
-            <div className="segmented" role="group" aria-label="视图模式">
+            <div className="segmented" role="group" aria-label={t("视图模式")}>
               {VIEW_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   className={viewMode === option.value ? "active" : ""}
-                  title={option.label}
-                  aria-label={option.label}
+                  title={t(option.label)}
+                  aria-label={t(option.label)}
                   aria-pressed={viewMode === option.value}
                   onClick={() => setViewMode(option.value)}
                 >
@@ -1471,8 +1476,8 @@ export default function App() {
             type="button"
             className="icon-btn"
             onClick={() => setSettingsOpen(true)}
-            title="设置"
-            aria-label="设置"
+            title={t("设置")}
+            aria-label={t("设置")}
           >
             <IconSettings size={17} />
           </button>
@@ -1482,19 +1487,32 @@ export default function App() {
             onClick={() =>
               setTheme((value) => (value === "dark" ? "light" : "dark"))
             }
-            title={theme === "dark" ? "切换到浅色" : "切换到深色"}
-            aria-label="切换主题"
+            title={theme === "dark" ? t("切换到浅色") : t("切换到深色")}
+            aria-label={t("切换主题")}
           >
             {theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
           <button
             type="button"
+            className="icon-btn lang-btn"
+            onClick={() =>
+              void i18nHook.changeLanguage(
+                i18nHook.language === "zh-CN" ? "en" : "zh-CN",
+              )
+            }
+            title={i18nHook.language === "zh-CN" ? "English" : "简体中文"}
+            aria-label={i18nHook.language === "zh-CN" ? "Switch to English" : "切换到中文"}
+          >
+            <span>{i18nHook.language === "zh-CN" ? "EN" : "中"}</span>
+          </button>
+          <button
+            type="button"
             className="btn primary new-btn"
             onClick={requestNewDoc}
-            title="新建文档 (⌘⇧N)"
+            title={t("新建文档 (⌘⇧N)")}
           >
             <IconPlus size={15} />
-            <span>新建</span>
+            <span>{t("新建")}</span>
           </button>
         </div>
       </header>
@@ -1504,7 +1522,7 @@ export default function App() {
           type="button"
           className={`sidebar-backdrop${sidebarOpen ? " show" : ""}`}
           onClick={() => setSidebarOpen(false)}
-          aria-label="关闭侧边栏"
+          aria-label={t("关闭侧边栏")}
         />
         <Sidebar
           open={sidebarOpen}
@@ -1541,9 +1559,9 @@ export default function App() {
                   <div className="pane-head">
                     <span className="pane-title">
                       <IconPen size={14} />
-                      编辑
+                      {t("编辑")}
                     </span>
-                    <span className="pane-meta">自动保存</span>
+                    <span className="pane-meta">{t("自动保存")}</span>
                   </div>
                   <Editor
                     ref={editorRef}
@@ -1561,7 +1579,7 @@ export default function App() {
                   className="split-handle"
                   onPointerDown={startSplitDrag}
                   onDoubleClick={() => setSplit(50)}
-                  title="拖动调整分栏，双击恢复 50/50"
+                  title={t("拖动调整分栏，双击恢复 50/50")}
                   role="separator"
                   aria-orientation="vertical"
                 >
@@ -1573,10 +1591,10 @@ export default function App() {
                 <div className="pane-head">
                   <span className="pane-title">
                     <IconEye size={14} />
-                    预览
+                    {t("预览")}
                   </span>
                   {previewOnly ? (
-                    <span className="pane-meta">前台只读 · Agent 修改自动更新</span>
+                    <span className="pane-meta">{t("前台只读 · Agent 修改自动更新")}</span>
                   ) : null}
                   <div className="pane-head-right">
                     {agentActivity ? (
@@ -1607,12 +1625,12 @@ export default function App() {
                         }}
                         title={
                           codeRepos.length
-                            ? `已关联 ${codeRepos.length} 个代码仓库`
-                            : "关联代码仓库"
+                            ? t("已关联 {{count}} 个代码仓库", { count: codeRepos.length })
+                            : t("关联代码仓库")
                         }
                       >
                         <IconGitBranch size={13} />
-                        代码
+                        {t("代码")}
                         {codeRepos.length ? (
                           <span className="comments-badge">
                             {codeRepos.length}
@@ -1625,10 +1643,10 @@ export default function App() {
                         type="button"
                         className="comments-toggle discussion-toggle"
                         onClick={() => setDiscussionModalOpen(true)}
-                        title="导入讨论并维护文档共识"
+                        title={t("导入讨论并维护文档共识")}
                       >
                         <IconMessage size={13} />
-                        讨论
+                        {t("讨论")}
                         {consensusActivity &&
                         consensusActivity.status !== "done" &&
                         consensusActivity.status !== "error" ? (
@@ -1644,11 +1662,11 @@ export default function App() {
                       type="button"
                       className={`comments-toggle${commentsOpen ? " active" : ""}`}
                       onClick={() => setCommentsOpen((value) => !value)}
-                      title="查看 / 添加评论"
+                      title={t("查看 / 添加评论")}
                       aria-pressed={commentsOpen}
                     >
                       <IconMessage size={13} />
-                      评论
+                      {t("评论")}
                       {comments.length ? (
                         <span className="comments-badge">{comments.length}</span>
                       ) : null}
@@ -1657,7 +1675,7 @@ export default function App() {
                       className={`live-badge${connection === "open" ? " on" : ""}`}
                     >
                       <i />
-                      {connection === "open" ? "实时" : "离线渲染"}
+                      {connection === "open" ? t("实时") : t("离线渲染")}
                     </span>
                   </div>
                 </div>
@@ -1714,13 +1732,13 @@ export default function App() {
           {currentPath ? (
             <>
               {previewOnly ? (
-                <span className="foot-readonly">· 审阅模式</span>
+                <span className="foot-readonly">{t("· 审阅模式")}</span>
               ) : status === "saved" ? (
                 <span className="foot-sep">·</span>
               ) : status === "saving" ? (
-                <span className="foot-sep">· 保存中…</span>
+                <span className="foot-sep">{t("· 保存中…")}</span>
               ) : (
-                <span className="foot-unsaved">· 未保存</span>
+                <span className="foot-unsaved">{t("· 未保存")}</span>
               )}
               {meta ? (
                 <>
@@ -1734,9 +1752,9 @@ export default function App() {
         <div className="status-right">
           {currentPath ? (
             <>
-              <span>{stats.words} 字</span>
-              <span>{stats.chars} 字符</span>
-              <span>{stats.lines} 行</span>
+              <span>{t("{{count}} 字", { count: stats.words })}</span>
+              <span>{t("{{count}} 字符", { count: stats.chars })}</span>
+              <span>{t("{{count}} 行", { count: stats.lines })}</span>
               <span
                 className="status-path"
                 title={
@@ -1817,7 +1835,7 @@ export default function App() {
           onManageRepos={() => setCodeRepoModalOpen(true)}
           onBranchChanged={() => {
             setCodeRepoNonce((value) => value + 1);
-            toast("已切换分支", "success");
+            toast(t("已切换分支"), "success");
           }}
         />
       ) : null}
@@ -1847,8 +1865,9 @@ export default function App() {
 }
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
+  const { t } = useTranslation();
   return (
-    <span className={`save-state ${status}`} title="自动保存已开启">
+    <span className={`save-state ${status}`} title={t("自动保存已开启")}>
       {status === "saved" ? (
         <IconCheck size={13} />
       ) : status === "saving" ? (
@@ -1856,7 +1875,7 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
       ) : (
         <span className="unsaved-dot" />
       )}
-      {status === "saved" ? "已保存" : status === "saving" ? "保存中" : "未保存"}
+      {status === "saved" ? t("已保存") : status === "saving" ? t("保存中") : t("未保存")}
     </span>
   );
 }
@@ -1880,6 +1899,7 @@ function Welcome({
   onBrowse,
   onOpen,
 }: WelcomeProps) {
+  const { t } = useTranslation();
   const roots = tree?.roots ?? [];
   const primary = roots.find((root) => root.primary) ?? roots[0];
   const recent = [...(tree?.files ?? [])]
@@ -1889,19 +1909,19 @@ function Welcome({
     <div className="welcome">
       <div className="welcome-glow" />
       <div className="welcome-inner">
-        <div className="welcome-mark">M</div>
+        <div className="welcome-mark">C</div>
         <p className="eyebrow">
           {readOnly ? "REVIEW MODE · AGENT WRITES" : "LOCAL-FIRST MARKDOWN"}
         </p>
         <h1>
-          让 Markdown
+          {t("让 Markdown")}
           <br />
-          <span className="welcome-accent">所见即所得</span>
+          <span className="welcome-accent">{t("所见即所得")}</span>
         </h1>
         <p className="welcome-lead">
           {readOnly
-            ? "审阅模式：前台不编辑文档，但可以新建、导入、删除文档；评论、关联和局部回滚在这里完成。"
-            : "本地文件、实时预览、自动保存。编辑在浏览器里，内容始终留在你的电脑上。"}
+            ? t("审阅模式：前台不编辑文档，但可以新建、导入、删除文档；评论、关联和局部回滚在这里完成。")
+            : t("本地文件、实时预览、自动保存。编辑在浏览器里，内容始终留在你的电脑上。")}
         </p>
 
         <div className="welcome-actions">
@@ -1912,7 +1932,7 @@ function Welcome({
               onClick={onAddRoot}
             >
               <IconFolderPlus size={16} />
-              添加目录
+              {t("添加目录")}
             </button>
           ) : (
             <>
@@ -1923,7 +1943,7 @@ function Welcome({
                   onClick={onNew}
                 >
                   <IconPlus size={16} />
-                  新建文档
+                  {t("新建文档")}
                 </button>
               ) : null}
               <button
@@ -1932,7 +1952,7 @@ function Welcome({
                 onClick={onBrowse}
               >
                 <IconFileText size={16} />
-                浏览文件
+                {t("浏览文件")}
               </button>
               <button
                 type="button"
@@ -1940,20 +1960,20 @@ function Welcome({
                 onClick={onAddRoot}
               >
                 <IconFolderPlus size={16} />
-                添加目录
+                {t("添加目录")}
               </button>
             </>
           )}
         </div>
         {readOnly ? (
           <p className="welcome-readonly-note">
-            审阅模式，文件由后台 Agent 维护；切换文件不会写入磁盘。
+            {t("审阅模式，文件由后台 Agent 维护；切换文件不会写入磁盘。")}
           </p>
         ) : null}
 
         {recent.length ? (
           <div className="welcome-recent">
-            <span className="recent-label">最近文件</span>
+            <span className="recent-label">{t("最近文件")}</span>
             <div className="recent-list">
               {recent.map((file) => {
                 const location = [file.rootName, file.dir]
@@ -1979,10 +1999,10 @@ function Welcome({
           <div className="welcome-recent">
             <p className="welcome-empty">
               {roots.length === 0
-                ? "还没有添加目录。添加一个包含 Markdown 文件的目录开始。"
+                ? t("还没有添加目录。添加一个包含 Markdown 文件的目录开始。")
                 : readOnly
-                  ? "已添加的目录还没有 Markdown 文件，可以新建或导入文档。"
-                  : "已添加的目录还没有 Markdown 文件，新建一篇开始写作。"}
+                  ? t("已添加的目录还没有 Markdown 文件，可以新建或导入文档。")
+                  : t("已添加的目录还没有 Markdown 文件，新建一篇开始写作。")}
             </p>
           </div>
         )}
@@ -1990,22 +2010,22 @@ function Welcome({
         <div className="welcome-features">
           <span>
             <IconCheck size={13} />{" "}
-            {readOnly ? "前台只读、Agent 写入" : "GFM 表格 / 任务列表"}
+            {readOnly ? t("前台只读、Agent 写入") : t("GFM 表格 / 任务列表")}
           </span>
           <span>
-            <IconCheck size={13} /> 代码高亮
+            <IconCheck size={13} /> {t("代码高亮")}
           </span>
           <span>
-            <IconCheck size={13} /> 外部修改实时同步
+            <IconCheck size={13} /> {t("外部修改实时同步")}
           </span>
           <span>
-            <IconCheck size={13} /> 多目录工作区
+            <IconCheck size={13} /> {t("多目录工作区")}
           </span>
         </div>
 
         <p className="welcome-root">
           <IconFolder size={13} />
-          {roots.length ? `${roots.length} 个目录` : "尚未添加目录"}
+          {roots.length ? `${roots.length} 个目录` : t("尚未添加目录")}
           {primary ? <code>{primary.path}</code> : null}
           {roots.length > 1 ? (
             <span className="version">+{roots.length - 1}</span>

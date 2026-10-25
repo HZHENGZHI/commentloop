@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import type { Comment, CommentMessage, Discussion, PromptTemplate } from "../types";
 import { LinkCommentsModal } from "./LinkCommentsModal";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
@@ -39,10 +40,10 @@ interface CommentsPanelProps {
   agentName?: string;
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -64,6 +65,7 @@ export function CommentsPanel({
   onTrigger,
   agentName = "Code Agent",
 }: CommentsPanelProps) {
+  const { t, i18n } = useTranslation();
   const [groupTarget, setGroupTarget] = useState<Comment | null>(null);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -132,7 +134,7 @@ export function CommentsPanel({
   const submitReply = async (event: FormEvent, comment: Comment) => {
     event.preventDefault();
     if (!replyText.trim()) {
-      setReplyError("请输入要继续修改的内容");
+      setReplyError(t("请输入要继续修改的内容"));
       return;
     }
     setReplyBusy(true);
@@ -144,7 +146,7 @@ export function CommentsPanel({
       setReplyDiscussions([]);
       setReplyTemplateId("");
     } catch (err) {
-      setReplyError(err instanceof Error ? err.message : "回复失败");
+      setReplyError(err instanceof Error ? err.message : t("回复失败"));
     } finally {
       setReplyBusy(false);
     }
@@ -154,9 +156,12 @@ export function CommentsPanel({
       <div className="comments-head">
         <div className="comments-title">
           <IconMessage size={15} />
-          评论
+          {t("评论")}
           <span className="comments-count">
-            {unresolved} 未解决 / {comments.length}
+            {t("{{unresolved}} 未解决 / {{total}}", {
+              unresolved,
+              total: comments.length,
+            })}
           </span>
         </div>
         <div className="comments-head-actions">
@@ -166,14 +171,14 @@ export function CommentsPanel({
               className="comments-expand-all"
               onClick={toggleAll}
             >
-              {allExpanded ? "全部收起" : "全部展开"}
+              {allExpanded ? t("全部收起") : t("全部展开")}
             </button>
           ) : null}
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭评论"
+            aria-label={t("关闭评论")}
           >
             <IconX size={15} />
           </button>
@@ -183,8 +188,8 @@ export function CommentsPanel({
         {comments.length === 0 ? (
           <div className="comments-empty">
             <IconMessage size={22} />
-            <p>还没有评论</p>
-            <span>在预览中选择文字，点击“评论”即可添加。</span>
+            <p>{t("还没有评论")}</p>
+            <span>{t("在预览中选择文字，点击“评论”即可添加。")}</span>
           </div>
         ) : (
           comments.map((comment) => {
@@ -196,8 +201,8 @@ export function CommentsPanel({
               lastMessage?.author === "agent"
                 ? "Code Agent"
                 : lastMessage?.author === "system"
-                  ? "版本回滚"
-                  : "你";
+                  ? t("版本回滚")
+                  : t("你");
             return (
             <article
               key={comment.id}
@@ -213,8 +218,8 @@ export function CommentsPanel({
                     className="comment-expand"
                     onClick={() => toggleExpanded(comment.id)}
                     aria-expanded={isExpanded}
-                    aria-label={isExpanded ? "收起评论" : "展开评论"}
-                    title={isExpanded ? "收起评论" : "展开评论"}
+                    aria-label={isExpanded ? t("收起评论") : t("展开评论")}
+                    title={isExpanded ? t("收起评论") : t("展开评论")}
                   >
                     {isExpanded ? (
                       <IconChevronDown size={12} />
@@ -223,17 +228,17 @@ export function CommentsPanel({
                     )}
                   </button>
                   {comment.orphaned || comment.line === 0 ? (
-                    <span className="comment-orphaned">未定位</span>
+                    <span className="comment-orphaned">{t("未定位")}</span>
                   ) : (
-                    <span>第 {comment.line} 行</span>
+                    <span>{t("第 {{line}} 行", { line: comment.line })}</span>
                   )}
                   {comment.resolved ? (
-                    <span className="comment-resolved-badge">已解决</span>
+                    <span className="comment-resolved-badge">{t("已解决")}</span>
                   ) : null}
                   {members.length > 0 ? (
                     <span className="comment-group-badge">
                       <IconLink size={9} />
-                      {members.length + 1} 条关联
+                      {t("{{count}} 条关联", { count: members.length + 1 })}
                     </span>
                   ) : null}
                 </div>
@@ -242,36 +247,36 @@ export function CommentsPanel({
                     type="button"
                     className="comment-action"
                     onClick={() => onJump(comment)}
-                    title="在预览中定位"
+                    title={t("在预览中定位")}
                   >
                     <IconLocate size={11} />
-                    定位
+                    {t("定位")}
                   </button>
                   <button
                     type="button"
                     className="comment-action"
                     onClick={() => setGroupTarget(comment)}
-                    title={comment.groupId ? "管理关联评论" : "关联其他评论"}
-                    aria-label={comment.groupId ? "管理关联评论" : "关联其他评论"}
+                    title={comment.groupId ? t("管理关联评论") : t("关联其他评论")}
+                    aria-label={comment.groupId ? t("管理关联评论") : t("关联其他评论")}
                   >
                     <IconLink size={11} />
-                    关联评论
+                    {t("关联评论")}
                   </button>
                   <button
                     type="button"
                     className="comment-action"
                     onClick={() => onResolve(comment, !comment.resolved)}
-                    title={comment.resolved ? "重新打开" : "标记解决"}
+                    title={comment.resolved ? t("重新打开") : t("标记解决")}
                   >
                     <IconCheck size={12} />
-                    {comment.resolved ? "重新打开" : "解决"}
+                    {comment.resolved ? t("重新打开") : t("解决")}
                   </button>
                   <button
                     type="button"
                     className="comment-action danger"
                     onClick={() => onDelete(comment)}
-                    title="删除评论"
-                    aria-label="删除评论"
+                    title={t("删除评论")}
+                    aria-label={t("删除评论")}
                   >
                     <IconTrash size={12} />
                   </button>
@@ -281,7 +286,7 @@ export function CommentsPanel({
               <blockquote
                 className="comment-anchor"
                 onClick={() => onJump(comment)}
-                title="点击定位"
+                title={t("点击定位")}
               >
                 {comment.quote}
               </blockquote>
@@ -291,14 +296,14 @@ export function CommentsPanel({
                   <div className="comment-related-head">
                     <span>
                       <IconLink size={10} />
-                      关联 {members.length + 1} 条评论
+                      {t("关联 {{count}} 条评论", { count: members.length + 1 })}
                     </span>
                     <button
                       type="button"
                       className="comment-related-manage"
                       onClick={() => setGroupTarget(comment)}
                     >
-                      管理
+                      {t("管理")}
                     </button>
                   </div>
                   <div className="comment-related-list">
@@ -311,9 +316,9 @@ export function CommentsPanel({
                         title={member.quote}
                       >
                         <span>
-                          {member.line > 0 ? `第 ${member.line} 行` : "未定位"}
+                          {member.line > 0 ? t("第 {{line}} 行", { line: member.line }) : t("未定位")}
                         </span>
-                        {member.resolved ? <em>已解决</em> : null}
+                        {member.resolved ? <em>{t("已解决")}</em> : null}
                         <strong>{member.quote.replace(/\s+/g, " ").trim()}</strong>
                       </button>
                     ))}
@@ -336,22 +341,22 @@ export function CommentsPanel({
                         <div className="comment-message-meta">
                           <span className="comment-author">
                             {message.author === "agent"
-                              ? `${agentName}${roundForMessage > 1 ? ` · 第 ${roundForMessage} 次修改` : ""}`
+                              ? `${agentName}${roundForMessage > 1 ? ` · ${t("第 {{round}} 次修改", { round: roundForMessage })}` : ""}`
                               : message.author === "system"
-                                ? "版本回滚"
-                                : "你"}
+                                ? t("版本回滚")
+                                : t("你")}
                           </span>
-                          <span>{formatTime(message.createdAt)}</span>
+                          <span>{formatTime(message.createdAt, i18n.language)}</span>
                         </div>
                         <div className="comment-message-body">{message.body}</div>
                         {message.before || message.after ? (
                           <div className="comment-change">
-                            <div className="comment-change-head">变更内容</div>
+                            <div className="comment-change-head">{t("变更内容")}</div>
                             {message.before ? (
                               <div className="comment-diff before">
                                 <div className="comment-diff-label">
                                   <span className="diff-badge">−</span>
-                                  {message.author === "system" ? "回滚前" : "修改前"}
+                                  {message.author === "system" ? t("回滚前") : t("修改前")}
                                 </div>
                                 <pre>{message.before}</pre>
                               </div>
@@ -368,7 +373,7 @@ export function CommentsPanel({
                               <div className="comment-diff after">
                                 <div className="comment-diff-label">
                                   <span className="diff-badge">+</span>
-                                  {message.author === "system" ? "恢复后" : "修改后"}
+                                  {message.author === "system" ? t("恢复后") : t("修改后")}
                                 </div>
                                 <pre>{message.after}</pre>
                               </div>
@@ -378,7 +383,7 @@ export function CommentsPanel({
                         {message.author === "agent" &&
                         (message.versionId || message.before) ? (
                           <div className="comment-version">
-                            <span>此轮快照</span>
+                            <span>{t("此轮快照")}</span>
                             <div className="comment-version-actions">
                               {message.before ? (
                                 <button
@@ -392,10 +397,10 @@ export function CommentsPanel({
                                       "before",
                                     )
                                   }
-                                  title="只把评论段落恢复为这一轮修改前的内容"
+                                  title={t("只把评论段落恢复为这一轮修改前的内容")}
                                 >
                                   <IconHistory size={11} />
-                                  回滚前
+                                  {t("回滚前")}
                                 </button>
                               ) : null}
                               {message.versionId ? (
@@ -410,10 +415,10 @@ export function CommentsPanel({
                                       "after",
                                     )
                                   }
-                                  title="只把评论段落恢复为这一轮修改后的内容"
+                                  title={t("只把评论段落恢复为这一轮修改后的内容")}
                                 >
                                   <IconHistory size={11} />
-                                  回滚后
+                                  {t("回滚后")}
                                 </button>
                               ) : null}
                             </div>
@@ -431,15 +436,15 @@ export function CommentsPanel({
                   type="button"
                   className="comment-collapsed"
                   onClick={() => toggleExpanded(comment.id)}
-                  aria-label="展开评论"
+                  aria-label={t("展开评论")}
                 >
                   <span className="comment-collapsed-count">
-                    {comment.messages.length} 条讨论
+                    {t("{{count}} 条讨论", { count: comment.messages.length })}
                   </span>
                   <span className="comment-collapsed-text">
                     {lastMessage
-                      ? `${lastAuthor}：${lastMessage.body.replace(/\s+/g, " ").trim()}`
-                      : "展开评论"}
+                      ? `${lastAuthor}: ${lastMessage.body.replace(/\s+/g, " ").trim()}`
+                      : t("展开评论")}
                   </span>
                   <IconChevronRight size={11} />
                 </button>
@@ -447,19 +452,19 @@ export function CommentsPanel({
 
               {comment.promptTemplateId ? (
                 <div className="comment-discussion-refs">
-                  任务类型：
+                  {t("任务类型：")}
                   {promptTemplates.find((item) => item.id === comment.promptTemplateId)
-                    ?.name || "自定义模板"}
+                    ?.name ? t(promptTemplates.find((item) => item.id === comment.promptTemplateId)?.name || "") : t("自定义模板")}
                 </div>
               ) : null}
 
               {comment.discussionIds?.length ? (
                 <div className="comment-discussion-refs">
-                  已参考讨论：
+                  {t("已参考讨论：")}
                   {comment.discussionIds
                     .map((id) => discussions.find((item) => item.id === id)?.title)
                     .filter(Boolean)
-                    .join("、") || `${comment.discussionIds.length} 个会话`}
+                    .join(", ") || t("{{count}} 个会话", { count: comment.discussionIds.length })}
                 </div>
               ) : null}
 
@@ -473,12 +478,12 @@ export function CommentsPanel({
                 }`}
               >
                 {comment.resolved
-                  ? "已确认解决"
+                  ? t("已确认解决")
                   : lastMessage?.author === "user"
-                    ? `等待 ${agentName} 继续修改`
+                    ? t("等待 {{agent}} 继续修改", { agent: agentName })
                     : lastMessage?.author === "system"
-                      ? "已局部回滚，等待你的确认"
-                      : "等待你的确认，或继续回复 Agent"}
+                      ? t("已局部回滚，等待你的确认")
+                      : t("等待你的确认，或继续回复 Agent")}
               </div>
 
               {!comment.resolved &&
@@ -502,13 +507,13 @@ export function CommentsPanel({
                     className="comment-reply-input"
                     value={replyText}
                     onChange={(event) => setReplyText(event.target.value)}
-                    placeholder={`说明还需要修改什么，发送给 ${agentName}…`}
+                    placeholder={t("说明还需要修改什么，发送给 {{agent}}…", { agent: agentName })}
                     rows={3}
                     autoFocus
                   />
                   {promptTemplates.length > 0 ? (
                     <label className="comment-template-field">
-                      <span>任务类型</span>
+                      <span>{t("任务类型")}</span>
                       <select
                         value={replyTemplateId}
                         onChange={(event) => setReplyTemplateId(event.target.value)}
@@ -516,7 +521,7 @@ export function CommentsPanel({
                         {promptTemplates.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.name}
-                            {item.allowDocumentEdit ? "" : "（只分析）"}
+                            {item.allowDocumentEdit ? "" : t("（只分析）")}
                           </option>
                         ))}
                       </select>
@@ -549,7 +554,7 @@ export function CommentsPanel({
                       className="btn primary comment-reply-submit"
                       disabled={replyBusy}
                     >
-                      {replyBusy ? "发送中…" : "发送给 Agent"}
+                      {replyBusy ? t("发送中…") : t("发送给 Agent")}
                     </button>
                   </div>
                 </form>
@@ -572,7 +577,7 @@ export function CommentsPanel({
                   }}
                 >
                   <IconMessage size={12} />
-                  {comment.resolved ? "有新的修改意见" : "继续修改 / 回复"}
+                  {comment.resolved ? t("有新的修改意见") : t("继续修改 / 回复")}
                 </button>
               )}
             </article>

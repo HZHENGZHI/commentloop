@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import type { FileEntry, RootInfo, TreeResponse } from "../types";
 import {
   IconChevronDown,
@@ -95,6 +96,7 @@ export function Sidebar({
   onAddRoot,
   onRemoveRoot,
 }: SidebarProps) {
+  const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -154,17 +156,19 @@ export function Sidebar({
           <IconFileText size={14} />
         </span>
         <span className="tree-name">{file.name}</span>
-        {active && dirty ? <span className="dirty-dot" title="未保存" /> : null}
+        {active && dirty ? <span className="dirty-dot" title={t("未保存")} /> : null}
         <button
           type="button"
           className="row-action"
-          title={`删除 ${file.name}`}
-          aria-label={`删除 ${file.name}`}
+          title={t("删除 {{name}}", { name: file.name })}
+          aria-label={t("删除 {{name}}", { name: file.name })}
           onClick={(event) => {
             event.stopPropagation();
             if (
               window.confirm(
-                `确定删除 “${displayFile(file)}”？此操作不可撤销。`,
+                t("确定删除 “{{name}}”？此操作不可撤销。", {
+                  name: displayFile(file),
+                }),
               )
             ) {
               onDelete(file.path);
@@ -179,10 +183,10 @@ export function Sidebar({
 
   const renderDir = (node: DirNode, depth: number): ReactNode => {
     const folders = [...node.dirs.values()].sort((a, b) =>
-      a.name.localeCompare(b.name, "zh-CN"),
+      a.name.localeCompare(b.name, i18n.language),
     );
     const files = [...node.files].sort((a, b) =>
-      a.name.localeCompare(b.name, "zh-CN"),
+      a.name.localeCompare(b.name, i18n.language),
     );
     return (
       <>
@@ -277,22 +281,22 @@ export function Sidebar({
           </span>
           <span className="tree-name">{root.name}</span>
           {root.kind === "remote" ? (
-            <span className="root-remote">远程</span>
+            <span className="root-remote">{t("远程")}</span>
           ) : root.primary ? (
-            <span className="root-primary">主</span>
+            <span className="root-primary">{t("主")}</span>
           ) : null}
           {root.offline ? (
-            <span className="root-offline">离线</span>
+            <span className="root-offline">{t("离线")}</span>
           ) : null}
           {removing ? (
             <span className="root-removing-label">
               <span className="spinner" />
-              移除中
+              {t("移除中")}
             </span>
           ) : root.offline ? null : root.kind === "remote" && root.loading ? (
             <span className="root-loading-count">
               <span className="spinner" />
-              读取中
+              {t("读取中")}
             </span>
           ) : (
             <span className="root-count">{root.files.length}</span>
@@ -301,8 +305,8 @@ export function Sidebar({
             <button
               type="button"
               className="row-action root-remove"
-              title={`移除目录 ${root.name}（不会删除磁盘文件）`}
-              aria-label={`移除目录 ${root.name}`}
+              title={t("移除目录 {{name}}（不会删除磁盘文件）", { name: root.name })}
+              aria-label={t("移除目录 {{name}}（不会删除磁盘文件）", { name: root.name })}
               onClick={(event) => {
                 event.stopPropagation();
                 onRemoveRoot(root);
@@ -317,15 +321,15 @@ export function Sidebar({
             {renderDir(node, 1)}
             {root.offline ? (
               <p className="root-empty-hint root-offline-hint">
-                连接不可用：{root.offline}
+                {t("连接不可用：{{error}}", { error: root.offline })}
               </p>
             ) : root.kind === "remote" && root.loading ? (
               <p className="root-empty-hint root-loading-hint">
                 <span className="spinner" />
-                正在读取远程文件…
+                {t("正在读取远程文件…")}
               </p>
             ) : root.files.length === 0 ? (
-              <p className="root-empty-hint">此目录没有 Markdown 文件</p>
+              <p className="root-empty-hint">{t("此目录没有 Markdown 文件")}</p>
             ) : null}
           </>
         ) : null}
@@ -350,15 +354,15 @@ export function Sidebar({
               )
               .join("\n")}
           >
-            {roots.length ? `${roots.length} 个目录` : "Commentloop"}
+            {roots.length ? t("{{count}} 个目录", { count: roots.length }) : "Commentloop"}
           </span>
         </div>
         <div className="sidebar-tools">
           <button
             type="button"
             className="icon-btn small"
-            title="新建文档"
-            aria-label="新建文档"
+            title={t("新建文档")}
+            aria-label={t("新建文档")}
             onClick={onNew}
           >
             <IconPlus size={15} />
@@ -366,8 +370,8 @@ export function Sidebar({
           <button
             type="button"
             className="icon-btn small"
-            title="导入 Markdown 文件"
-            aria-label="导入 Markdown 文件"
+            title={t("导入 Markdown 文件")}
+            aria-label={t("导入 Markdown 文件")}
             onClick={() => importRef.current?.click()}
           >
             <IconUpload size={15} />
@@ -388,8 +392,8 @@ export function Sidebar({
           <button
             type="button"
             className="icon-btn small"
-            title="添加目录"
-            aria-label="添加目录"
+            title={t("添加目录")}
+            aria-label={t("添加目录")}
             onClick={onAddRoot}
           >
             <IconFolderPlus size={15} />
@@ -403,8 +407,8 @@ export function Sidebar({
           ref={searchRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索文件"
-          aria-label="搜索文件"
+          placeholder={t("搜索文件")}
+          aria-label={t("搜索文件")}
           spellCheck={false}
         />
         {query ? (
@@ -412,7 +416,7 @@ export function Sidebar({
             type="button"
             className="search-clear"
             onClick={() => setQuery("")}
-            aria-label="清空搜索"
+            aria-label={t("清空搜索")}
           >
             ×
           </button>
@@ -454,13 +458,13 @@ export function Sidebar({
               })}
             </div>
           ) : (
-            <p className="tree-empty">没有匹配的文件</p>
+            <p className="tree-empty">{t("没有匹配的文件")}</p>
           )
         ) : noRoots ? (
           <div className="tree-empty-block">
-            <p>还没有添加目录</p>
+            <p>{t("还没有添加目录")}</p>
             <button type="button" className="btn ghost" onClick={onAddRoot}>
-              添加目录
+              {t("添加目录")}
             </button>
           </div>
         ) : (
@@ -472,7 +476,7 @@ export function Sidebar({
         <div className="sidebar-removing" role="status" aria-live="polite">
           <span className="spinner" />
           <span>
-            正在移除目录
+            {t("正在移除目录")}
             {removingRootName ? ` “${removingRootName}”` : ""}…
           </span>
         </div>
@@ -480,9 +484,10 @@ export function Sidebar({
 
       <div className="sidebar-foot">
         <span>
-          {roots.length} 个目录 · {tree?.files.length ?? 0} 个文档
+          {t("{{count}} 个目录", { count: roots.length })} ·{" "}
+          {t("{{count}} 个文档", { count: tree?.files.length ?? 0 })}
         </span>
-        {tree?.truncated ? <span className="truncated">已截断</span> : null}
+        {tree?.truncated ? <span className="truncated">{t("已截断")}</span> : null}
         <span
           className="root-path"
           title={roots

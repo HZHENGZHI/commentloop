@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ToastItem } from "../types";
 import { IconAlert, IconCheck, IconWifi, IconX } from "./Icons";
 
@@ -7,6 +8,7 @@ interface ToastsProps {
 }
 
 export function Toasts({ items, onDismiss }: ToastsProps) {
+  const { t } = useTranslation();
   return (
     <div className="toasts" aria-live="polite">
       {items.map((toast) => (
@@ -25,7 +27,7 @@ export function Toasts({ items, onDismiss }: ToastsProps) {
             type="button"
             className="toast-close"
             onClick={() => onDismiss(toast.id)}
-            aria-label="关闭提示"
+            aria-label={t("关闭提示")}
           >
             <IconX size={13} />
           </button>

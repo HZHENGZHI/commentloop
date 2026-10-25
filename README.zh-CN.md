@@ -12,7 +12,7 @@
 用户评论 → Agent 修改 → 用户审阅 → 继续评论 / 回滚 → 文档更新
 ```
 
-![Commentloop 演示：评论、Agent 修改、审阅、解决](docs/demo.gif)
+![Commentloop 演示：评论、Agent 修改、审阅、解决](docs/demo.zh-CN.gif)
 
 ## 主要能力
 
