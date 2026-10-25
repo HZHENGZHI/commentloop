@@ -345,11 +345,42 @@ function openMermaidModal(block: HTMLElement) {
     stripEdgeLabelBackgrounds(next);
     return next;
   };
-  const refreshClone = () => {
-    content.replaceChildren(makeClone());
-  };
-  refreshClone();
+  const clone = makeClone();
+  content.appendChild(clone);
   viewport.appendChild(content);
+
+  const sourceNodes = Array.from(sourceSvg.querySelectorAll<SVGGElement>("g.node"));
+  const cloneNodes = Array.from(clone.querySelectorAll<SVGGElement>("g.node"));
+  const sourceEdges = Array.from(sourceSvg.querySelectorAll<SVGPathElement>("path[data-edge]"));
+  const cloneEdges = Array.from(clone.querySelectorAll<SVGPathElement>("path[data-edge]"));
+  const sourceLabels = Array.from(sourceSvg.querySelectorAll<Element>(".edgeLabel"));
+  const cloneLabels = Array.from(clone.querySelectorAll<Element>(".edgeLabel"));
+  const stepClasses = ["mermaid-step-hidden", "mermaid-step-current"];
+  const syncStepClasses = (from: Element, to: Element) => {
+    for (const name of stepClasses) {
+      to.classList.toggle(name, from.classList.contains(name));
+    }
+  };
+  const syncClone = () => {
+    for (let i = 0; i < sourceNodes.length; i++) {
+      const target = cloneNodes[i];
+      if (target) syncStepClasses(sourceNodes[i], target);
+    }
+    for (let i = 0; i < sourceEdges.length; i++) {
+      const target = cloneEdges[i];
+      if (!target) continue;
+      syncStepClasses(sourceEdges[i], target);
+      // The inline SVG path may be mid-draw through a Web Animation. The
+      // clone has no such animation, so restore its original dash style and
+      // let the class change reveal the complete edge instead of a blank one.
+      target.style.strokeDasharray = target.dataset.mermaidOriginalDasharray ?? "";
+      target.style.strokeDashoffset = target.dataset.mermaidOriginalDashoffset ?? "";
+    }
+    for (let i = 0; i < sourceLabels.length; i++) {
+      const target = cloneLabels[i];
+      if (target) syncStepClasses(sourceLabels[i], target);
+    }
+  };
 
   const playback = document.createElement("div");
   playback.className = "mermaid-animation-controls mermaid-modal-playback";
@@ -394,7 +425,7 @@ function openMermaidModal(block: HTMLElement) {
     playbackFill.style.width = `${total ? (current / total) * 100 : 0}%`;
     playbackPrev.disabled = !active || current <= 1;
     playbackNext.disabled = !active || current >= total;
-    refreshClone();
+    syncClone();
   };
 
   const onStep = () => syncPlayback();

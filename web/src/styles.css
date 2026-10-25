@@ -5815,6 +5815,7 @@ body.dragging-split * {
   background: var(--surface-2);
   cursor: grab;
   touch-action: none;
+  contain: paint;
 }
 
 .mermaid-modal-viewport.dragging {
