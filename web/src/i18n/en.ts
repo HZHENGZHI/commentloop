@@ -153,6 +153,8 @@ const en: Record<string, string> = {
   "图表": "Diagram",
   "源码": "Source",
   "查看大图": "Open diagram",
+  "收起": "Collapse",
+  "展开": "Expand",
   "关闭提示": "Dismiss notification",
 
   // Comment modal

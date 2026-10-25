@@ -5661,11 +5661,22 @@ body.dragging-split * {
 .mermaid-viewport {
   position: relative;
   max-height: min(62vh, 620px);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: auto;
   padding: 16px 18px;
 }
 
-.mermaid-block.is-clipped .mermaid-viewport::after {
+.mermaid-block.is-expanded .mermaid-viewport {
+  max-height: none;
+  overflow: visible;
+}
+
+.mermaid-block.is-expanded .mermaid-viewport::after {
+  display: none;
+}
+
+.mermaid-block.is-clipped:not(.at-bottom) .mermaid-viewport::after {
   content: "";
   position: absolute;
   right: 0;

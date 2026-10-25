@@ -170,9 +170,15 @@ function mermaidConfig(theme: Theme) {
 
 function updateToolbar(block: HTMLElement) {
   const open = block.querySelector<HTMLButtonElement>("[data-mermaid-open]");
+  const expand = block.querySelector<HTMLButtonElement>("[data-mermaid-expand]");
   const source = block.querySelector<HTMLButtonElement>("[data-mermaid-source]");
   const pre = block.querySelector<HTMLPreElement>(".mermaid-source");
   if (open) open.textContent = i18n.t("查看大图");
+  if (expand) {
+    expand.textContent = block.classList.contains("is-expanded")
+      ? i18n.t("收起")
+      : i18n.t("展开");
+  }
   if (source && pre) source.textContent = pre.hidden ? i18n.t("源码") : i18n.t("图表");
 }
 
@@ -193,12 +199,23 @@ function createBlock(source: string): HTMLElement {
   open.className = "mermaid-action";
   open.dataset.mermaidOpen = "1";
   open.textContent = i18n.t("查看大图");
+  const expand = document.createElement("button");
+  expand.type = "button";
+  expand.className = "mermaid-action";
+  expand.dataset.mermaidExpand = "1";
+  expand.textContent = i18n.t("展开");
+  expand.addEventListener("click", () => {
+    const expanded = block.classList.toggle("is-expanded");
+    expand.textContent = expanded ? i18n.t("收起") : i18n.t("展开");
+    expand.setAttribute("aria-expanded", String(expanded));
+    if (expanded) block.classList.remove("at-bottom");
+  });
   const sourceButton = document.createElement("button");
   sourceButton.type = "button";
   sourceButton.className = "mermaid-action";
   sourceButton.dataset.mermaidSource = "1";
   sourceButton.textContent = i18n.t("源码");
-  actions.append(open, sourceButton);
+  actions.append(open, expand, sourceButton);
   toolbar.append(label, actions);
 
   const viewport = document.createElement("div");
@@ -206,6 +223,12 @@ function createBlock(source: string): HTMLElement {
   const diagram = document.createElement("div");
   diagram.className = "mermaid-diagram";
   viewport.appendChild(diagram);
+  viewport.addEventListener("scroll", () => {
+    block.classList.toggle(
+      "at-bottom",
+      viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2,
+    );
+  });
 
   const sourcePre = document.createElement("pre");
   sourcePre.className = "mermaid-source";
