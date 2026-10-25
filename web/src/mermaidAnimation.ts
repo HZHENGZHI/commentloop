@@ -13,7 +13,12 @@ interface FlowStep {
 
 interface ResolvedStep {
   nodes: SVGGElement[];
-  edges: Array<{ path: SVGPathElement; label: Element | null }>;
+  edges: Array<{
+    path: SVGPathElement;
+    label: Element | null;
+    from?: SVGGElement;
+    to?: SVGGElement;
+  }>;
 }
 
 interface EdgeOriginal {
@@ -222,7 +227,14 @@ export function setupMermaidAnimation(
     const edges = step.edges
       .map((edge) => {
         const path = index.edges.get(edge.id);
-        return path ? { path, label: index.labels.get(edge.id) ?? null } : null;
+        return path
+          ? {
+              path,
+              label: index.labels.get(edge.id) ?? null,
+              from: index.nodes.get(edge.from),
+              to: index.nodes.get(edge.to),
+            }
+          : null;
       })
       .filter(Boolean) as Array<{ path: SVGPathElement; label: Element | null }>;
     if (nodes.length || edges.length) steps.push({ nodes, edges });
@@ -252,6 +264,14 @@ export function setupMermaidAnimation(
   let savedScrollTop = 0;
   let cameraOffset = 0;
   const running = new Set<Animation>();
+  let targetRevealTimer: number | undefined;
+
+  const cancelTargetReveal = () => {
+    if (targetRevealTimer !== undefined) {
+      window.clearTimeout(targetRevealTimer);
+      targetRevealTimer = undefined;
+    }
+  };
 
   const currentNodes = new Set<SVGGElement>();
   const currentEdges = new Set<Element>();
@@ -279,11 +299,21 @@ export function setupMermaidAnimation(
 
   const revealUpTo = (target: number, animateNewEdges: boolean) => {
     cancelDraws();
+    cancelTargetReveal();
     for (let i = 0; i < steps.length; i++) {
       const item = steps[i];
+      const isCurrent = i === target - 1;
       const visible = i < target;
       for (const node of item.nodes) {
-        node.classList.toggle("mermaid-step-hidden", !visible);
+        // In an animated step, defer target boxes until the incoming edge has
+        // grown toward them. Sources must exist before their edge starts.
+        let nodeVisible = visible;
+        if (isCurrent && animateNewEdges) {
+          const isSource = item.edges.some((edge) => edge.from === node);
+          const isTarget = item.edges.some((edge) => edge.to === node);
+          if (isTarget && !isSource) nodeVisible = false;
+        }
+        node.classList.toggle("mermaid-step-hidden", !nodeVisible);
       }
       for (const edge of item.edges) {
         const element = edgeElement(edge.path);
@@ -307,6 +337,21 @@ export function setupMermaidAnimation(
       }
       const focus = current.nodes[0] ?? current.edges[0]?.path;
       if (focus) ensureVisible(focus);
+
+      if (animateNewEdges) {
+        const deferred = current.nodes.filter(
+          (node) =>
+            !current.edges.some((edge) => edge.from === node) &&
+            current.edges.some((edge) => edge.to === node),
+        );
+        if (deferred.length) {
+          targetRevealTimer = window.setTimeout(() => {
+            targetRevealTimer = undefined;
+            for (const node of deferred) node.classList.remove("mermaid-step-hidden");
+            updateControls();
+          }, 520);
+        }
+      }
     }
   };
 
@@ -321,7 +366,7 @@ export function setupMermaidAnimation(
     try {
       animation = path.animate(
         [{ strokeDashoffset: `${length}` }, { strokeDashoffset: "0" }],
-        { duration: 620, easing: "ease-out" },
+        { duration: 520, easing: "ease-out" },
       );
     } catch {
       clearEdgeStyles(path, originals);
@@ -407,6 +452,11 @@ export function setupMermaidAnimation(
 
   const finishPlayback = () => {
     playing = false;
+    cancelDraws();
+    cancelTargetReveal();
+    // On a manual jump to the last step the deferred target box may still be
+    // hidden; reveal it before removing the final-step highlight.
+    for (const node of currentNodes) node.classList.remove("mermaid-step-hidden");
     // The final step is fully revealed; keeping its accent color makes the
     // finished diagram look like it is still waiting on an action.
     clearCurrent();
@@ -472,6 +522,7 @@ export function setupMermaidAnimation(
     playing = false;
     stopTimer();
     cancelDraws();
+    cancelTargetReveal();
     step = 0;
     clearCurrent();
     for (const element of diagram.querySelectorAll<Element>(".mermaid-step-hidden")) {
@@ -566,6 +617,7 @@ export function setupMermaidAnimation(
     playing = false;
     stopTimer();
     cancelDraws();
+    cancelTargetReveal();
     clearCurrent();
     for (const element of diagram.querySelectorAll<Element>(
       ".mermaid-step-hidden, .mermaid-step-current",

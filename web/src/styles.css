@@ -5877,7 +5877,7 @@ body.mermaid-modal-open {
 .mermaid-diagram g.node:not(.mermaid-step-hidden),
 .mermaid-diagram path[data-edge]:not(.mermaid-step-hidden),
 .mermaid-diagram g.edgeLabel:not(.mermaid-step-hidden) {
-  transition: opacity 620ms ease;
+  transition: opacity 260ms ease;
 }
 
 .mermaid-diagram .mermaid-step-hidden {
