@@ -5629,6 +5629,14 @@ body.dragging-split * {
 .mermaid-diagram svg * {
   filter: none !important;
 }
+
+/* Mermaid themes do not consistently apply text colors to every diagram
+   type (sequence, class, state, pie, ...). Keep labels readable even when
+   the diagram uses its own inline styles. */
+.mermaid-diagram svg text,
+.mermaid-diagram svg tspan {
+  fill: var(--text-primary) !important;
+}
 .mermaid-error {
   color: #b42318;
   font-size: 13px;
