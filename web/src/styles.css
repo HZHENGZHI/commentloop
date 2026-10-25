@@ -5879,7 +5879,8 @@ body.mermaid-modal-open {
   transition: opacity 220ms ease;
 }
 
-.mermaid-diagram .mermaid-step-hidden {
+.mermaid-diagram .mermaid-step-hidden,
+.mermaid-diagram .mermaid-edge-pending {
   opacity: 0 !important;
   pointer-events: none;
 }

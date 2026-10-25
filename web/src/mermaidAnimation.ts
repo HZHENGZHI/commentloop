@@ -216,7 +216,8 @@ export function setupMermaidAnimation(
   let step = 0;
   let timer: number | undefined;
   const running = new Set<Animation>();
-  const revealedEdges = new Set<string>();
+  const pendingTimers = new Set<number>();
+  const pendingElements = new Set<Element>();
 
   const currentNodes = new Set<SVGGElement>();
   const currentEdges = new Set<Element>();
@@ -237,6 +238,12 @@ export function setupMermaidAnimation(
       }
     }
     running.clear();
+    for (const timer of pendingTimers) window.clearTimeout(timer);
+    pendingTimers.clear();
+    for (const element of pendingElements) {
+      element.classList.remove("mermaid-edge-pending");
+    }
+    pendingElements.clear();
     diagram.querySelectorAll<SVGPathElement>("path[data-edge]").forEach((path) => {
       clearEdgeStyles(path, originals);
     });
@@ -264,24 +271,39 @@ export function setupMermaidAnimation(
         node.classList.add("mermaid-step-current");
         currentNodes.add(node);
       }
+      // If this statement introduces new nodes, let the boxes fade in before
+      // growing their edge. Edge-only steps (loops / back edges) start at once.
+      const edgeDelay = current.nodes.length ? 220 : 0;
       for (const edge of current.edges) {
         const element = edgeElement(edge.path);
         element.classList.add("mermaid-step-current");
         currentEdges.add(element);
-        if (!revealedEdges.has(edge.path.id)) {
-          revealedEdges.add(edge.path.id);
-          if (animateNewEdges) drawEdge(edge.path);
-        }
+        if (animateNewEdges) drawEdge(edge.path, edge.label, edgeDelay);
       }
       const focus = current.nodes[0] ?? current.edges[0]?.path;
       if (focus) ensureVisible(focus);
     }
     for (let i = target; i < steps.length; i++) {
-      for (const edge of steps[i].edges) revealedEdges.delete(edge.path.id);
     }
   };
 
-  const drawEdge = (path: SVGPathElement) => {
+  const drawEdge = (path: SVGPathElement, label: Element | null, delay = 0) => {
+    if (delay > 0) {
+      path.classList.add("mermaid-edge-pending");
+      pendingElements.add(path);
+      label?.classList.add("mermaid-edge-pending");
+      if (label) pendingElements.add(label);
+      const timer = window.setTimeout(() => {
+        pendingTimers.delete(timer);
+        path.classList.remove("mermaid-edge-pending");
+        pendingElements.delete(path);
+        label?.classList.remove("mermaid-edge-pending");
+        if (label) pendingElements.delete(label);
+        drawEdge(path, label, 0);
+      }, delay);
+      pendingTimers.add(timer);
+      return;
+    }
     const length = path.getTotalLength();
     if (!length || typeof path.animate !== "function") return;
     const original = originals.get(path);
@@ -292,7 +314,7 @@ export function setupMermaidAnimation(
     try {
       animation = path.animate(
         [{ strokeDashoffset: `${length}` }, { strokeDashoffset: "0" }],
-        { duration: 620, easing: "ease-out" },
+        { duration: 620, delay, easing: "ease-out" },
       );
     } catch {
       clearEdgeStyles(path, originals);
@@ -369,7 +391,6 @@ export function setupMermaidAnimation(
     active = true;
     playing = false;
     step = 0;
-    revealedEdges.clear();
     cancelDraws();
     block.classList.add("is-animating");
     controls.hidden = false;
@@ -394,7 +415,6 @@ export function setupMermaidAnimation(
     stopTimer();
     cancelDraws();
     step = 0;
-    revealedEdges.clear();
     clearCurrent();
     for (const element of diagram.querySelectorAll<Element>(".mermaid-step-hidden")) {
       element.classList.remove("mermaid-step-hidden");
@@ -439,7 +459,6 @@ export function setupMermaidAnimation(
     } else {
       if (step >= steps.length) {
         step = 1;
-        revealedEdges.clear();
         revealUpTo(step, true);
       }
       playing = true;
