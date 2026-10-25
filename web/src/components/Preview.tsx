@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import type { Comment, Theme } from "../types";
+import { enhanceMermaidDiagrams } from "../mermaid";
 import {
   findQuoteRange,
   isMarkdownPath,
@@ -25,76 +26,6 @@ interface PreviewProps {
   onOpenDoc: (path: string) => void;
   onRequestComment: (quote: string) => void;
   theme: Theme;
-}
-
-// Mermaid lets a diagram set its own fill via style/classDef while the label
-// inherits the theme text color. In dark mode that can produce light text on a
-// light custom fill (for example a yellow warning box). Pick a readable color
-// from the actual shape fill instead of applying one color to every label.
-function mermaidTextColor(fill: string, theme: Theme): string {
-  const fallback = theme === "dark" ? "#e6edf3" : "#1f2328";
-  const value = fill.trim().toLowerCase();
-  if (!value || value === "none" || value === "transparent") return fallback;
-  const match = value.match(
-    /rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/,
-  );
-  if (!match) return fallback;
-  const [, r, g, b] = match.map(Number);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.56 ? "#111827" : "#e6edf3";
-}
-
-function mermaidBackground(el: Element, container: HTMLElement): string {
-  let ancestor: Element | null = el.parentElement;
-  while (ancestor && ancestor !== container) {
-    const shape = ancestor.querySelector(
-      ":scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path",
-    );
-    if (shape) {
-      const rect = shape as SVGRectElement;
-      if (
-        shape.tagName.toLowerCase() === "rect" &&
-        (!rect.getAttribute("width") ||
-          !rect.getAttribute("height") ||
-          Number(rect.getAttribute("width")) <= 0 ||
-          Number(rect.getAttribute("height")) <= 0)
-      ) {
-        ancestor = ancestor.parentElement;
-        continue;
-      }
-      const candidate = getComputedStyle(shape).fill;
-      if (
-        candidate &&
-        candidate !== "none" &&
-        candidate !== "transparent" &&
-        !/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(candidate)
-      ) {
-        return candidate;
-      }
-    }
-    ancestor = ancestor.parentElement;
-  }
-  return "";
-}
-
-function fixMermaidContrast(container: HTMLElement, theme: Theme) {
-  container.querySelectorAll<SVGTextElement>("text").forEach((text) => {
-    const color = mermaidTextColor(mermaidBackground(text, container), theme);
-    text.style.setProperty("fill", color, "important");
-    text.querySelectorAll("tspan").forEach((tspan) => {
-      (tspan as SVGElement).style.setProperty("fill", color, "important");
-    });
-  });
-  // Mermaid uses HTML labels (foreignObject) for some diagram types. Its
-  // generated CSS sets `color` on span elements, so the SVG text override
-  // above cannot reach them.
-  container.querySelectorAll<SVGForeignObjectElement>("foreignObject").forEach((foreign) => {
-    const color = mermaidTextColor(mermaidBackground(foreign, container), theme);
-    foreign.style.setProperty("color", color, "important");
-    foreign.querySelectorAll("*").forEach((child) => {
-      (child as HTMLElement).style.setProperty("color", color, "important");
-    });
-  });
 }
 
 export function Preview({
@@ -200,163 +131,21 @@ export function Preview({
     if (el) el.scrollTop = scrollPos.current;
   }, [html, containerRef]);
 
-  // Hydrate fenced Mermaid blocks into SVG. The Go renderer intentionally
-  // leaves them as code blocks so a JS-disabled browser still shows the source.
+  // Hydrate fenced Mermaid blocks into SVG and attach the diagram viewer.
   useEffect(() => {
     const article = articleRef.current;
     if (!article) return;
+    let cleanup: (() => void) | undefined;
     let cancelled = false;
-    const blocks = new Map<HTMLElement, string>();
-    article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
-      const code = pre.querySelector<HTMLElement>("code.language-mermaid");
-      if (!code) return;
-      const source = code.textContent ?? "";
-      const block = document.createElement("div");
-      block.className = "mermaid-block";
-      block.dataset.source = source;
-      block.dataset.renderedTheme = "";
-      const diagram = document.createElement("div");
-      diagram.className = "mermaid-diagram";
-      block.appendChild(diagram);
-      pre.replaceWith(block);
-      blocks.set(block, source);
+    void enhanceMermaidDiagrams(article, theme).then((dispose) => {
+      if (cancelled) dispose();
+      else cleanup = dispose;
     });
-    article.querySelectorAll<HTMLElement>(".mermaid-block").forEach((block) => {
-      if (block.dataset.renderedTheme !== theme) {
-        blocks.set(block, block.dataset.source ?? "");
-      }
-    });
-    if (blocks.size === 0) return;
-    void (async () => {
-      try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          theme: "base",
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          themeVariables:
-            theme === "dark"
-              ? {
-                  background: "#12161b",
-                  primaryColor: "#1d2838",
-                  primaryTextColor: "#e6edf3",
-                  primaryBorderColor: "#64748b",
-                  secondaryColor: "#20262e",
-                  secondaryTextColor: "#e6edf3",
-                  secondaryBorderColor: "#475569",
-                  tertiaryColor: "#171b21",
-                  tertiaryTextColor: "#e6edf3",
-                  lineColor: "#94a3b8",
-                  textColor: "#e6edf3",
-                  labelTextColor: "#e6edf3",
-                  loopTextColor: "#e6edf3",
-                  noteTextColor: "#e6edf3",
-                  noteBkgColor: "#1d2838",
-                  noteBorderColor: "#64748b",
-                  activationBkgColor: "#20262e",
-                  activationBorderColor: "#64748b",
-                  sequenceNumberColor: "#e6edf3",
-                  classText: "#e6edf3",
-                  stateTextColor: "#e6edf3",
-                  stateLabelColor: "#e6edf3",
-                  transitionLabelColor: "#cbd5e1",
-                  mainBkg: "#1d2838",
-                  nodeBorder: "#64748b",
-                  clusterBkg: "#111418",
-                  clusterBorder: "#334155",
-                  edgeLabelBackground: "#12161b",
-                  titleColor: "#e6edf3",
-                  actorBkg: "#1d2838",
-                  actorBorder: "#64748b",
-                  actorTextColor: "#e6edf3",
-                  signalColor: "#94a3b8",
-                  signalTextColor: "#e6edf3",
-                }
-              : {
-                  background: "#ffffff",
-                  primaryColor: "#f3f2ff",
-                  primaryTextColor: "#1f2328",
-                  primaryBorderColor: "#b9b7f4",
-                  secondaryColor: "#f8f8fc",
-                  secondaryTextColor: "#1f2328",
-                  secondaryBorderColor: "#d5d3fa",
-                  tertiaryColor: "#fbfbfd",
-                  tertiaryTextColor: "#1f2328",
-                  lineColor: "#6b7280",
-                  textColor: "#1f2328",
-                  labelTextColor: "#1f2328",
-                  loopTextColor: "#1f2328",
-                  noteTextColor: "#1f2328",
-                  noteBkgColor: "#fafaff",
-                  noteBorderColor: "#d5d3fa",
-                  activationBkgColor: "#f8f8fc",
-                  activationBorderColor: "#b9b7f4",
-                  sequenceNumberColor: "#1f2328",
-                  classText: "#1f2328",
-                  stateTextColor: "#1f2328",
-                  stateLabelColor: "#1f2328",
-                  transitionLabelColor: "#374151",
-                  mainBkg: "#f3f2ff",
-                  nodeBorder: "#b9b7f4",
-                  clusterBkg: "#fafaff",
-                  clusterBorder: "#d5d3fa",
-                  edgeLabelBackground: "#ffffff",
-                  titleColor: "#1f2328",
-                  actorBkg: "#f3f2ff",
-                  actorBorder: "#b9b7f4",
-                  actorTextColor: "#1f2328",
-                  signalColor: "#6b7280",
-                  signalTextColor: "#1f2328",
-                },
-          flowchart: {
-            htmlLabels: false,
-            curve: "basis",
-            padding: 14,
-            nodeSpacing: 34,
-            rankSpacing: 46,
-          },
-        });
-        let index = 0;
-        for (const [block, source] of blocks) {
-          if (cancelled) return;
-          const diagram = block.querySelector<HTMLElement>(".mermaid-diagram");
-          if (!diagram) continue;
-          block.dataset.renderedTheme = theme;
-          try {
-            const { svg } = await mermaid.render(
-              `commentloop-mermaid-${Date.now()}-${index++}`,
-              source,
-            );
-            if (cancelled) return;
-            diagram.innerHTML = svg;
-            fixMermaidContrast(diagram, theme);
-            block.querySelector(".mermaid-error")?.remove();
-          } catch (error) {
-            if (cancelled) return;
-            diagram.textContent = "";
-            const failure = document.createElement("div");
-            failure.className = "mermaid-error";
-            failure.textContent =
-              error instanceof Error
-                ? error.message
-                : i18n.t("Mermaid 渲染失败");
-            const sourcePre = document.createElement("pre");
-            sourcePre.className = "mermaid-error-source";
-            sourcePre.textContent = source;
-            diagram.append(failure, sourcePre);
-          }
-        }
-      } catch (error) {
-        // The source block remains visible if the dynamic import itself fails.
-        console.error("commentloop: failed to load Mermaid", error);
-      }
-    })();
     return () => {
       cancelled = true;
+      cleanup?.();
     };
-  }, [html, currentPath, theme]);
+  }, [html, currentPath, theme, i18n.language]);
 
   // Make links work for both normal clicks and middle-click/open-in-new-tab.
   useEffect(() => {

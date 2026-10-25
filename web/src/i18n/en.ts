@@ -147,6 +147,12 @@ const en: Record<string, string> = {
   "开始输入 Markdown，预览会实时出现在这里。": "Start writing Markdown; the preview appears here.",
   "评论选中内容": "Comment",
   "Mermaid 渲染失败": "Mermaid rendering failed.",
+  "重置视图": "Reset view",
+  "适应页面": "Fit page",
+  "适应宽度": "Fit width",
+  "图表": "Diagram",
+  "源码": "Source",
+  "查看大图": "Open diagram",
   "关闭提示": "Dismiss notification",
 
   // Comment modal
