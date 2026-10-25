@@ -44,6 +44,26 @@ func Path() (string, error) {
 	return filepath.Join(d, "server.json"), nil
 }
 
+// AgentTokenPath is the short-lived capability token file shared by the
+// host agent-runner and the MCP process it launches.
+func AgentTokenPath() (string, error) {
+	d, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "agent-token"), nil
+}
+
+// AgentURLPath is the short-lived server URL file shared by the host
+// agent-runner and MCP processes that do not inherit its environment.
+func AgentURLPath() (string, error) {
+	d, err := dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "agent-url"), nil
+}
+
 // LogPath is where a background mdlive instance appends its stdout/stderr.
 func LogPath() (string, error) {
 	d, err := dir()

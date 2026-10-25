@@ -35,6 +35,8 @@ var builtinPromptTemplates = []PromptTemplate{
 		ID: "builtin-document-review", Name: "文档评审修改",
 		Description:       "根据评论和讨论共识修改文档，保留无关内容。",
 		AllowDocumentEdit: true,
+		AllowCodeRead:     true,
+		AllowCommentReply: true,
 		Builtin:           true,
 		Body:              `根据当前评论和讨论共识修改文档。只改与评论相关的内容，保持无关内容不变；回复时说明修改理由和必要的修改前后对照。`,
 	},
@@ -42,6 +44,8 @@ var builtinPromptTemplates = []PromptTemplate{
 		ID: "builtin-requirements", Name: "需求拆解",
 		Description:       "阅读讨论和文档，拆解目标、约束、验收标准和待确认问题。",
 		AllowDocumentEdit: false,
+		AllowCodeRead:     true,
+		AllowCommentReply: true,
 		Builtin:           true,
 		Body:              `阅读当前文档、评论线程、已导入讨论和文档共识，拆解需求。输出：目标与范围、用户场景、约束、验收标准、待确认问题。不要修改文档，先把分析和不确定点回复给用户。`,
 	},
@@ -49,6 +53,8 @@ var builtinPromptTemplates = []PromptTemplate{
 		ID: "builtin-bug-triage", Name: "Bug 排查",
 		Description:       "阅读评论、文档和关联代码，先给出排查分析与修复方案。",
 		AllowDocumentEdit: false,
+		AllowCodeRead:     true,
+		AllowCommentReply: true,
 		Builtin:           true,
 		Body:              `阅读当前文档、完整评论线程、相关讨论和关联代码，排查问题。输出：复现条件、可能原因与证据、验证步骤、建议修复方案。不要修改文档或代码，先回复分析结果；信息不足时明确说明。`,
 	},
@@ -63,6 +69,17 @@ func (s *promptTemplateStore) ensureDefaults() error {
 			item.ID, item.Name, item.Description, item.Body,
 			boolInt(item.AllowDocumentEdit), boolInt(item.AllowCodeRead), boolInt(item.AllowCommentReply), now, now)
 		if err != nil {
+			return err
+		}
+	}
+	// Repair built-ins seeded before capability columns were populated.
+	var migrated string
+	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key='prompt_template_capabilities_v1'`).Scan(&migrated); err == sql.ErrNoRows {
+		if _, err := s.db.Exec(`UPDATE prompt_templates SET allow_code_read=1, allow_comment_reply=1
+			WHERE builtin=1 AND allow_code_read=0 AND allow_comment_reply=0`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO meta (key,value) VALUES ('prompt_template_capabilities_v1','1')`); err != nil {
 			return err
 		}
 	}

@@ -14,10 +14,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"mdlive/internal/discovery"
 	"mdlive/internal/lsp"
 )
 
@@ -174,9 +176,20 @@ func runJob(ctx context.Context, opts Options, job Job) {
 	} else {
 		cmd = exec.CommandContext(runCtx, command, append(args, job.Prompt)...)
 	}
+	tokenPath, tokenErr := writeAgentToken(job.Token)
+	if tokenErr != nil {
+		finish(context.Background(), opts, job, tokenErr)
+		return
+	}
+	defer os.Remove(tokenPath)
+	urlPath, urlErr := writeAgentURL(opts.URL)
+	if urlErr == nil {
+		defer os.Remove(urlPath)
+	}
 	cmd.Env = append(os.Environ(),
 		"MDLIVE_URL="+opts.URL,
 		"MDLIVE_AGENT_TOKEN="+job.Token,
+		"MDLIVE_AGENT_TOKEN_FILE="+tokenPath,
 	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -200,6 +213,34 @@ func runJob(ctx context.Context, opts Options, job Job) {
 		fmt.Fprintf(os.Stderr, "mdlive agent-runner: job %s done\n", job.ID)
 	}
 	finish(context.Background(), opts, job, err)
+}
+
+func writeAgentToken(token string) (string, error) {
+	path, err := discovery.AgentTokenPath()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func writeAgentURL(raw string) (string, error) {
+	path, err := discovery.AgentURLPath()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(raw+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func agentCommand(opts Options) (string, []string, error) {

@@ -70,6 +70,7 @@ type Client struct {
 	http         *http.Client
 	agentSession string
 	agentToken   string
+	tokenPath    string
 	agentTool    string
 }
 
@@ -90,6 +91,11 @@ func DefaultURL(explicit string) string {
 	if env := strings.TrimSpace(os.Getenv("MDLIVE_URL")); env != "" {
 		return normalizeURL(env)
 	}
+	if path, err := discovery.AgentURLPath(); err == nil {
+		if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) != "" {
+			return normalizeURL(strings.TrimSpace(string(data)))
+		}
+	}
 	if info, err := discovery.Read(); err == nil && info.URL != "" {
 		return normalizeURL(info.URL)
 	}
@@ -105,17 +111,38 @@ func normalizeURL(value string) string {
 }
 
 func New(baseURL string) *Client {
+	tokenPath := strings.TrimSpace(os.Getenv("MDLIVE_AGENT_TOKEN_FILE"))
+	if tokenPath == "" {
+		if path, err := discovery.AgentTokenPath(); err == nil {
+			tokenPath = path
+		}
+	}
 	return &Client{
 		base:         normalizeURL(baseURL),
 		http:         &http.Client{Timeout: 120 * time.Second},
 		agentSession: strings.TrimSpace(os.Getenv("MDLIVE_AGENT_SESSION")),
 		agentToken:   strings.TrimSpace(os.Getenv("MDLIVE_AGENT_TOKEN")),
+		tokenPath:    tokenPath,
 	}
 }
 
 func (c *Client) BaseURL() string { return c.base }
 
 func (c *Client) SetTool(name string) { c.agentTool = strings.TrimSpace(name) }
+
+func (c *Client) currentToken() string {
+	if c.agentToken != "" {
+		return c.agentToken
+	}
+	if c.tokenPath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(c.tokenPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
 
 func (c *Client) Config() (Config, error) {
 	var cfg Config
@@ -337,8 +364,8 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 	if c.agentSession != "" {
 		req.Header.Set("X-Mdlive-Agent-Session", c.agentSession)
 	}
-	if c.agentToken != "" {
-		req.Header.Set("X-Mdlive-Agent-Token", c.agentToken)
+	if token := c.currentToken(); token != "" {
+		req.Header.Set("X-Mdlive-Agent-Token", token)
 	}
 	if c.agentTool != "" {
 		req.Header.Set("X-Mdlive-MCP-Tool", c.agentTool)

@@ -205,6 +205,27 @@ func (s *Server) recordAgentDenial(r *http.Request, message string) {
 	s.agentJobs.audit(jobID, token, r.Header.Get("X-Mdlive-MCP-Tool"), r.Method, r.URL.Path, false, message)
 }
 
+func inferAgentTool(method, path string) string {
+	switch {
+	case method == http.MethodPut || method == http.MethodPost && path == "/api/doc":
+		return "write_file"
+	case method == http.MethodPost && path == "/api/comments/reply":
+		return "reply_comment"
+	case method == http.MethodGet && strings.HasPrefix(path, "/api/code/"):
+		return "read_code"
+	case method == http.MethodGet && path == "/api/doc":
+		return "read_file"
+	case method == http.MethodGet && path == "/api/comments":
+		return "list_comments"
+	case method == http.MethodGet && path == "/api/doc/code-repos":
+		return "read_code"
+	case method == http.MethodGet && (path == "/api/tree" || path == "/api/config"):
+		return "workspace_info"
+	default:
+		return ""
+	}
+}
+
 func agentToolProgress(tool string) string {
 	switch tool {
 	case "read_file", "list_comments":

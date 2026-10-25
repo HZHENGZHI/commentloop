@@ -100,8 +100,9 @@ Runner 会：
 
 1. 向 mdlive 领取任务
 2. 启动本机 Agent，注入 `MDLIVE_URL` 和一次性 `MDLIVE_AGENT_TOKEN`
-3. Agent 通过 MCP 读写；Go 后端按 token 校验能力、文档路径和代码仓库
-4. Agent 退出后上报 done / error，mdlive 清理 token
+3. 同时把 token / URL 写入用户配置目录的短生命周期文件，供不继承环境变量的 Agent（例如 Cursor worker）读取
+4. Agent 通过 MCP 读写；Go 后端按 token 校验能力、文档路径和代码仓库，并广播 MCP 工具阶段
+5. Agent 退出后上报 done / error，mdlive 清理 token 文件
 
 Runner 不把模型凭据放进服务端镜像。Agent 需要已配置 `mdlive mcp`（或通过环境变量/临时 MCP 配置连接到 mdlive）。
 
@@ -175,7 +176,7 @@ cursor-agent --print --approve-mcps --trust --sandbox enabled "<prompt>"
 
 注意：
 
-- 当前机器 `cursor-agent status` 显示未登录，需要先执行 `cursor-agent login`
+- Cursor CLI 已登录；tokens 由用户配置目录（macOS：`~/Library/Application Support/mdlive/`，Linux：`~/.config/mdlive/`）下的 `agent-token` / `agent-url` 短生命周期文件传给不继承环境变量的 worker
 - Cursor CLI 的 MCP 配置由用户维护；Runner 暂不自动写 `~/.cursor/mcp.json`
 - Cursor CLI 预设尚未做真实端到端写回验证；配置完成后建议先用 `--mode ask` 做只读测试，再开自动运行
 
@@ -185,7 +186,8 @@ cursor-agent --print --approve-mcps --trust --sandbox enabled "<prompt>"
 - 一次性 capability token（不是可伪造的 session header）
 - 文档路径 ACL：编辑任务只允许当前文档
 - 代码仓库 ACL：只能访问该文档关联的代码仓库
-- `agent_audit`：记录 Agent 请求的工具、HTTP 方法、路径、允许/拒绝
+- `agent_audit`：记录 Agent 请求（token / job / MCP 工具名 / method / path / allowed / reason）
+- 即使 Agent 没有发送 MCP 工具名，也会按 HTTP method/path 推断“读文档 / 写文档 / 回复评论 / 读代码 / 检查工作区”并广播进度
 - `GET /api/agent/jobs` 查看最近任务
 - `POST /api/agent/runner/claim` / `finish` / `heartbeat`
 

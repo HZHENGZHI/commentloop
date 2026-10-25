@@ -322,6 +322,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {
 			token := r.Header.Get("X-Mdlive-Agent-Token")
 			tool := r.Header.Get("X-Mdlive-MCP-Tool")
+			if tool == "" {
+				tool = inferAgentTool(r.Method, r.URL.Path)
+			}
 			s.agentJobs.audit(grant.JobID, token, tool, r.Method, r.URL.Path, true, "")
 			if tool != "" && grant.DocPath != "" {
 				s.broadcastAgent(grant.DocPath, "working", agentToolProgress(tool))
