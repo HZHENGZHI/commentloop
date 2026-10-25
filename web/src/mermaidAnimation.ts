@@ -265,6 +265,7 @@ export function setupMermaidAnimation(
   let cameraOffset = 0;
   const running = new Set<Animation>();
   let targetRevealTimer: number | undefined;
+  let stepDrawsEdges = false;
 
   const cancelTargetReveal = () => {
     if (targetRevealTimer !== undefined) {
@@ -298,6 +299,7 @@ export function setupMermaidAnimation(
   };
 
   const revealUpTo = (target: number, animateNewEdges: boolean) => {
+    stepDrawsEdges = animateNewEdges;
     cancelDraws();
     cancelTargetReveal();
     for (let i = 0; i < steps.length; i++) {
@@ -438,7 +440,7 @@ export function setupMermaidAnimation(
     next.disabled = step >= total;
     block.dispatchEvent(
       new CustomEvent(MERMAID_STEP_EVENT, {
-        detail: { active, playing, step, total },
+        detail: { active, playing, step, total, animateEdges: stepDrawsEdges },
       }),
     );
   };
@@ -454,6 +456,7 @@ export function setupMermaidAnimation(
     playing = false;
     cancelDraws();
     cancelTargetReveal();
+    stepDrawsEdges = false;
     // On a manual jump to the last step the deferred target box may still be
     // hidden; reveal it before removing the final-step highlight.
     for (const node of currentNodes) node.classList.remove("mermaid-step-hidden");
@@ -523,6 +526,7 @@ export function setupMermaidAnimation(
     stopTimer();
     cancelDraws();
     cancelTargetReveal();
+    stepDrawsEdges = false;
     step = 0;
     clearCurrent();
     for (const element of diagram.querySelectorAll<Element>(".mermaid-step-hidden")) {

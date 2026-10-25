@@ -361,25 +361,70 @@ function openMermaidModal(block: HTMLElement) {
       to.classList.toggle(name, from.classList.contains(name));
     }
   };
-  const syncClone = () => {
+  let cloneStep = -1;
+  const cloneDraws = new Set<Animation>();
+  const restoreCloneEdge = (path: SVGPathElement) => {
+    path.style.strokeDasharray = path.dataset.mermaidOriginalDasharray ?? "";
+    path.style.strokeDashoffset = path.dataset.mermaidOriginalDashoffset ?? "";
+  };
+  const cancelCloneDraws = () => {
+    for (const animation of cloneDraws) {
+      try {
+        animation.cancel();
+      } catch {
+        // Already finished.
+      }
+    }
+    cloneDraws.clear();
+    for (const path of cloneEdges) restoreCloneEdge(path);
+  };
+  const drawCloneEdge = (path: SVGPathElement) => {
+    const length = path.getTotalLength();
+    if (!length || typeof path.animate !== "function") {
+      restoreCloneEdge(path);
+      return;
+    }
+    path.style.strokeDasharray = `${length}`;
+    path.style.strokeDashoffset = `${length}`;
+    const animation = path.animate(
+      [{ strokeDashoffset: `${length}` }, { strokeDashoffset: "0" }],
+      { duration: 520, easing: "ease-out" },
+    );
+    cloneDraws.add(animation);
+    const finish = () => {
+      cloneDraws.delete(animation);
+      restoreCloneEdge(path);
+    };
+    animation.addEventListener("finish", finish, { once: true });
+    animation.addEventListener("cancel", finish, { once: true });
+  };
+  const syncClone = (animateEdges: boolean) => {
+    const current = animation?.isActive() ? animation.getStep() : 0;
+    const changed = current !== cloneStep;
+    if (changed) cancelCloneDraws();
+
     for (let i = 0; i < sourceNodes.length; i++) {
       const target = cloneNodes[i];
       if (target) syncStepClasses(sourceNodes[i], target);
     }
+    const hasCurrentEdges = sourceEdges.some((path) =>
+      path.classList.contains("mermaid-step-current"),
+    );
     for (let i = 0; i < sourceEdges.length; i++) {
       const target = cloneEdges[i];
       if (!target) continue;
-      syncStepClasses(sourceEdges[i], target);
-      // The inline SVG path may be mid-draw through a Web Animation. The
-      // clone has no such animation, so restore its original dash style and
-      // let the class change reveal the complete edge instead of a blank one.
-      target.style.strokeDasharray = target.dataset.mermaidOriginalDasharray ?? "";
-      target.style.strokeDashoffset = target.dataset.mermaidOriginalDashoffset ?? "";
+      const source = sourceEdges[i];
+      syncStepClasses(source, target);
+      if (changed && animateEdges && source.classList.contains("mermaid-step-current")) {
+        drawCloneEdge(target);
+      }
     }
     for (let i = 0; i < sourceLabels.length; i++) {
       const target = cloneLabels[i];
       if (target) syncStepClasses(sourceLabels[i], target);
     }
+    if (!hasCurrentEdges) cancelCloneDraws();
+    cloneStep = current;
   };
 
   const playback = document.createElement("div");
@@ -409,7 +454,7 @@ function openMermaidModal(block: HTMLElement) {
   playbackProgress.appendChild(playbackFill);
   playback.append(playbackPrev, playbackToggle, playbackNext, playbackStep, playbackProgress);
 
-  const syncPlayback = () => {
+  const syncPlayback = (animateEdges = false) => {
     if (!animation) return;
     const total = animation.total;
     const current = animation.getStep();
@@ -425,10 +470,13 @@ function openMermaidModal(block: HTMLElement) {
     playbackFill.style.width = `${total ? (current / total) * 100 : 0}%`;
     playbackPrev.disabled = !active || current <= 1;
     playbackNext.disabled = !active || current >= total;
-    syncClone();
+    syncClone(animateEdges);
   };
 
-  const onStep = () => syncPlayback();
+  const onStep = (event: Event) => {
+    const detail = (event as CustomEvent<{ animateEdges?: boolean }>).detail;
+    syncPlayback(detail?.animateEdges === true);
+  };
   if (animation) {
     block.addEventListener(MERMAID_STEP_EVENT, onStep);
     playbackPrev.addEventListener("click", () => animation.previous());
@@ -536,6 +584,7 @@ function openMermaidModal(block: HTMLElement) {
     window.removeEventListener("resize", onResize);
     window.removeEventListener("keydown", onKey);
     block.removeEventListener(MERMAID_STEP_EVENT, onStep);
+    cancelCloneDraws();
     document.body.classList.remove("mermaid-modal-open");
     backdrop.remove();
   };
