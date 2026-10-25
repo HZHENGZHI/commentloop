@@ -564,7 +564,7 @@ func (b *logBuffer) String() string {
 	return string(b.data)
 }
 
-func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
+func (s *Server) enqueueAutoReview(path, commentID string, force bool, language string) error {
 	settings := s.settings.get()
 	agent := settings.Agent
 	if !force && !agent.AutoRun {
@@ -574,7 +574,7 @@ func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
 	if !ok {
 		return fmt.Errorf("评论不存在")
 	}
-	prompt, err := s.buildReviewAgentPrompt(path, commentID)
+	prompt, err := s.buildReviewAgentPrompt(path, commentID, language)
 	if err != nil {
 		return fmt.Errorf("无法生成 Agent 任务：%w", err)
 	}
@@ -613,7 +613,7 @@ func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
 	return nil
 }
 
-func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) {
+func (s *Server) buildReviewAgentPrompt(path, commentID, language string) (string, error) {
 	comment, ok := s.comments.get(path, commentID)
 	if !ok {
 		return "", fmt.Errorf("评论不存在")
@@ -646,11 +646,16 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 				AllowCodeRead: true, AllowCommentReply: true,
 				Body: "原任务模板已删除。请只分析当前评论并提供建议，不要修改文档。",
 			}
+			if language == "en" {
+				template.Name = "Deleted template"
+				template.Body = "The original task template was deleted. Analyze the current comment only and provide suggestions; do not modify the document."
+			}
 			hasTemplate = true
 		} else {
 			template, _ = s.prompts.get(defaultPromptTemplateID)
 		}
 	}
+	template = localizePromptTemplate(template, language)
 	allowCodeRead := !hasTemplate || template.AllowCodeRead
 	allowCommentReply := !hasTemplate || template.AllowCommentReply
 	templateVars := map[string]string{

@@ -27,11 +27,22 @@ type optimizePromptRequest struct {
 	AllowCommentReply bool   `json:"allowCommentReply"`
 }
 
-func (s *Server) handleListPromptTemplates(w http.ResponseWriter, _ *http.Request) {
+func promptLanguage(r *http.Request) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Accept-Language"))), "en") {
+		return "en"
+	}
+	return "zh"
+}
+
+func (s *Server) handleListPromptTemplates(w http.ResponseWriter, r *http.Request) {
 	items, err := s.prompts.list()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+	lang := promptLanguage(r)
+	for i := range items {
+		items[i] = localizePromptTemplate(items[i], lang)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"templates": items})
 }
@@ -49,7 +60,7 @@ func (s *Server) handleCreatePromptTemplate(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, localizePromptTemplate(item, promptLanguage(r)))
 }
 
 func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +85,7 @@ func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, localizePromptTemplate(item, promptLanguage(r)))
 }
 
 func (s *Server) handleDeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
@@ -128,5 +139,5 @@ func (s *Server) handleResetPromptTemplate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, localizePromptTemplate(item, promptLanguage(r)))
 }

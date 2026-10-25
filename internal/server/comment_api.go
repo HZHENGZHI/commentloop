@@ -171,7 +171,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
-	_ = s.enqueueAutoReview(canonical, comment.ID, false)
+	_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	writeJSON(w, http.StatusOK, comment)
 }
 
@@ -233,7 +233,7 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	if author == "user" {
-		_ = s.enqueueAutoReview(canonical, comment.ID, false)
+		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)
 }
@@ -260,7 +260,7 @@ func (s *Server) handleTriggerCommentAgent(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
 		return
 	}
-	if err := s.enqueueAutoReview(canonical, req.ID, true); err != nil {
+	if err := s.enqueueAutoReview(canonical, req.ID, true, promptLanguage(r)); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

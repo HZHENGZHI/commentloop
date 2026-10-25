@@ -60,6 +60,36 @@ var builtinPromptTemplates = []PromptTemplate{
 	},
 }
 
+var builtinPromptTemplatesEN = map[string]PromptTemplate{
+	"builtin-document-review": {
+		Name:        "Document review",
+		Description: "Edit the document according to the comment and document consensus while preserving unrelated content.",
+		Body:        "Edit the document according to the current comment and document consensus. Change only content related to the comment and keep unrelated content unchanged. In your reply, explain the reasoning and include the necessary before/after excerpts.",
+	},
+	"builtin-requirements": {
+		Name:        "Requirements breakdown",
+		Description: "Read discussions and the document, then break down goals, constraints, acceptance criteria, and open questions.",
+		Body:        "Read the current document, comment thread, imported discussions, and document consensus, then break down the requirement. Output: goals and scope, user scenarios, constraints, acceptance criteria, and open questions. Do not edit the document; reply with the analysis and uncertainties first.",
+	},
+	"builtin-bug-triage": {
+		Name:        "Bug investigation",
+		Description: "Read comments, the document, and linked code; provide an investigation and a fix plan first.",
+		Body:        "Read the current document, full comment thread, related discussions, and linked code, then investigate the issue. Output: reproduction conditions, likely causes and evidence, verification steps, and a proposed fix. Do not edit the document or code; reply with the analysis first, and state clearly when information is insufficient.",
+	},
+}
+
+func localizePromptTemplate(item PromptTemplate, language string) PromptTemplate {
+	if !item.Builtin || language != "en" {
+		return item
+	}
+	if translated, ok := builtinPromptTemplatesEN[item.ID]; ok {
+		item.Name = translated.Name
+		item.Description = translated.Description
+		item.Body = translated.Body
+	}
+	return item
+}
+
 func (s *promptTemplateStore) ensureDefaults() error {
 	for _, item := range builtinPromptTemplates {
 		now := formatTime(time.Now())

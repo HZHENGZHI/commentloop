@@ -881,7 +881,7 @@ func TestPromptTemplatesAndCommentTask(t *testing.T) {
 	if caps.WriteDocs || caps.ReadCode || caps.ReplyComments {
 		t.Fatalf("custom capabilities = %+v", caps)
 	}
-	prompt, err := app.buildReviewAgentPrompt(path, comment.ID)
+	prompt, err := app.buildReviewAgentPrompt(path, comment.ID, "zh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -977,7 +977,7 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 	if len(comment.DiscussionIDs) != 1 {
 		t.Fatalf("comment discussionIds = %+v", comment.DiscussionIDs)
 	}
-	prompt, err := app.buildReviewAgentPrompt(path, comment.ID)
+	prompt, err := app.buildReviewAgentPrompt(path, comment.ID, "zh")
 	if err != nil {
 		t.Fatal(err)
 	}
