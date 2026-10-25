@@ -77,6 +77,17 @@ function fixMermaidContrast(container: HTMLElement, theme: Theme) {
   });
 }
 
+function stripEdgeLabelBackgrounds(container: Element) {
+  container.querySelectorAll<HTMLElement>(".edgeLabel, .edgeLabel *, rect.background, .labelBkg").forEach((el) => {
+    el.style.setProperty("background", "transparent", "important");
+    el.style.setProperty("background-color", "transparent", "important");
+    if (el.tagName.toLowerCase() === "rect") {
+      el.style.setProperty("fill", "transparent", "important");
+      el.style.setProperty("stroke", "none", "important");
+    }
+  });
+}
+
 function mermaidConfig(theme: Theme) {
   return {
     startOnLoad: false,
@@ -318,6 +329,7 @@ function openMermaidModal(block: HTMLElement) {
   clone.style.maxWidth = "none";
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;
+  stripEdgeLabelBackgrounds(clone);
   content.appendChild(clone);
   viewport.appendChild(content);
 
@@ -469,6 +481,7 @@ export async function enhanceMermaidDiagrams(
         if (cancelled) break;
         diagram.innerHTML = svg;
         fixMermaidContrast(diagram, theme);
+        stripEdgeLabelBackgrounds(diagram);
         block.querySelector(".mermaid-error")?.remove();
         requestAnimationFrame(() => {
           const viewport = block.querySelector<HTMLElement>(".mermaid-viewport");
