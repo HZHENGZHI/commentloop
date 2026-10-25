@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
-import type { Comment } from "../types";
+import type { Comment, Theme } from "../types";
 import {
   findQuoteRange,
   isMarkdownPath,
@@ -24,6 +24,7 @@ interface PreviewProps {
   onScrollRatio: (ratio: number) => void;
   onOpenDoc: (path: string) => void;
   onRequestComment: (quote: string) => void;
+  theme: Theme;
 }
 
 export function Preview({
@@ -34,6 +35,7 @@ export function Preview({
   onScrollRatio,
   onOpenDoc,
   onRequestComment,
+  theme,
 }: PreviewProps) {
   const { t } = useTranslation();
   const articleRef = useRef<HTMLElement>(null);
@@ -128,6 +130,83 @@ export function Preview({
     if (el) el.scrollTop = scrollPos.current;
   }, [html, containerRef]);
 
+  // Hydrate fenced Mermaid blocks into SVG. The Go renderer intentionally
+  // leaves them as code blocks so a JS-disabled browser still shows the source.
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!article) return;
+    let cancelled = false;
+    const blocks = new Map<HTMLElement, string>();
+    article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
+      const code = pre.querySelector<HTMLElement>("code.language-mermaid");
+      if (!code) return;
+      const source = code.textContent ?? "";
+      const block = document.createElement("div");
+      block.className = "mermaid-block";
+      block.dataset.source = source;
+      block.dataset.renderedTheme = "";
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid-diagram";
+      block.appendChild(diagram);
+      pre.replaceWith(block);
+      blocks.set(block, source);
+    });
+    article.querySelectorAll<HTMLElement>(".mermaid-block").forEach((block) => {
+      if (block.dataset.renderedTheme !== theme) {
+        blocks.set(block, block.dataset.source ?? "");
+      }
+    });
+    if (blocks.size === 0) return;
+    void (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: theme === "dark" ? "dark" : "default",
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          flowchart: { htmlLabels: false, curve: "basis" },
+        });
+        let index = 0;
+        for (const [block, source] of blocks) {
+          if (cancelled) return;
+          const diagram = block.querySelector<HTMLElement>(".mermaid-diagram");
+          if (!diagram) continue;
+          block.dataset.renderedTheme = theme;
+          try {
+            const { svg } = await mermaid.render(
+              `commentloop-mermaid-${Date.now()}-${index++}`,
+              source,
+            );
+            if (cancelled) return;
+            diagram.innerHTML = svg;
+            block.querySelector(".mermaid-error")?.remove();
+          } catch (error) {
+            if (cancelled) return;
+            diagram.textContent = "";
+            const failure = document.createElement("div");
+            failure.className = "mermaid-error";
+            failure.textContent =
+              error instanceof Error
+                ? error.message
+                : i18n.t("Mermaid 渲染失败");
+            const sourcePre = document.createElement("pre");
+            sourcePre.className = "mermaid-error-source";
+            sourcePre.textContent = source;
+            diagram.append(failure, sourcePre);
+          }
+        }
+      } catch (error) {
+        // The source block remains visible if the dynamic import itself fails.
+        console.error("commentloop: failed to load Mermaid", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [html, currentPath, theme]);
+
   // Make links work for both normal clicks and middle-click/open-in-new-tab.
   useEffect(() => {
     const article = articleRef.current;
@@ -159,6 +238,7 @@ export function Preview({
     // Add copy buttons to highlighted code blocks.
     article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
       if (pre.querySelector(":scope > .commentloop-copy")) return;
+      if (pre.querySelector(":scope > code.language-mermaid")) return;
       pre.classList.add("commentloop-pre");
       const button = document.createElement("button");
       button.type = "button";

@@ -1703,6 +1703,7 @@ export default function App() {
                   onScrollRatio={handlePreviewScroll}
                   onOpenDoc={(path) => void openDoc(path)}
                   onRequestComment={(quote) => setCommentQuote(quote)}
+                  theme={theme}
                 />
                 {commentsOpen ? (
                   <CommentsPanel

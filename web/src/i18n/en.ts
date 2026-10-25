@@ -146,6 +146,7 @@ const en: Record<string, string> = {
   "空白文档": "Blank document",
   "开始输入 Markdown，预览会实时出现在这里。": "Start writing Markdown; the preview appears here.",
   "评论选中内容": "Comment",
+  "Mermaid 渲染失败": "Mermaid rendering failed.",
   "关闭提示": "Dismiss notification",
 
   // Comment modal

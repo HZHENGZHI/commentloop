@@ -21,6 +21,7 @@ comment → agent edit → human review → reply / rollback → updated documen
 - **Inline review threads**: select text, leave a comment, and keep the thread anchored to the source.
 - **Agent edits**: the agent reads the document, comments, and consensus; writes a focused change; then replies with before/after context.
 - **Document consensus**: import sessions from Pi, Claude Code, Codex, or Cursor and distill them into structured consensus. Later edits can use it instead of re-litigating old decisions.
+- **Mermaid diagrams**: fenced `mermaid` blocks render as themed SVG diagrams. Unsupported diagrams fall back to the source block.
 - **Code context**: link a document to local directories or GitHub repositories; agents can read code, Git state, and branches.
 - **Local-first**: a single Go binary with an embedded React frontend; binds to `127.0.0.1` by default; comments and sessions live in SQLite.
 - **Read-only browser**: existing documents cannot be edited in the browser. Agents write through MCP/CLI, with document and repository access enforced by the Go backend.

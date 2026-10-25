@@ -5603,3 +5603,35 @@ body.dragging-split * {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+
+/* Mermaid diagrams are hydrated from fenced mermaid blocks in the preview. */
+.mermaid-block {
+  margin: 1.4em 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.04));
+}
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  min-width: min-content;
+}
+.mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.mermaid-error {
+  color: #b42318;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.mermaid-error-source {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  opacity: 0.8;
+}
