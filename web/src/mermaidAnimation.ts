@@ -24,6 +24,7 @@ interface ResolvedStep {
 interface EdgeOriginal {
   dasharray: string;
   dashoffset: string;
+  markerEnd: string;
 }
 
 export interface MermaidAnimationController {
@@ -179,10 +180,12 @@ function prepareEdgeOriginals(diagram: HTMLElement): WeakMap<SVGPathElement, Edg
     const original = {
       dasharray: path.style.strokeDasharray,
       dashoffset: path.style.strokeDashoffset,
+      markerEnd: path.getAttribute("marker-end") ?? "",
     };
     originals.set(path, original);
     path.dataset.mermaidOriginalDasharray = original.dasharray;
     path.dataset.mermaidOriginalDashoffset = original.dashoffset;
+    path.dataset.mermaidOriginalMarkerEnd = original.markerEnd;
   });
   return originals;
 }
@@ -192,6 +195,7 @@ function clearEdgeStyles(path: SVGPathElement, originals: WeakMap<SVGPathElement
   if (!original) return;
   path.style.strokeDasharray = original.dasharray;
   path.style.strokeDashoffset = original.dashoffset;
+  path.setAttribute("marker-end", original.markerEnd);
 }
 
 function createButton(className: string, text: string, title?: string): HTMLButtonElement {
@@ -364,6 +368,9 @@ export function setupMermaidAnimation(
     if (!original) return;
     path.style.strokeDasharray = `${length}`;
     path.style.strokeDashoffset = `${length}`;
+    // Marker endpoints are painted independently of dashoffset; hide the
+    // arrowhead so it appears when the line actually reaches the target.
+    path.setAttribute("marker-end", "");
     let animation: Animation;
     try {
       animation = path.animate(

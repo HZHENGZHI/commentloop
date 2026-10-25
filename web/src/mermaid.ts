@@ -366,6 +366,7 @@ function openMermaidModal(block: HTMLElement) {
   const restoreCloneEdge = (path: SVGPathElement) => {
     path.style.strokeDasharray = path.dataset.mermaidOriginalDasharray ?? "";
     path.style.strokeDashoffset = path.dataset.mermaidOriginalDashoffset ?? "";
+    path.setAttribute("marker-end", path.dataset.mermaidOriginalMarkerEnd ?? "");
   };
   const cancelCloneDraws = () => {
     for (const animation of cloneDraws) {
@@ -386,6 +387,7 @@ function openMermaidModal(block: HTMLElement) {
     }
     path.style.strokeDasharray = `${length}`;
     path.style.strokeDashoffset = `${length}`;
+    path.setAttribute("marker-end", "");
     const animation = path.animate(
       [{ strokeDashoffset: `${length}` }, { strokeDashoffset: "0" }],
       { duration: 520, easing: "ease-out" },
