@@ -21,6 +21,28 @@ interface EdgeOriginal {
   dashoffset: string;
 }
 
+export interface MermaidAnimationController {
+  readonly total: number;
+  getStep: () => number;
+  isActive: () => boolean;
+  isPlaying: () => boolean;
+  activate: () => void;
+  deactivate: () => void;
+  previous: () => void;
+  next: () => void;
+  toggle: () => void;
+}
+
+export const MERMAID_STEP_EVENT = "commentloop-mermaid-step";
+
+const controllers = new WeakMap<HTMLElement, MermaidAnimationController>();
+
+export function getMermaidAnimationController(
+  block: HTMLElement,
+): MermaidAnimationController | null {
+  return controllers.get(block) ?? null;
+}
+
 const EDGE_OPERATOR = /(<-->|-->|---|-\.->|-\.-|==>|===|--x|--o)/g;
 const MAX_STEPS = 160;
 
@@ -337,6 +359,11 @@ export function setupMermaidAnimation(
     progressFill.style.width = `${total ? (step / total) * 100 : 0}%`;
     prev.disabled = step <= 1;
     next.disabled = step >= total;
+    block.dispatchEvent(
+      new CustomEvent(MERMAID_STEP_EVENT, {
+        detail: { active, playing, step, total },
+      }),
+    );
   };
 
   const stopTimer = () => {
@@ -357,6 +384,9 @@ export function setupMermaidAnimation(
         updateControls();
         if (step >= steps.length) {
           playing = false;
+          // The final step is fully revealed; keeping its accent color makes
+          // the finished diagram look like it is still waiting on an action.
+          clearCurrent();
           updateControls();
           return;
         }
@@ -426,6 +456,7 @@ export function setupMermaidAnimation(
     if (step < steps.length) {
       step += 1;
       revealUpTo(step, true);
+      if (step >= steps.length) clearCurrent();
     }
     updateControls();
   };
@@ -448,6 +479,21 @@ export function setupMermaidAnimation(
     }
     updateControls();
   };
+
+  const controller: MermaidAnimationController = {
+    get total() {
+      return steps.length;
+    },
+    getStep: () => step,
+    isActive: () => active,
+    isPlaying: () => playing,
+    activate,
+    deactivate,
+    previous,
+    next: forward,
+    toggle: togglePlayback,
+  };
+  controllers.set(block, controller);
 
   const onAnimate = () => {
     if (active) deactivate();
@@ -485,16 +531,6 @@ export function setupMermaidAnimation(
     animateButton.textContent = i18n.t("动画");
     animateButton.setAttribute("aria-pressed", "false");
     controls.remove();
+    controllers.delete(block);
   };
-}
-
-/** Remove playback-only classes/styles from a clone used by the fullscreen viewer. */
-export function clearMermaidAnimationState(svg: SVGSVGElement) {
-  svg.querySelectorAll(".mermaid-step-hidden, .mermaid-step-current").forEach((element) => {
-    element.classList.remove("mermaid-step-hidden", "mermaid-step-current");
-  });
-  svg.querySelectorAll<SVGPathElement>("path[data-mermaid-original-dasharray]").forEach((path) => {
-    path.style.strokeDasharray = path.dataset.mermaidOriginalDasharray ?? "";
-    path.style.strokeDashoffset = path.dataset.mermaidOriginalDashoffset ?? "";
-  });
 }

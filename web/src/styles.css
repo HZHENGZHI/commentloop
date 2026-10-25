@@ -5977,3 +5977,25 @@ body.mermaid-modal-open {
     font-size: 10px;
   }
 }
+
+/* Full-screen playback mirrors the inline step state. */
+.mermaid-modal-content .mermaid-step-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.mermaid-modal-content g.node.mermaid-step-current [class*="label-container"] {
+  stroke: var(--accent) !important;
+  stroke-width: 2.4px !important;
+}
+
+.mermaid-modal-content path.mermaid-step-current {
+  stroke: var(--accent) !important;
+  stroke-width: 2.4px !important;
+}
+
+.mermaid-modal-playback {
+  flex: 0 0 auto;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+}

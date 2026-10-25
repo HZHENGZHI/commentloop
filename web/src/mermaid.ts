@@ -1,5 +1,9 @@
 import i18n from "./i18n";
-import { clearMermaidAnimationState, setupMermaidAnimation } from "./mermaidAnimation";
+import {
+  getMermaidAnimationController,
+  MERMAID_STEP_EVENT,
+  setupMermaidAnimation,
+} from "./mermaidAnimation";
 import type { Theme } from "./types";
 
 type MermaidApi = typeof import("mermaid").default;
@@ -277,6 +281,7 @@ function openMermaidModal(block: HTMLElement) {
   const sourceSvg = block.querySelector<SVGSVGElement>(".mermaid-diagram svg");
   if (!sourceSvg) return;
   const source = block.dataset.source ?? "";
+  const animation = getMermaidAnimationController(block);
 
   const backdrop = document.createElement("div");
   backdrop.className = "mermaid-modal-backdrop";
@@ -329,19 +334,82 @@ function openMermaidModal(block: HTMLElement) {
   viewport.className = "mermaid-modal-viewport";
   const content = document.createElement("div");
   content.className = "mermaid-modal-content";
-  const clone = sourceSvg.cloneNode(true) as SVGSVGElement;
-  clearMermaidAnimationState(clone);
   const { width, height } = nativeSize(sourceSvg);
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
-  clone.style.maxWidth = "none";
-  clone.style.width = `${width}px`;
-  clone.style.height = `${height}px`;
-  stripEdgeLabelBackgrounds(clone);
-  content.appendChild(clone);
+  const makeClone = () => {
+    const next = sourceSvg.cloneNode(true) as SVGSVGElement;
+    next.setAttribute("width", String(width));
+    next.setAttribute("height", String(height));
+    next.style.maxWidth = "none";
+    next.style.width = `${width}px`;
+    next.style.height = `${height}px`;
+    stripEdgeLabelBackgrounds(next);
+    return next;
+  };
+  const refreshClone = () => {
+    content.replaceChildren(makeClone());
+  };
+  refreshClone();
   viewport.appendChild(content);
 
-  modal.append(header, viewport, sourcePre);
+  const playback = document.createElement("div");
+  playback.className = "mermaid-animation-controls mermaid-modal-playback";
+  playback.hidden = !animation;
+  const playbackPrev = document.createElement("button");
+  playbackPrev.type = "button";
+  playbackPrev.className = "mermaid-step-button";
+  playbackPrev.textContent = "‹";
+  playbackPrev.title = i18n.t("上一步");
+  playbackPrev.setAttribute("aria-label", i18n.t("上一步"));
+  const playbackToggle = document.createElement("button");
+  playbackToggle.type = "button";
+  playbackToggle.className = "mermaid-step-toggle";
+  playbackToggle.textContent = i18n.t("播放");
+  const playbackNext = document.createElement("button");
+  playbackNext.type = "button";
+  playbackNext.className = "mermaid-step-button";
+  playbackNext.textContent = "›";
+  playbackNext.title = i18n.t("下一步");
+  playbackNext.setAttribute("aria-label", i18n.t("下一步"));
+  const playbackStep = document.createElement("span");
+  playbackStep.className = "mermaid-step-label";
+  const playbackProgress = document.createElement("span");
+  playbackProgress.className = "mermaid-step-progress";
+  const playbackFill = document.createElement("i");
+  playbackProgress.appendChild(playbackFill);
+  playback.append(playbackPrev, playbackToggle, playbackNext, playbackStep, playbackProgress);
+
+  const syncPlayback = () => {
+    if (!animation) return;
+    const total = animation.total;
+    const current = animation.getStep();
+    const active = animation.isActive();
+    playbackToggle.textContent = !active
+      ? i18n.t("播放")
+      : animation.isPlaying()
+        ? i18n.t("暂停")
+        : current >= total
+          ? i18n.t("重播")
+          : i18n.t("播放");
+    playbackStep.textContent = `${i18n.t("步骤")} ${current} / ${total}`;
+    playbackFill.style.width = `${total ? (current / total) * 100 : 0}%`;
+    playbackPrev.disabled = !active || current <= 1;
+    playbackNext.disabled = !active || current >= total;
+    refreshClone();
+  };
+
+  const onStep = () => syncPlayback();
+  if (animation) {
+    block.addEventListener(MERMAID_STEP_EVENT, onStep);
+    playbackPrev.addEventListener("click", () => animation.previous());
+    playbackNext.addEventListener("click", () => animation.next());
+    playbackToggle.addEventListener("click", () => {
+      if (!animation.isActive()) animation.activate();
+      else animation.toggle();
+    });
+    syncPlayback();
+  }
+
+  modal.append(header, playback, viewport, sourcePre);
   backdrop.appendChild(modal);
   document.body.appendChild(backdrop);
   document.body.classList.add("mermaid-modal-open");
@@ -436,6 +504,7 @@ function openMermaidModal(block: HTMLElement) {
     activeModalCleanup = null;
     window.removeEventListener("resize", onResize);
     window.removeEventListener("keydown", onKey);
+    block.removeEventListener(MERMAID_STEP_EVENT, onStep);
     document.body.classList.remove("mermaid-modal-open");
     backdrop.remove();
   };
