@@ -269,6 +269,7 @@ export function setupMermaidAnimation(
   let cameraOffset = 0;
   const running = new Set<Animation>();
   let targetRevealTimer: number | undefined;
+  let finishTimer: number | undefined;
   let stepDrawsEdges = false;
 
   const cancelTargetReveal = () => {
@@ -304,6 +305,7 @@ export function setupMermaidAnimation(
 
   const revealUpTo = (target: number, animateNewEdges: boolean) => {
     stepDrawsEdges = animateNewEdges;
+    cancelFinish();
     cancelDraws();
     cancelTargetReveal();
     for (let i = 0; i < steps.length; i++) {
@@ -459,7 +461,15 @@ export function setupMermaidAnimation(
     }
   };
 
+  const cancelFinish = () => {
+    if (finishTimer !== undefined) {
+      window.clearTimeout(finishTimer);
+      finishTimer = undefined;
+    }
+  };
+
   const finishPlayback = () => {
+    cancelFinish();
     playing = false;
     cancelDraws();
     cancelTargetReveal();
@@ -474,6 +484,17 @@ export function setupMermaidAnimation(
     updateControls();
   };
 
+  const scheduleFinish = () => {
+    cancelFinish();
+    // Let the final edge finish growing and the target box appear before
+    // removing the last-step highlight. Cancelling the draw immediately here
+    // was making the last edge snap into place.
+    finishTimer = window.setTimeout(() => {
+      finishTimer = undefined;
+      finishPlayback();
+    }, 700);
+  };
+
   const schedule = () => {
     stopTimer();
     if (!playing) return;
@@ -484,7 +505,7 @@ export function setupMermaidAnimation(
         revealUpTo(step, true);
         updateControls();
         if (step >= steps.length) {
-          finishPlayback();
+          scheduleFinish();
           return;
         }
         schedule();
@@ -533,6 +554,7 @@ export function setupMermaidAnimation(
     stopTimer();
     cancelDraws();
     cancelTargetReveal();
+    cancelFinish();
     stepDrawsEdges = false;
     step = 0;
     clearCurrent();
@@ -566,7 +588,7 @@ export function setupMermaidAnimation(
       step += 1;
       revealUpTo(step, true);
       if (step >= steps.length) {
-        finishPlayback();
+        scheduleFinish();
         return;
       }
     }
@@ -583,6 +605,7 @@ export function setupMermaidAnimation(
       stopTimer();
     } else {
       if (step >= steps.length) {
+        cancelFinish();
         step = 1;
         revealUpTo(step, true);
       }
@@ -629,6 +652,7 @@ export function setupMermaidAnimation(
     stopTimer();
     cancelDraws();
     cancelTargetReveal();
+    cancelFinish();
     clearCurrent();
     for (const element of diagram.querySelectorAll<Element>(
       ".mermaid-step-hidden, .mermaid-step-current",
