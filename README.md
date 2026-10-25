@@ -1,3 +1,5 @@
+[![CI](https://github.com/HZHENGZHI/commentloop/actions/workflows/ci.yml/badge.svg)](https://github.com/HZHENGZHI/commentloop/actions/workflows/ci.yml)
+
 # Commentloop
 
 本地优先的 AI 协作审阅循环：**Go 后端 + React 前端**，编译后是单个可执行文件，macOS 与 Linux 通用。评论、Agent 修改、审阅、共识和回滚都围绕同一份文档发生。
@@ -242,23 +244,35 @@ API：
 - `POST /api/prompt-templates/reset`
 - `POST /api/prompt-templates/optimize`（AI 优化草稿）
 
-## Docker 镜像
+## GitHub Actions / 自动发布
 
-已发布多架构镜像：
+工作流：`.github/workflows/ci.yml`
 
-```text
-docker.io/iankkk/commentloop:0.1.0
-docker.io/iankkk/commentloop:latest
+- push 到 `main`：运行 `go vet`、全量测试、前端构建，并上传四平台二进制 artifact
+- push `v*` tag：生成 macOS / Linux 的 amd64 + arm64 二进制、`.tar.gz`、`SHA256SUMS`，创建 GitHub Release，并推送多架构 GHCR 镜像
+
+发版：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-支持 `linux/arm64` 和 `linux/amd64`。镜像是只读评审模式，固定以前台 `run` 启动，适合交给 Docker / Apple container 管理：
+发布后的镜像：
+
+```text
+ghcr.io/hzhenzhi/commentloop:latest
+ghcr.io/hzhenzhi/commentloop:v0.1.0
+```
+
+支持 `linux/arm64` 和 `linux/amd64`。首次使用 GHCR 时，如果 package 是私有的，需要在 GitHub Package 设置里改为 public。镜像是只读评审模式，固定以前台 `run` 启动，适合交给 Docker / Apple container 管理：
 
 ```bash
 docker run -d --name commentloop \
   -p 127.0.0.1:4571:4571 \
   -v "$HOME/Documents/notes:/notes" \
   -v commentloop-data:/data \
-  iankkk/commentloop:latest
+  ghcr.io/hzhenzhi/commentloop:latest
 ```
 
 - `/notes`：要评审的 Markdown 目录
@@ -273,7 +287,7 @@ container run -d --name commentloop \
   -p 127.0.0.1:4571:4571 \
   -v "$HOME/Documents/notes:/notes" \
   -v commentloop-data:/data \
-  iankkk/commentloop:latest
+  ghcr.io/hzhenzhi/commentloop:latest
 ```
 
 本地重新构建：
@@ -281,7 +295,7 @@ container run -d --name commentloop \
 ```bash
 make cross
 container build --platform linux/arm64 --platform linux/amd64 \
-  -t iankkk/commentloop:0.1.0 -t iankkk/commentloop:latest .
+  -t ghcr.io/hzhenzhi/commentloop:0.1.0 -t ghcr.io/hzhenzhi/commentloop:latest .
 ```
 
 ## 后台运行（start / stop / status）

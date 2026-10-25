@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "24"
+  GO_VERSION_FILE: go.mod
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: cd web && npm ci
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
+
+      - name: Build web
+        run: cd web && npm run build
+
+  build:
+    name: Build packages
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: cd web && npm ci
+
+      - name: Build cross-platform binaries
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: make cross VERSION="${VERSION}"
+
+      - name: Package release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            cp "bin/commentloop-${target}" "dist/commentloop-${target}"
+            stage="$(mktemp -d)"
+            cp "bin/commentloop-${target}" "${stage}/commentloop"
+            cp README.md LICENSE "${stage}/"
+            tar -C "${stage}" -czf "dist/commentloop-${target}.tar.gz" .
+            rm -rf "${stage}"
+          done
+          (cd dist && sha256sum commentloop-* > SHA256SUMS)
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commentloop-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: commentloop-dist
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  docker:
+    name: Docker image
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: commentloop-dist
+          path: dist
+
+      - name: Restore Docker build binaries
+        run: |
+          set -euo pipefail
+          mkdir -p bin
+          cp dist/commentloop-linux-amd64 bin/commentloop-linux-amd64
+          cp dist/commentloop-linux-arm64 bin/commentloop-linux-arm64
+          chmod +x bin/commentloop-linux-amd64 bin/commentloop-linux-arm64
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/hzhenzhi/commentloop:${{ github.ref_name }}
+            ghcr.io/hzhenzhi/commentloop:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
