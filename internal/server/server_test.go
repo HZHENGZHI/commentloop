@@ -984,6 +984,13 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 	if !strings.Contains(prompt, "使用字段 X") || !strings.Contains(prompt, "Document consensus") {
 		t.Fatalf("prompt missing consensus/context:\n%s", prompt)
 	}
+	enPrompt, err := app.buildReviewAgentPrompt(path, comment.ID, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(enPrompt, "Task template: Document review") || !strings.Contains(enPrompt, "Edit the document according to the current comment") {
+		t.Fatalf("English prompt did not use the English builtin template:\n%s", enPrompt)
+	}
 
 	// Continuing the original session is picked up by the poller and updates
 	// both the stored transcript and the consensus.

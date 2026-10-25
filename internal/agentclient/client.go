@@ -236,12 +236,12 @@ func Resolve(tree Tree, input string, allowNew bool) (Resolved, error) {
 	input = strings.TrimSpace(input)
 	input = strings.TrimPrefix(input, "./")
 	if input == "" {
-		return Resolved{}, errors.New("路径不能为空")
+		return Resolved{}, errors.New("path is required")
 	}
 	if strings.Contains(input, "..") {
 		for _, part := range strings.Split(input, "/") {
 			if part == ".." {
-				return Resolved{}, errors.New("路径不能包含 ..")
+				return Resolved{}, errors.New("path cannot contain ..")
 			}
 		}
 	}
@@ -259,7 +259,7 @@ func Resolve(tree Tree, input string, allowNew bool) (Resolved, error) {
 		if strings.HasPrefix(input, prefix) {
 			rel := strings.TrimPrefix(input, prefix)
 			if rel == "" {
-				return Resolved{}, errors.New("路径缺少文件名")
+				return Resolved{}, errors.New("path is missing a file name")
 			}
 			return resolveUnderRoot(tree, root, rel, allowNew)
 		}
@@ -294,22 +294,22 @@ func Resolve(tree Tree, input string, allowNew bool) (Resolved, error) {
 		return Resolved{Path: f.Path, RootID: f.RootID, RelPath: f.RelPath, Exists: true, File: &f}, nil
 	}
 	if len(matches) > 1 {
-		return Resolved{}, fmt.Errorf("路径 %q 在多个目录中存在，请使用 <目录名>/<相对路径> 或 canonical path", input)
+		return Resolved{}, fmt.Errorf("path %q exists in multiple roots; use <root>/<relative-path> or a canonical path", input)
 	}
 
 	if allowNew && len(tree.Roots) == 1 {
 		return resolveUnderRoot(tree, tree.Roots[0], input, true)
 	}
 	if allowNew {
-		return Resolved{}, fmt.Errorf("找不到 %q；写入新文件请使用 <目录名>/<相对路径>，可选目录：%s", input, rootNames(tree))
+		return Resolved{}, fmt.Errorf("cannot find %q; to create a file use <root>/<relative-path>; available roots: %s", input, rootNames(tree))
 	}
-	return Resolved{}, fmt.Errorf("找不到文件 %q；可用 commentloop agent list 查看路径", input)
+	return Resolved{}, fmt.Errorf("file %q not found; run commentloop agent list to see paths", input)
 }
 
 func resolveUnderRoot(tree Tree, root Root, rel string, allowNew bool) (Resolved, error) {
 	rel = strings.TrimPrefix(strings.TrimSpace(rel), "/")
 	if rel == "" {
-		return Resolved{}, errors.New("路径缺少文件名")
+		return Resolved{}, errors.New("path is missing a file name")
 	}
 	canonical := root.ID + "/" + rel
 	for _, file := range tree.Files {
@@ -319,7 +319,7 @@ func resolveUnderRoot(tree Tree, root Root, rel string, allowNew bool) (Resolved
 		}
 	}
 	if !allowNew {
-		return Resolved{}, fmt.Errorf("文件不存在：%s", canonical)
+		return Resolved{}, fmt.Errorf("file does not exist: %s", canonical)
 	}
 	return Resolved{Path: canonical, RootID: root.ID, RelPath: rel}, nil
 }
@@ -358,6 +358,7 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Language", "en")
 	// Mark requests made by the Agent CLI/MCP. In preview/review mode the
 	// frontend stays read-only while the background agent may still write.
 	req.Header.Set("X-Commentloop-Agent", "1")
@@ -372,7 +373,7 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("无法连接 commentloop 服务 %s：%w", c.base, err)
+		return fmt.Errorf("cannot connect to Commentloop at %s: %w", c.base, err)
 	}
 	defer res.Body.Close()
 	if out == nil {
@@ -392,15 +393,15 @@ func decodeResponse(res *http.Response, out any) error {
 		}
 		_ = json.Unmarshal(data, &payload)
 		if payload.Error != "" {
-			return fmt.Errorf("commentloop 返回错误：%s", payload.Error)
+			return fmt.Errorf("Commentloop returned an error: %s", payload.Error)
 		}
-		return fmt.Errorf("commentloop 返回 HTTP %d", res.StatusCode)
+		return fmt.Errorf("Commentloop returned HTTP %d", res.StatusCode)
 	}
 	if out == nil || len(data) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("解析 commentloop 响应失败：%w", err)
+		return fmt.Errorf("could not parse Commentloop response: %w", err)
 	}
 	return nil
 }

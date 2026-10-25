@@ -50,16 +50,16 @@ type Options struct {
 func Run(args []string) error {
 	fs := flag.NewFlagSet("commentloop agent-runner", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "commentloop server URL（默认 discovery / COMMENTLOOP_URL）")
-	runnerID := fs.String("id", "", "Runner ID（默认 hostname-pid）")
-	agentType := fs.String("agent-type", "pi", "要领取的 Agent 类型：pi / claude-code / codex / cursor / generic")
-	command := fs.String("command", "", "Agent 可执行文件（默认按 agent-type）")
-	promptMode := fs.String("prompt-mode", "arg", "prompt 传递方式：arg / stdin")
-	timeout := fs.Duration("timeout", 15*time.Minute, "单任务超时")
-	poll := fs.Duration("poll", 2*time.Second, "队列轮询间隔")
-	once := fs.Bool("once", false, "只处理一个任务后退出")
+	urlFlag := fs.String("url", "", "Commentloop server URL (defaults to discovery / COMMENTLOOP_URL)")
+	runnerID := fs.String("id", "", "Runner ID (defaults to hostname-pid)")
+	agentType := fs.String("agent-type", "pi", "Agent type to claim: pi / claude-code / codex / cursor / generic")
+	command := fs.String("command", "", "Agent executable (defaults by agent-type)")
+	promptMode := fs.String("prompt-mode", "arg", "Prompt delivery: arg / stdin")
+	timeout := fs.Duration("timeout", 15*time.Minute, "Per-job timeout")
+	poll := fs.Duration("poll", 2*time.Second, "Queue poll interval")
+	once := fs.Bool("once", false, "Process one job and exit")
 	var extraArgs stringSlice
-	fs.Var(&extraArgs, "arg", "追加 Agent 参数（可重复）")
+	fs.Var(&extraArgs, "arg", "Append agent arguments (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -81,10 +81,10 @@ func Run(args []string) error {
 		PromptMode: strings.TrimSpace(*promptMode), Timeout: *timeout, Poll: *poll, Once: *once,
 	}
 	if opts.AgentType == "" {
-		return errors.New("--agent-type 不能为空")
+		return errors.New("--agent-type cannot be empty")
 	}
 	if opts.PromptMode != "arg" && opts.PromptMode != "stdin" {
-		return errors.New("--prompt-mode 必须是 arg 或 stdin")
+		return errors.New("--prompt-mode must be arg or stdin")
 	}
 	return runLoop(opts)
 }
@@ -121,7 +121,7 @@ func runLoop(opts Options) error {
 			if seen {
 				return nil
 			}
-			return errors.New("没有可领取的任务")
+			return errors.New("No jobs available")
 		}
 		select {
 		case <-ctx.Done():
@@ -138,6 +138,7 @@ func claim(ctx context.Context, opts Options) (*Job, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Language", "en")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -155,7 +156,7 @@ func claim(ctx context.Context, opts Options) (*Job, error) {
 		return nil, err
 	}
 	if job.Token == "" {
-		return nil, errors.New("服务端没有返回任务 capability token")
+		return nil, errors.New("Server did not return a job capability token")
 	}
 	return &job, nil
 }
@@ -198,7 +199,7 @@ func runJob(ctx context.Context, opts Options, job Job) {
 	err = cmd.Run()
 	heartbeatDone()
 	if runCtx.Err() == context.DeadlineExceeded {
-		err = fmt.Errorf("Agent 执行超时")
+		err = fmt.Errorf("Agent execution timed out")
 	}
 	if err != nil && stderr.Len() > 0 {
 		detail := strings.TrimSpace(stderr.String())
@@ -272,7 +273,7 @@ func agentCommand(opts Options) (string, []string, error) {
 		presetArgs = []string{"--print", "--approve-mcps", "--trust", "--sandbox", "enabled"}
 	default:
 		if command == "" {
-			return "", nil, fmt.Errorf("agent-type=%s 需要 --command", opts.AgentType)
+			return "", nil, fmt.Errorf("agent-type=%s requires --command", opts.AgentType)
 		}
 	}
 	args = append(presetArgs, args...)
@@ -299,6 +300,7 @@ func startHeartbeat(ctx context.Context, opts Options, jobID string) func() {
 					continue
 				}
 				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Accept-Language", "en")
 				if res, err := http.DefaultClient.Do(req); err == nil {
 					_ = res.Body.Close()
 				}
@@ -319,6 +321,7 @@ func finish(ctx context.Context, opts Options, job Job, runErr error) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Language", "en")
 	if res, err := http.DefaultClient.Do(req); err == nil {
 		_ = res.Body.Close()
 	}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
+import { localizeServerMessage } from "../i18n/serverMessages";
 import {
   deleteDiscussion,
   fetchAvailableDiscussionSessions,
@@ -329,8 +330,10 @@ export function DiscussionModal({
                   <IconAlert size={13} />
                 )}
                 <span>
-                  {effectiveActivity.message ||
-                    consensusLabel(effectiveActivity.status)}
+                  {localizeServerMessage(
+                    effectiveActivity.message || "",
+                    effectiveActivity.status,
+                  ) || consensusLabel(effectiveActivity.status)}
                 </span>
               </div>
               <div className="consensus-progress-bar">

@@ -64,7 +64,7 @@ type toolDef struct {
 func Run(args []string, version string) error {
 	fs := flag.NewFlagSet("commentloop mcp", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "commentloop server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
+	urlFlag := fs.String("url", "", "Commentloop server URL (defaults to the discovery file or 127.0.0.1:4571)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -505,7 +505,7 @@ func (s *server) callTool(params toolCallParams) toolResult {
 			}
 			body := strings.TrimSpace(commentText)
 			if body == "" {
-				body = "已根据此评论修改文档。"
+				body = "Updated the document based on this comment."
 			}
 			before := excerptForComment(beforeContent, comment.Quote, comment.Line)
 			if strings.TrimSpace(before) == "" {

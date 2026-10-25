@@ -312,13 +312,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		if s.agentTokenInvalid(r) && !strings.HasPrefix(r.URL.Path, "/api/agent/runner/") {
-			message := "Agent 任务令牌无效或已过期"
+			message := "Agent job token is invalid or expired."
+			if promptLanguage(r) != "en" {
+				message = "Agent 任务令牌无效或已过期"
+			}
 			s.recordAgentDenial(r, message)
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
 			return
 		}
-		aw := &auditResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		aw := &apiErrorWriter{
+			ResponseWriter: w,
+			status:         http.StatusOK,
+			lang:           promptLanguage(r),
+		}
 		s.mux.ServeHTTP(aw, r)
+		aw.finish()
 		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {
 			token := r.Header.Get("X-Commentloop-Agent-Token")
 			tool := r.Header.Get("X-Commentloop-MCP-Tool")
@@ -333,16 +341,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mux.ServeHTTP(w, r)
-}
-
-type auditResponseWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *auditResponseWriter) WriteHeader(status int) {
-	w.status = status
-	w.ResponseWriter.WriteHeader(status)
 }
 
 func (s *Server) hostAllowed(r *http.Request) bool {

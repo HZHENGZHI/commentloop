@@ -17,11 +17,11 @@ import (
 func Run(args []string) error {
 	fs := flag.NewFlagSet("commentloop agent", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "commentloop server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
+	urlFlag := fs.String("url", "", "Commentloop server URL (defaults to the discovery file or 127.0.0.1:4571)")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "用法: commentloop agent [--url URL] <command> [args]")
-		fmt.Fprintln(os.Stderr, "命令: list, info, read, write, search, changes, comments, reply, refresh")
-		fmt.Fprintln(os.Stderr, "示例: commentloop agent list --refresh")
+		fmt.Fprintln(os.Stderr, "Usage: commentloop agent [--url URL] <command> [args]")
+		fmt.Fprintln(os.Stderr, "Commands: list, info, read, write, search, changes, comments, reply, refresh")
+		fmt.Fprintln(os.Stderr, "Examples: commentloop agent list --refresh")
 		fmt.Fprintln(os.Stderr, "      commentloop agent read Ali/notes/todo.md")
 		fmt.Fprintln(os.Stderr, "      printf '# hi' | commentloop agent write Ali/notes/todo.md")
 		fs.PrintDefaults()
@@ -62,16 +62,16 @@ func Run(args []string) error {
 		fs.Usage()
 		return nil
 	default:
-		return fmt.Errorf("未知 agent 命令 %q\n可用: list, info, read, write, search, changes, refresh", rest[0])
+		return fmt.Errorf("Unknown agent command %q\nAvailable: list, info, read, write, search, changes, refresh", rest[0])
 	}
 }
 
 func runList(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
-	refresh := fs.Bool("refresh", false, "先刷新远程目录（可能较慢）")
-	query := fs.String("query", "", "只显示路径匹配的文件")
+	jsonOut := fs.Bool("json", false, "Output JSON")
+	refresh := fs.Bool("refresh", false, "Refresh remote directories first (may be slow)")
+	query := fs.String("query", "", "Only show files whose paths match")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func runList(client *agentclient.Client, args []string) error {
 
 func runInfo(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent info", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
+	jsonOut := fs.Bool("json", false, "Output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -143,13 +143,13 @@ func runInfo(client *agentclient.Client, args []string) error {
 
 func runRead(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent read", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
-	refresh := fs.Bool("refresh", false, "先刷新远程目录")
+	jsonOut := fs.Bool("json", false, "Output JSON")
+	refresh := fs.Bool("refresh", false, "Refresh remote directories first")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("用法: commentloop agent read [--json] [--refresh] <path>")
+		return fmt.Errorf("Usage: commentloop agent read [--json] [--refresh] <path>")
 	}
 	doc, resolved, err := client.Read(fs.Arg(0), *refresh)
 	if err != nil {
@@ -167,13 +167,13 @@ func runRead(client *agentclient.Client, args []string) error {
 
 func runWrite(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent write", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
-	contentFlag := fs.String("content", "", "文档内容；省略则从 stdin 读取")
+	jsonOut := fs.Bool("json", false, "Output JSON")
+	contentFlag := fs.String("content", "", "Document content; read from stdin if omitted")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("用法: printf '...' | commentloop agent write [--json] <path>")
+		return fmt.Errorf("Usage: printf '...' | commentloop agent write [--json] <path>")
 	}
 	content := *contentFlag
 	contentSet := false
@@ -205,13 +205,13 @@ func runWrite(client *agentclient.Client, args []string) error {
 
 func runSearch(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent search", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
-	refresh := fs.Bool("refresh", false, "先刷新远程目录")
+	jsonOut := fs.Bool("json", false, "Output JSON")
+	refresh := fs.Bool("refresh", false, "Refresh remote directories first")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("用法: commentloop agent search [--json] [--refresh] <query>")
+		return fmt.Errorf("Usage: commentloop agent search [--json] [--refresh] <query>")
 	}
 	files, err := client.Search(strings.Join(fs.Args(), " "), *refresh)
 	if err != nil {
@@ -228,9 +228,9 @@ func runSearch(client *agentclient.Client, args []string) error {
 
 func runChanges(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent changes", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
-	refresh := fs.Bool("refresh", true, "先刷新远程目录")
-	since := fs.Duration("since", 30*time.Minute, "时间窗口，例如 10m、2h、24h")
+	jsonOut := fs.Bool("json", false, "Output JSON")
+	refresh := fs.Bool("refresh", true, "Refresh remote directories first")
+	since := fs.Duration("since", 30*time.Minute, "Time window, e.g. 10m, 2h, 24h")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func formatSize(size int64) string {
 
 func runComments(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent comments", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "输出 JSON")
+	jsonOut := fs.Bool("json", false, "Output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -329,16 +329,16 @@ func runComments(client *agentclient.Client, args []string) error {
 
 func runReply(client *agentclient.Client, args []string) error {
 	fs := flag.NewFlagSet("agent reply", flag.ContinueOnError)
-	path := fs.String("path", "", "文档路径")
-	message := fs.String("message", "", "回复内容")
-	before := fs.String("before", "", "修改前内容")
-	after := fs.String("after", "", "修改后内容")
-	jsonOut := fs.Bool("json", false, "输出 JSON")
+	path := fs.String("path", "", "Document path")
+	message := fs.String("message", "", "Reply body")
+	before := fs.String("before", "", "Before content")
+	after := fs.String("after", "", "After content")
+	jsonOut := fs.Bool("json", false, "Output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 || *path == "" || *message == "" {
-		return fmt.Errorf("用法: commentloop agent reply --path <文档> --message <内容> [--before ...] [--after ...] <commentID>（评论只能由用户在界面标记解决）")
+		return fmt.Errorf("Usage: commentloop agent reply --path <document> --message <text> [--before ...] [--after ...] <commentID> (only users can resolve comments in the UI)")
 	}
 	comment, err := client.ReplyComment(*path, fs.Arg(0), *message, *before, *after, "", "")
 	if err != nil {

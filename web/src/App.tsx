@@ -63,6 +63,7 @@ import {
 } from "./components/Icons";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
+import { localizeServerMessage } from "./i18n/serverMessages";
 import { applyTheme, currentTheme } from "./theme";
 import { useWebSocket } from "./useWebSocket";
 import type {
@@ -1069,11 +1070,11 @@ export default function App() {
                   : "working";
           setAgentActivity({
             status,
-            message: message.message || i18n.t("后台 Agent 正在处理…"),
+            message: localizeServerMessage(message.message || "", status as "queued" | "working" | "done" | "error") || i18n.t("后台 Agent 正在处理…"),
           });
           if (status === "queued" || status === "done" || status === "error") {
             toast(
-              message.message || i18n.t("后台 Agent 状态更新"),
+              localizeServerMessage(message.message || "", status as "queued" | "working" | "done" | "error") || i18n.t("后台 Agent 状态更新"),
               status === "error" ? "error" : status === "done" ? "success" : "info",
             );
           }
