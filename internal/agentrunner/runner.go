@@ -205,16 +205,36 @@ func runJob(ctx context.Context, opts Options, job Job) {
 func agentCommand(opts Options) (string, []string, error) {
 	command := opts.Command
 	args := append([]string{}, opts.Args...)
-	switch {
-	case command == "" && opts.AgentType == "pi":
-		command, args = "pi", append([]string{"--print", "--no-builtin-tools"}, args...)
-	case command == "" && opts.AgentType == "claude-code":
-		command, args = "claude", append([]string{"--print"}, args...)
-	case command == "" && opts.AgentType == "codex":
-		command, args = "codex", append([]string{"exec"}, args...)
-	case command == "":
-		return "", nil, fmt.Errorf("agent-type=%s 需要 --command", opts.AgentType)
+	var presetArgs []string
+	switch opts.AgentType {
+	case "pi":
+		if command == "" {
+			command = "pi"
+		}
+		presetArgs = []string{"--print", "--no-builtin-tools"}
+	case "claude-code":
+		if command == "" {
+			command = "claude"
+		}
+		presetArgs = []string{"--print"}
+	case "codex":
+		if command == "" {
+			command = "codex"
+		}
+		presetArgs = []string{"exec"}
+	case "cursor":
+		if command == "" {
+			command = "cursor-agent"
+		}
+		// Do not pass --force: MCP tool permissions are handled by Cursor's
+		// own permissions file. --approve-mcps lets the mdlive MCP server load.
+		presetArgs = []string{"--print", "--approve-mcps", "--trust", "--sandbox", "enabled"}
+	default:
+		if command == "" {
+			return "", nil, fmt.Errorf("agent-type=%s 需要 --command", opts.AgentType)
+		}
 	}
+	args = append(presetArgs, args...)
 	resolved, err := lsp.FindCommand(command)
 	if err != nil {
 		return "", nil, err

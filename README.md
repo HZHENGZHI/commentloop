@@ -105,6 +105,80 @@ Runner 会：
 
 Runner 不把模型凭据放进服务端镜像。Agent 需要已配置 `mdlive mcp`（或通过环境变量/临时 MCP 配置连接到 mdlive）。
 
+### Cursor CLI
+
+Cursor Desktop 是 GUI，不能作为 Runner 子进程自动执行；请使用 **Cursor CLI**（`cursor-agent` 或新的 `agent` 命令）。
+
+这台机器上 CLI 已安装在：
+
+```text
+~/.local/bin/cursor-agent
+```
+
+但 `~/.local/bin` 不在 PATH 时，先登录并验证：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+cursor-agent login       # 首次需要浏览器登录
+cursor-agent status      # 应显示已登录
+cursor-agent mcp list
+```
+
+mdlive MCP 配置在 `~/.cursor/mcp.json`（或项目的 `.cursor/mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "mdlive": {
+      "command": "/Users/iamkkk/Desktop/coding/mdlive/bin/mdlive",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Cursor 需要允许 mdlive MCP，同时禁止 Cursor 自带的文件写入和 Shell，避免绕过 mdlive 的路径 ACL。在 `~/.cursor/cli-config.json` 的 `permissions` 中至少保留：
+
+```json
+{
+  "permissions": {
+    "allow": ["Mcp(mdlive:*)"],
+    "deny": ["Shell(*)", "Write(**)","Read(.env*)"]
+  }
+}
+```
+
+（保留原有 allow，只追加 `Mcp(mdlive:*)`；deny 规则优先。）
+
+mdlive 设置：
+
+```text
+自动运行方式：外部 Agent Runner
+Agent 类型：Cursor
+自动运行：开
+```
+
+宿主机 Runner：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+./bin/mdlive agent-runner   --url http://127.0.0.1:4571   --agent-type cursor   --once
+```
+
+Runner 预设会执行：
+
+```text
+cursor-agent --print --approve-mcps --trust --sandbox enabled "<prompt>"
+```
+
+不会传 `--force`；Cursor 的内置 Write/Shell 由上面的 deny 规则挡住。MCP 的 `write_file` 仍经过 mdlive 的后端权限和路径 ACL。
+
+注意：
+
+- 当前机器 `cursor-agent status` 显示未登录，需要先执行 `cursor-agent login`
+- Cursor CLI 的 MCP 配置由用户维护；Runner 暂不自动写 `~/.cursor/mcp.json`
+- Cursor CLI 预设尚未做真实端到端写回验证；配置完成后建议先用 `--mode ask` 做只读测试，再开自动运行
+
 ### 后端能力
 
 - `agent_jobs` 队列表、lease、runner 心跳、完成/失败
