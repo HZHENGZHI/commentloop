@@ -124,9 +124,8 @@ func (s *agentCapabilityStore) lookupGrant(session string) (agentGrant, bool) {
 
 func (s *Server) agentGrantForRequest(r *http.Request) (agentGrant, bool) {
 	if token := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Token")); token != "" {
-		if grant, ok := s.agentCaps.lookupToken(token); ok {
-			return grant, true
-		}
+		grant, ok := s.agentCaps.lookupToken(token)
+		return grant, ok
 	}
 	session := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Session"))
 	if session == "" {
@@ -139,7 +138,19 @@ func (s *Server) agentGrantForRequest(r *http.Request) (agentGrant, bool) {
 	return grant, true
 }
 
+func (s *Server) agentTokenInvalid(r *http.Request) bool {
+	token := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Token"))
+	if token == "" {
+		return false
+	}
+	_, ok := s.agentCaps.lookupToken(token)
+	return !ok
+}
+
 func (s *Server) agentDocPathAllowed(r *http.Request, canonical string) bool {
+	if s.agentTokenInvalid(r) {
+		return false
+	}
 	grant, known := s.agentGrantForRequest(r)
 	if !known || grant.DocPath == "" {
 		return true
@@ -166,6 +177,11 @@ func (s *Server) guardAgentRepo(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) rejectAgentRepo(w http.ResponseWriter, r *http.Request, repoID string) bool {
+	if s.agentTokenInvalid(r) {
+		s.recordAgentDenial(r, "Agent 任务令牌无效或已过期")
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Agent 任务令牌无效或已过期"})
+		return true
+	}
 	grant, known := s.agentGrantForRequest(r)
 	if !known || len(grant.RepoIDs) == 0 || repoID == "" {
 		return false
@@ -219,6 +235,12 @@ func (s *Server) rejectAgentCommentReply(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) rejectAgentCapability(w http.ResponseWriter, r *http.Request, allowed func(agentCapabilities) bool, message string) bool {
+	if s.agentTokenInvalid(r) {
+		message := "Agent 任务令牌无效或已过期"
+		s.recordAgentDenial(r, message)
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
+		return true
+	}
 	grant, known := s.agentGrantForRequest(r)
 	if !known {
 		return false

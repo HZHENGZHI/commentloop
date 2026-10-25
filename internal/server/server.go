@@ -311,6 +311,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
+		if s.agentTokenInvalid(r) && !strings.HasPrefix(r.URL.Path, "/api/agent/runner/") {
+			message := "Agent 任务令牌无效或已过期"
+			s.recordAgentDenial(r, message)
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
+			return
+		}
 		aw := &auditResponseWriter{ResponseWriter: w, status: http.StatusOK}
 		s.mux.ServeHTTP(aw, r)
 		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {

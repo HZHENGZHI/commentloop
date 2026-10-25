@@ -729,6 +729,11 @@ func TestAgentJobQueueTokenAndPathACL(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("current doc write status=%d body=%s", rec.Code, rec.Body)
 	}
+	invalidHeaders := map[string]string{"X-Mdlive-Agent-Token": "job_invalid", "X-Mdlive-Agent": "1"}
+	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: docPath, Content: "# invalid"}, invalidHeaders)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("invalid token write status=%d body=%s", rec.Code, rec.Body)
+	}
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: otherPath, Content: "# other"}, headers)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("other doc write status=%d body=%s", rec.Code, rec.Body)
