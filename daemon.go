@@ -39,7 +39,7 @@ func hasFlag(args []string, name string) bool {
 
 func startDaemon(args []string) error {
 	if info, err := discovery.Read(); err == nil {
-		return fmt.Errorf("commentloop 已在运行 (pid %d, %s)；先执行 commentloop stop", info.PID, info.URL)
+		return fmt.Errorf("commentloop is already running (pid %d, %s); run commentloop stop first", info.PID, info.URL)
 	}
 
 	logPath, err := discovery.LogPath()
@@ -79,13 +79,13 @@ func startDaemon(args []string) error {
 		info, findErr := discovery.Find(pid)
 		if findErr == nil && info.URL != "" {
 			if healthOK(info.URL) {
-				fmt.Printf("commentloop 已启动\n")
+				fmt.Printf("commentloop started\n")
 				fmt.Printf("  PID    %d\n", info.PID)
-				fmt.Printf("  地址    %s\n", info.URL)
-				fmt.Printf("  版本    %s\n", info.Version)
-				fmt.Printf("  日志    %s\n", logPath)
-				fmt.Printf("  停止    commentloop stop\n")
-				fmt.Printf("  状态    commentloop status\n")
+				fmt.Printf("  URL       %s\n", info.URL)
+				fmt.Printf("  Version   %s\n", info.Version)
+				fmt.Printf("  Log       %s\n", logPath)
+				fmt.Printf("  Stop      commentloop stop\n")
+				fmt.Printf("  Status    commentloop status\n")
 				if !hasFlag(args, "no-open") {
 					openBrowser(info.URL)
 				}
@@ -94,18 +94,18 @@ func startDaemon(args []string) error {
 		}
 		time.Sleep(120 * time.Millisecond)
 	}
-	return fmt.Errorf("启动超时，请查看日志 %s", logPath)
+	return fmt.Errorf("Startup timed out; check the log at %s", logPath)
 }
 
 func stopDaemon() error {
 	info, err := discovery.Read()
 	if err != nil {
-		return fmt.Errorf("没有运行中的 commentloop 实例")
+		return fmt.Errorf("No running commentloop instance.")
 	}
 	process, err := os.FindProcess(info.PID)
 	if err != nil {
 		discovery.RemovePID(info.PID)
-		return fmt.Errorf("找不到进程 %d", info.PID)
+		return fmt.Errorf("Process %d not found", info.PID)
 	}
 	if err := process.Signal(syscall.SIGTERM); err != nil && !isNoSuchProcess(err) {
 		return err
@@ -114,7 +114,7 @@ func stopDaemon() error {
 	for time.Now().Before(deadline) {
 		if !processAlive(info.PID) {
 			discovery.RemovePID(info.PID)
-			fmt.Printf("commentloop 已停止 (pid %d)\n", info.PID)
+			fmt.Printf("commentloop stopped (pid %d)\n", info.PID)
 			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -126,36 +126,36 @@ func stopDaemon() error {
 	}
 	discovery.RemovePID(info.PID)
 	if processAlive(info.PID) {
-		return fmt.Errorf("无法停止进程 %d", info.PID)
+		return fmt.Errorf("Could not stop process %d", info.PID)
 	}
-	fmt.Printf("commentloop 已强制停止 (pid %d)\n", info.PID)
+	fmt.Printf("commentloop force-stopped (pid %d)\n", info.PID)
 	return nil
 }
 
 func statusDaemon() {
 	info, err := discovery.Read()
 	if err != nil {
-		fmt.Println("commentloop 未运行")
+		fmt.Println("commentloop is not running")
 		return
 	}
 	uptime := time.Since(info.StartedAt)
 	if uptime < 0 {
 		uptime = 0
 	}
-	fmt.Printf("commentloop 运行中\n")
+	fmt.Printf("commentloop is running\n")
 	fmt.Printf("  PID    %d\n", info.PID)
-	fmt.Printf("  地址    %s\n", info.URL)
-	fmt.Printf("  版本    %s\n", info.Version)
-	fmt.Printf("  启动    %s\n", info.StartedAt.Local().Format("2006-01-02 15:04:05"))
-	fmt.Printf("  运行    %s\n", formatDuration(uptime))
+	fmt.Printf("  URL       %s\n", info.URL)
+	fmt.Printf("  Version   %s\n", info.Version)
+	fmt.Printf("  Started   %s\n", info.StartedAt.Local().Format("2006-01-02 15:04:05"))
+	fmt.Printf("  Uptime    %s\n", formatDuration(uptime))
 	if logPath, err := discovery.LogPath(); err == nil {
-		fmt.Printf("  日志    %s\n", logPath)
+		fmt.Printf("  Log       %s\n", logPath)
 	}
 
 	client := &http.Client{Timeout: 1200 * time.Millisecond}
 	resp, err := client.Get(strings.TrimRight(info.URL, "/") + "/api/config")
 	if err != nil {
-		fmt.Println("  健康    无法连接")
+		fmt.Println("  Health    unreachable")
 		return
 	}
 	defer resp.Body.Close()
@@ -166,19 +166,19 @@ func statusDaemon() {
 		Debug       bool   `json:"debug"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
-		fmt.Println("  健康    响应无法解析")
+		fmt.Println("  Health    invalid response")
 		return
 	}
-	mode := "评审模式"
+	mode := "review mode"
 	if !config.PreviewOnly {
-		mode = "编辑 + 预览"
+		mode = "edit + preview"
 	}
 	if config.Debug {
 		mode += " · debug"
 	}
-	fmt.Printf("  健康    正常 (%s)\n", mode)
-	fmt.Printf("  主目录  %s\n", config.Root)
-	fmt.Printf("  目录数  %d\n", config.RootCount)
+	fmt.Printf("  Health    ok (%s)\n", mode)
+	fmt.Printf("  Root      %s\n", config.Root)
+	fmt.Printf("  Roots     %d\n", config.RootCount)
 }
 
 func healthOK(rawURL string) bool {

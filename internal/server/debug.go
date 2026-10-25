@@ -27,11 +27,11 @@ func (s *Server) configureDiskAssets(dir string) {
 	}
 	index := filepath.Join(abs, "index.html")
 	if info, err := os.Stat(index); err != nil || info.IsDir() {
-		log.Printf("commentloop: debug: %s 不存在，回退到内嵌前端（热更新不可用）", index)
+		log.Printf("commentloop: debug: %s does not exist; falling back to the embedded frontend (hot reload unavailable)", index)
 		return
 	}
 	s.webDir = abs
-	log.Printf("commentloop: debug: 从磁盘加载前端 %s", abs)
+	log.Printf("commentloop: debug: loading frontend from disk %s", abs)
 }
 
 // startAssetPoll compares index.html between ticks. Vite writes index.html
@@ -60,7 +60,7 @@ func (s *Server) startAssetPoll() {
 					continue
 				}
 				if last != "" && sig != last {
-					log.Printf("commentloop: debug: 前端资源已更新，通知浏览器刷新")
+					log.Printf("commentloop: debug: frontend assets changed; notifying the browser to reload")
 					s.hub.broadcast(outMessage{Type: "reload", Message: "frontend assets changed"})
 				}
 				last = sig

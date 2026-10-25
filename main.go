@@ -102,39 +102,39 @@ func main() {
 
 func runServer(args []string) {
 	var extraRoots []string
-	flag.Func("add-dir", "追加一个目录到工作区（可重复）", func(value string) error {
+	flag.Func("add-dir", "Add a directory to the workspace (repeatable)", func(value string) error {
 		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("目录不能为空")
+			return fmt.Errorf("Directory cannot be empty")
 		}
 		extraRoots = append(extraRoots, value)
 		return nil
 	})
 
 	var (
-		dirFlag   = flag.String("dir", "", "要打开的目录（默认：当前目录；也可传文件路径）")
-		addrFlag  = flag.String("addr", "127.0.0.1:4571", "监听地址")
-		noOpen    = flag.Bool("no-open", false, "不自动打开浏览器")
-		devMode   = flag.Bool("dev", false, "开发模式：前端未构建时也启动（配合 Vite）")
-		debugMode = flag.Bool("debug", false, "调试模式：审阅模式（前台只读、Agent 可写）+ 前端资源热更新")
-		preview   = flag.Bool("preview", false, "兼容保留：commentloop 默认就是审阅模式；前台只读，Agent 可通过 MCP/CLI 写入")
-		webDir    = flag.String("web-dir", "web/dist", "调试模式从磁盘加载的前端目录")
-		noState   = flag.Bool("no-state", false, "不读取 / 保存目录列表")
-		stateDir  = flag.String("state-dir", "", "目录列表的保存位置（默认：用户配置目录/commentloop）")
-		showVer   = flag.Bool("version", false, "打印版本号后退出")
+		dirFlag   = flag.String("dir", "", "Directory to open (defaults to the current directory; a Markdown file is also accepted)")
+		addrFlag  = flag.String("addr", "127.0.0.1:4571", "Listen address")
+		noOpen    = flag.Bool("no-open", false, "Do not open a browser")
+		devMode   = flag.Bool("dev", false, "Development mode: start even when the frontend is not built (for Vite)")
+		debugMode = flag.Bool("debug", false, "Debug mode: review mode (read-only UI, agent writes) + hot reload of frontend assets")
+		preview   = flag.Bool("preview", false, "Compatibility flag: Commentloop is review-only by default; the UI is read-only and agents write through MCP/CLI")
+		webDir    = flag.String("web-dir", "web/dist", "Frontend directory loaded from disk in debug mode")
+		noState   = flag.Bool("no-state", false, "Do not read or save workspace roots")
+		stateDir  = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
+		showVer   = flag.Bool("version", false, "Print version and exit")
 	)
-	flag.BoolVar(showVer, "v", false, "打印版本号后退出")
+	flag.BoolVar(showVer, "v", false, "Print version and exit")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "commentloop %s — AI 协作审阅循环\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "用法: commentloop [start|run|stop|status] [选项] [目录或 Markdown 文件]\n\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "子命令:\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  start              后台启动（默认）\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  run                前台运行（调试 / 由进程管理器托管）\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  stop               停止最近启动的实例\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  status             查看运行状态\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       宿主机 Agent Runner，领取外部 Agent 任务\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  agent ...          给代码 Agent 的 CLI（list/read/write/search/changes）\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       宿主机 Agent Runner，领取评论任务\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  mcp                MCP stdio server（给支持 MCP 的 Agent）\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "commentloop %s — AI review loop\n\n", version)
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: commentloop [start|run|stop|status] [options] [directory or Markdown file]\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Subcommands:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  start              Start in the background (default)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  run                Run in the foreground (debug / process manager)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  stop               Stop the most recently started instance\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  status             Show runtime status\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       Host Agent Runner; claims external agent jobs\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent ...          CLI for code agents (list/read/write/search/changes)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       Host Agent Runner; claims review jobs\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  mcp                MCP stdio server for MCP-capable agents\n\n")
 		flag.PrintDefaults()
 	}
 	flag.CommandLine.Parse(reorderArgs(flag.CommandLine, args))
@@ -151,18 +151,18 @@ func runServer(args []string) {
 	if rootArg == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fatal("无法获取当前目录: %v", err)
+			fatal("Could not determine current directory: %v", err)
 		}
 		rootArg = cwd
 	}
 
 	abs, err := filepath.Abs(rootArg)
 	if err != nil {
-		fatal("无效路径 %q: %v", rootArg, err)
+		fatal("Invalid path %q: %v", rootArg, err)
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
-		fatal("无法访问 %q: %v", abs, err)
+		fatal("Could not access %q: %v", abs, err)
 	}
 	root := abs
 	initial := ""
@@ -170,24 +170,24 @@ func runServer(args []string) {
 		root = filepath.Dir(abs)
 		initial = filepath.Base(abs)
 		if !ignore.IsMarkdown(initial) {
-			fatal("不是 Markdown 文件: %s", abs)
+			fatal("Not a Markdown file: %s", abs)
 		}
 	}
 
 	dist, err := fs.Sub(webFiles, "web/dist")
 	if err != nil {
-		fatal("前端资源不可用: %v", err)
+		fatal("Frontend assets unavailable: %v", err)
 	}
 	if _, err := fs.Stat(dist, "index.html"); err != nil {
 		if !*devMode && !*debugMode {
-			fatal("前端尚未构建：请运行 make build，或在开发时使用 make dev-backend + make dev-web")
+			fatal("Frontend is not built. Run make build, or use make dev-backend + make dev-web for development.")
 		}
-		log.Println("commentloop: 内嵌前端尚未构建，继续使用磁盘前端或 Vite 开发服务器")
+		log.Println("commentloop: embedded frontend is not built; using the disk frontend or Vite dev server")
 	}
 
 	ln, actualAddr, err := listenWithFallback(*addrFlag)
 	if err != nil {
-		fatal("无法监听 %s: %v", *addrFlag, err)
+		fatal("Could not listen on %s: %v", *addrFlag, err)
 	}
 
 	stateDirPath := ""
@@ -223,7 +223,7 @@ func runServer(args []string) {
 		WebDir:      *webDir,
 	})
 	if err != nil {
-		fatal("启动失败: %v", err)
+		fatal("Startup failed: %v", err)
 	}
 	defer app.Close()
 
@@ -235,7 +235,7 @@ func runServer(args []string) {
 	}
 	discoveryPath, discoveryErr := discovery.Write(baseURL, version)
 	if discoveryErr != nil {
-		log.Printf("commentloop: 写入 Agent discovery 文件失败: %v", discoveryErr)
+		log.Printf("commentloop: failed to write agent discovery file: %v", discoveryErr)
 	} else {
 		defer discovery.RemoveOwner(discoveryPath, os.Getpid())
 	}
@@ -247,17 +247,17 @@ func runServer(args []string) {
 	}
 
 	fmt.Printf("commentloop %s\n", version)
-	fmt.Printf("  主目录  %s\n", app.Root())
-	fmt.Printf("  目录数  %d\n", app.RootCount())
+	fmt.Printf("  Root      %s\n", app.Root())
+	fmt.Printf("  Roots     %d\n", app.RootCount())
 	if *debugMode {
-		fmt.Printf("  模式    调试 · 审阅模式 · 前端热更新\n")
+		fmt.Printf("  Mode      debug · review mode · frontend hot reload\n")
 	} else if readOnly {
-		fmt.Printf("  模式    审阅模式（前台只读，Agent 可写）\n")
+		fmt.Printf("  Mode      review mode (UI read-only, agent writes)\n")
 	} else {
-		fmt.Printf("  模式    编辑 + 预览\n")
+		fmt.Printf("  Mode      edit + preview\n")
 	}
-	fmt.Printf("  地址    %s\n", browseURL)
-	fmt.Printf("  停止    Ctrl+C\n")
+	fmt.Printf("  URL       %s\n", browseURL)
+	fmt.Printf("  Stop      Ctrl+C\n")
 
 	if !*noOpen {
 		openBrowser(browseURL)
@@ -267,7 +267,7 @@ func runServer(args []string) {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
-		log.Println("commentloop: 正在退出…")
+		log.Println("commentloop: shutting down…")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
@@ -275,7 +275,7 @@ func runServer(args []string) {
 	}()
 
 	if err := httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		fatal("服务异常退出: %v", err)
+		fatal("Server exited unexpectedly: %v", err)
 	}
 }
 
@@ -354,7 +354,7 @@ func listenWithFallback(addr string) (net.Listener, string, error) {
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("没有可用端口")
+		lastErr = fmt.Errorf("No available port")
 	}
 	return nil, "", lastErr
 }
@@ -399,7 +399,7 @@ func openBrowser(u string) {
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		log.Printf("commentloop: 无法自动打开浏览器: %v", err)
+		log.Printf("commentloop: could not open the browser: %v", err)
 		return
 	}
 	go func() { _ = cmd.Wait() }()
@@ -420,7 +420,7 @@ func migrateLegacyState() {
 	}
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		if err := os.Rename(oldDir, newDir); err != nil {
-			log.Printf("commentloop: 迁移旧状态目录失败: %v", err)
+			log.Printf("commentloop: failed to migrate legacy state directory: %v", err)
 			return
 		}
 	} else {
@@ -450,7 +450,7 @@ func moveLegacyEntries(oldDir, newDir string) {
 			continue
 		}
 		if err := os.Rename(src, dst); err != nil {
-			log.Printf("commentloop: 迁移旧状态 %s 失败: %v", entry.Name(), err)
+			log.Printf("commentloop: failed to migrate legacy state %s: %v", entry.Name(), err)
 		}
 	}
 }
@@ -465,7 +465,7 @@ func renameLegacyFile(dir, oldName, newName string) {
 		return
 	}
 	if err := os.Rename(oldPath, newPath); err != nil {
-		log.Printf("commentloop: 迁移旧状态文件 %s 失败: %v", oldName, err)
+		log.Printf("commentloop: failed to migrate legacy state file %s: %v", oldName, err)
 	}
 }
 

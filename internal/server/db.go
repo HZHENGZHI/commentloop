@@ -43,7 +43,7 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 	}
 	if stateDir != "" {
 		if err := migrateLegacyRoots(db, stateDir); err != nil {
-			log.Printf("commentloop: 迁移 roots.json 失败: %v", err)
+			log.Printf("commentloop: failed to migrate roots.json: %v", err)
 		}
 	}
 	return db, nil
