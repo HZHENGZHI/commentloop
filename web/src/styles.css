@@ -5704,6 +5704,31 @@ body.dragging-split * {
   filter: none !important;
 }
 
+/* Mermaid draws a filled <rect> behind edge labels. With long loop labels or
+   HTML labels its measured width can exceed the text and visually cut through
+   nearby nodes, so the label background is intentionally transparent. */
+.mermaid-diagram svg .edgeLabel,
+.mermaid-diagram svg .edgeLabel .label,
+.mermaid-diagram svg .edgeLabel rect,
+.mermaid-diagram svg .edgeLabel foreignObject,
+.mermaid-diagram svg .edgeLabel .labelBkg,
+.mermaid-modal-content svg .edgeLabel,
+.mermaid-modal-content svg .edgeLabel .label,
+.mermaid-modal-content svg .edgeLabel rect,
+.mermaid-modal-content svg .edgeLabel foreignObject,
+.mermaid-modal-content svg .edgeLabel .labelBkg {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.mermaid-diagram svg .edgeLabel rect,
+.mermaid-diagram svg .edgeLabel rect.background,
+.mermaid-modal-content svg .edgeLabel rect,
+.mermaid-modal-content svg .edgeLabel rect.background {
+  fill: transparent !important;
+  stroke: none !important;
+}
+
 /* Mermaid themes do not consistently apply text colors to every diagram
    type (sequence, class, state, pie, ...). Keep labels readable even when
    the diagram uses its own inline styles. */
