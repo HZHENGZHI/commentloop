@@ -5873,14 +5873,13 @@ body.mermaid-modal-open {
   display: none;
 }
 
-.mermaid-diagram g.node,
-.mermaid-diagram path[data-edge],
-.mermaid-diagram g.edgeLabel {
-  transition: opacity 220ms ease;
+.mermaid-diagram g.node:not(.mermaid-step-hidden),
+.mermaid-diagram path[data-edge]:not(.mermaid-step-hidden),
+.mermaid-diagram g.edgeLabel:not(.mermaid-step-hidden) {
+  transition: opacity 620ms ease;
 }
 
-.mermaid-diagram .mermaid-step-hidden,
-.mermaid-diagram .mermaid-edge-pending {
+.mermaid-diagram .mermaid-step-hidden {
   opacity: 0 !important;
   pointer-events: none;
 }

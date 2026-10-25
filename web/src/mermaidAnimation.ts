@@ -51,6 +51,7 @@ export function parseFlowSteps(source: string): FlowStep[] {
   let isFlowchart = false;
   let steps: FlowStep[] = [];
   const seenNodes = new Set<string>();
+  const declaredNodes: string[][] = [];
   const edgeCounts = new Map<string, number>();
 
   const addStep = (nodes: string[], edges: FlowEdge[]) => {
@@ -85,8 +86,12 @@ export function parseFlowSteps(source: string): FlowStep[] {
 
     const parts = statement.split(EDGE_OPERATOR);
     if (parts.length === 1) {
-      // A standalone node declaration, e.g. `A[Start]`.
-      addStep(extractNodeIDs(statement), []);
+      // A standalone node declaration. Defer it: many diagrams declare all
+      // nodes first and connect them later. Revealing those boxes up front
+      // makes the whole graph appear before any line starts, so nodes that
+      // are used by an edge should enter together with that edge.
+      const ids = extractNodeIDs(statement);
+      if (ids.length) declaredNodes.push(ids);
       continue;
     }
 
@@ -105,6 +110,12 @@ export function parseFlowSteps(source: string): FlowStep[] {
       }
       addStep([...left, ...right], edges);
     }
+  }
+
+  // Nodes declared but never used by an edge still need a step, otherwise
+  // they would stay hidden for the whole playback.
+  for (const ids of declaredNodes) {
+    addStep(ids.filter((id) => !seenNodes.has(id)), []);
   }
 
   return steps;
@@ -216,8 +227,6 @@ export function setupMermaidAnimation(
   let step = 0;
   let timer: number | undefined;
   const running = new Set<Animation>();
-  const pendingTimers = new Set<number>();
-  const pendingElements = new Set<Element>();
 
   const currentNodes = new Set<SVGGElement>();
   const currentEdges = new Set<Element>();
@@ -238,12 +247,6 @@ export function setupMermaidAnimation(
       }
     }
     running.clear();
-    for (const timer of pendingTimers) window.clearTimeout(timer);
-    pendingTimers.clear();
-    for (const element of pendingElements) {
-      element.classList.remove("mermaid-edge-pending");
-    }
-    pendingElements.clear();
     diagram.querySelectorAll<SVGPathElement>("path[data-edge]").forEach((path) => {
       clearEdgeStyles(path, originals);
     });
@@ -271,39 +274,18 @@ export function setupMermaidAnimation(
         node.classList.add("mermaid-step-current");
         currentNodes.add(node);
       }
-      // If this statement introduces new nodes, let the boxes fade in before
-      // growing their edge. Edge-only steps (loops / back edges) start at once.
-      const edgeDelay = current.nodes.length ? 220 : 0;
       for (const edge of current.edges) {
         const element = edgeElement(edge.path);
         element.classList.add("mermaid-step-current");
         currentEdges.add(element);
-        if (animateNewEdges) drawEdge(edge.path, edge.label, edgeDelay);
+        if (animateNewEdges) drawEdge(edge.path);
       }
       const focus = current.nodes[0] ?? current.edges[0]?.path;
       if (focus) ensureVisible(focus);
     }
-    for (let i = target; i < steps.length; i++) {
-    }
   };
 
-  const drawEdge = (path: SVGPathElement, label: Element | null, delay = 0) => {
-    if (delay > 0) {
-      path.classList.add("mermaid-edge-pending");
-      pendingElements.add(path);
-      label?.classList.add("mermaid-edge-pending");
-      if (label) pendingElements.add(label);
-      const timer = window.setTimeout(() => {
-        pendingTimers.delete(timer);
-        path.classList.remove("mermaid-edge-pending");
-        pendingElements.delete(path);
-        label?.classList.remove("mermaid-edge-pending");
-        if (label) pendingElements.delete(label);
-        drawEdge(path, label, 0);
-      }, delay);
-      pendingTimers.add(timer);
-      return;
-    }
+  const drawEdge = (path: SVGPathElement) => {
     const length = path.getTotalLength();
     if (!length || typeof path.animate !== "function") return;
     const original = originals.get(path);
@@ -314,7 +296,7 @@ export function setupMermaidAnimation(
     try {
       animation = path.animate(
         [{ strokeDashoffset: `${length}` }, { strokeDashoffset: "0" }],
-        { duration: 620, delay, easing: "ease-out" },
+        { duration: 620, easing: "ease-out" },
       );
     } catch {
       clearEdgeStyles(path, originals);
