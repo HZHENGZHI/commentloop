@@ -1355,7 +1355,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = currentPath
-      ? `${baseName(currentPath)} · commentloop`
+      ? `${baseName(currentPath)} · Commentloop`
       : "Commentloop · AI 协作审阅";
   }, [currentPath]);
 
@@ -1369,7 +1369,7 @@ export default function App() {
     return (
       <div className="boot-screen">
         <div className="boot-mark">M</div>
-        <div className="boot-title">commentloop</div>
+        <div className="boot-title">Commentloop</div>
         <span className="spinner" />
       </div>
     );
@@ -1399,10 +1399,10 @@ export default function App() {
             <IconPanelLeft size={17} />
           </button>
           <div className="brand">
-            <span className="brand-mark">M</span>
-            <span className="brand-name">commentloop</span>
+            <span className="brand-mark">C</span>
+            <span className="brand-name">Commentloop</span>
           </div>
-          <span className="brand-tag">Markdown live preview</span>
+          <span className="brand-tag">AI review loop</span>
           {debugMode ? (
             <span
               className="mode-pill debug"

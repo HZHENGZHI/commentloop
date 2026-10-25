@@ -12,6 +12,8 @@ You read, comment, and review in the browser. Your agent edits through MCP or th
 comment → agent edit → human review → reply / rollback → updated document
 ```
 
+![Commentloop demo: comment, agent edit, review, resolve](docs/demo.gif)
+
 ## What you get
 
 - **Inline review threads**: select text, leave a comment, and keep the thread anchored to the source.

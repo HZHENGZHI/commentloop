@@ -350,7 +350,7 @@ export function Sidebar({
               )
               .join("\n")}
           >
-            {roots.length ? `${roots.length} 个目录` : "commentloop"}
+            {roots.length ? `${roots.length} 个目录` : "Commentloop"}
           </span>
         </div>
         <div className="sidebar-tools">
