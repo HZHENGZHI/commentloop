@@ -2,26 +2,30 @@
 
 # Commentloop
 
-本地优先的 AI 协作审阅循环。
+English | [简体中文](README.zh-CN.md)
 
-浏览器只负责阅读、评论和审阅；Agent 通过 MCP/CLI 修改文档。评论、修改前后、共识和回滚都围绕同一份 Markdown 发生，文档本身是最终结果。
+Commentloop is a local-first review loop for Markdown documents and AI agents.
+
+You read, comment, and review in the browser. Your agent edits through MCP or the CLI. Comments, before/after changes, consensus, and rollbacks stay attached to the same Markdown file.
 
 ```text
-用户评论 → Agent 修改 → 用户审阅 → 继续评论 / 回滚 → 文档更新
+comment → agent edit → human review → reply / rollback → updated document
 ```
 
-## 主要能力
+## What you get
 
-- **行内评论**：选中文字评论，评论锚定到原文；支持 Thread、关联组、局部回滚。
-- **Agent 改稿**：Agent 读取文档、评论和共识，写回修改，并回复修改前后内容。
-- **文档共识**：导入 Pi / Claude Code / Codex / Cursor 会话，提炼成结构化共识；后续修改可以参考，避免反复推翻早先决定。
-- **代码上下文**：文档可以关联本地目录或 GitHub 仓库；Agent 可以只读查看代码、Git 状态和分支。
-- **本地优先**：Go 单二进制 + React 前端，默认只监听 `127.0.0.1`；评论和会话保存在本地 SQLite。
-- **前台只读**：默认审阅模式，已有文档不能从浏览器编辑；Agent 写入仍经过后端路径和权限校验。
+- **Inline review threads**: select text, leave a comment, and keep the thread anchored to the source.
+- **Agent edits**: the agent reads the document, comments, and consensus; writes a focused change; then replies with before/after context.
+- **Document consensus**: import sessions from Pi, Claude Code, Codex, or Cursor and distill them into structured consensus. Later edits can use it instead of re-litigating old decisions.
+- **Code context**: link a document to local directories or GitHub repositories; agents can read code, Git state, and branches.
+- **Local-first**: a single Go binary with an embedded React frontend; binds to `127.0.0.1` by default; comments and sessions live in SQLite.
+- **Read-only browser**: existing documents cannot be edited in the browser. Agents write through MCP/CLI, with document and repository access enforced by the Go backend.
 
-## 快速开始
+## Quick start
 
-需要 Go 1.26+、Node.js 22+（仅构建前端时需要）。
+Requirements: Go 1.26+ and Node.js 22+ (Node is only needed to build the frontend).
+
+You can also download a prebuilt macOS/Linux binary (amd64 or arm64) from [Releases](https://github.com/HZHENGZHI/commentloop/releases).
 
 ```bash
 git clone https://github.com/HZHENGZHI/commentloop.git
@@ -29,46 +33,46 @@ cd commentloop
 make build
 ```
 
-启动并打开一个笔记目录：
+Start with a notes directory:
 
 ```bash
 ./bin/commentloop ~/Documents/notes
 ```
 
-默认地址是 http://127.0.0.1:4571/ ，启动后会自动打开浏览器。
+The server starts at http://127.0.0.1:4571/ and opens the browser.
 
-也可以同时添加多个目录，或直接打开某个 Markdown 文件：
+Multiple directories, or a single file:
 
 ```bash
 ./bin/commentloop ~/Documents/notes --add-dir ~/obsidian-vault --add-dir /Volumes/work/wiki
-./bin/commentloop ~/Documents/notes/当前笔记.md
+./bin/commentloop ~/Documents/notes/current-note.md
 ```
 
-后台管理：
+Manage the background process:
 
 ```bash
 ./bin/commentloop status
 ./bin/commentloop stop
 ```
 
-需要前台日志或交给 launchd/systemd 时：
+Run in the foreground when you need logs or want launchd/systemd to manage it:
 
 ```bash
 ./bin/commentloop run --no-open ~/Documents/notes
 ```
 
-### 第一次使用
+### Your first review
 
-1. 打开页面，左侧选择文档。
-2. 在预览中选中文字，写评论。
-3. 在评论里选择任务类型；Agent 完成后会回复“修改前 / 修改后”。
-4. 你决定继续、回滚，或标记评论已解决。只有用户能关闭评论。
+1. Pick a document in the sidebar.
+2. Select text and leave a comment.
+3. Choose a task type; the agent edits the document and replies with before/after context.
+4. Keep the discussion going, roll back a paragraph, or resolve the thread. Only the user can resolve a comment.
 
-## 接入 Agent
+## Connect an agent
 
 ### MCP
 
-Agent 通过 stdio 启动 `commentloop mcp`：
+Agents launch Commentloop over stdio with `commentloop mcp`:
 
 ```json
 {
@@ -81,7 +85,7 @@ Agent 通过 stdio 启动 `commentloop mcp`：
 }
 ```
 
-Cursor 需要在 `~/.cursor/cli-config.json` 允许：
+For Cursor, allow the MCP server in `~/.cursor/cli-config.json`:
 
 ```json
 {
@@ -91,16 +95,16 @@ Cursor 需要在 `~/.cursor/cli-config.json` 允许：
 }
 ```
 
-建议同时禁止 Cursor 自带的 `Shell(*)` / `Write(**)`，避免绕过 Commentloop 的路径控制。
+Also consider denying Cursor's built-in `Shell(*)` and `Write(**)` so it cannot bypass Commentloop's path controls.
 
-### 自动运行
+### Automatic runs
 
-设置 → 后台 Code Agent：
+Open **Settings → Code Agent** and choose:
 
-- **嵌入 Pi**：由 Commentloop 进程直接启动 Pi。
-- **外部 Agent Runner**：由宿主机上的 Runner 领取任务并启动本机 Agent。
+- **Embedded Pi**: Commentloop starts Pi directly.
+- **External Agent Runner**: a runner on the host claims jobs and starts the local agent.
 
-外部 Runner 示例：
+Start an external runner:
 
 ```bash
 ./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type pi
@@ -109,9 +113,9 @@ Cursor 需要在 `~/.cursor/cli-config.json` 允许：
 ./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type cursor
 ```
 
-支持 `--once`（处理一个任务后退出）、`--command`（自定义 Agent 命令）和 `--prompt-mode stdin`。
+Options: `--once` (handle one job and exit), `--command` (custom agent), and `--prompt-mode stdin`.
 
-Runner 会向 Agent 注入一次性的 `COMMENTLOOP_URL` / `COMMENTLOOP_AGENT_TOKEN`；Agent 必须已经配置好 Commentloop MCP。
+The runner injects a one-time `COMMENTLOOP_URL` / `COMMENTLOOP_AGENT_TOKEN` into the agent process. The agent must already be configured to use the Commentloop MCP server.
 
 ### CLI
 
@@ -124,40 +128,40 @@ printf '# Hello\n' | ./bin/commentloop agent write notes/hello.md
 ./bin/commentloop agent changes --since 30m
 ```
 
-## 配置和数据
+## Configuration and data
 
-默认数据目录：
+Default state directory:
 
 ```text
 macOS: ~/Library/Application Support/commentloop/
 Linux: ~/.config/commentloop/
 ```
 
-主要文件：
+Files:
 
 ```text
-commentloop.db     SQLite：目录、评论、会话、共识、任务
-commentloop.log    后台日志
-server.json        当前实例的 URL / PID
+commentloop.db    SQLite: roots, comments, sessions, consensus, jobs
+commentloop.log   background log
+server.json       URL / PID of the current instance
 ```
 
-文档本身仍然是普通 Markdown；评论和共识不写入 Markdown。
+Markdown files stay ordinary Markdown. Comments and consensus are stored in SQLite and are not written into the document.
 
-常用参数：
+Common flags:
 
 ```bash
---addr 127.0.0.1:4571   # 监听地址
---state-dir DIR         # 自定义状态目录
---no-open               # 不自动打开浏览器
---no-state              # 不读写状态
---add-dir DIR           # 追加工作区目录
+--addr 127.0.0.1:4571   # listen address
+--state-dir DIR         # custom state directory
+--no-open               # do not open a browser
+--no-state              # do not read or write state
+--add-dir DIR           # add another workspace directory
 ```
 
-默认审阅模式下：
+In the default review mode:
 
-- 已有文档不能从浏览器修改：`PUT /api/doc` 返回 403。
-- 新建、导入、删除文档仍可用。
-- Agent 通过 MCP/CLI 写入，后端会校验文档路径、关联代码仓库和任务能力。
+- Existing documents cannot be edited from the browser (`PUT /api/doc` returns 403).
+- Creating, importing, and deleting documents still works.
+- Agents write through MCP/CLI; the backend checks document paths, linked repositories, and task capabilities.
 
 ## Docker
 
@@ -172,27 +176,23 @@ docker run -d --name commentloop \
   commentloop
 ```
 
-容器内前台运行 `commentloop run --no-open --addr 0.0.0.0:4571 /notes`；`/data` 保存 SQLite、日志和 discovery 文件。
+The container runs `commentloop run --no-open --addr 0.0.0.0:4571 /notes` in the foreground. `/data` stores SQLite, logs, and discovery files.
 
-## 开发
+## Development
 
 ```bash
-make test          # Go 测试 + 前端构建
+make test          # Go tests + frontend build
 make debug DIR=~/Documents/notes
-make dev-backend   # 终端 1
-make dev-web       # 终端 2
-make cross         # macOS / Linux amd64 + arm64
+make dev-backend   # terminal 1
+make dev-web       # terminal 2
+make cross         # macOS / Linux, amd64 + arm64
 ```
 
-`make debug` 同时监听前端和 Go 代码：前端改动刷新页面，后端改动自动重启并让页面重连。
+`make debug` watches the frontend and Go code: frontend changes refresh the page, backend changes restart the server and reconnect the page.
 
-## 发布
+## Releases
 
-推 `v*` tag 会自动：
-
-- 构建 macOS / Linux 的 amd64 + arm64 二进制；
-- 生成 `.tar.gz` 和 `SHA256SUMS`；
-- 创建 GitHub Release 并上传产物。
+Pushing a `v*` tag builds macOS/Linux binaries for amd64 and arm64, generates `.tar.gz` archives and `SHA256SUMS`, and creates a GitHub Release.
 
 ```bash
 git tag v0.1.0
