@@ -183,7 +183,7 @@ func (s *Server) rejectAgentRepo(w http.ResponseWriter, r *http.Request, repoID 
 		return true
 	}
 	grant, known := s.agentGrantForRequest(r)
-	if !known || len(grant.RepoIDs) == 0 || repoID == "" {
+	if !known || repoID == "" {
 		return false
 	}
 	for _, id := range grant.RepoIDs {
@@ -218,7 +218,7 @@ func inferAgentTool(method, path string) string {
 	case method == http.MethodGet && path == "/api/comments":
 		return "list_comments"
 	case method == http.MethodGet && path == "/api/doc/code-repos":
-		return "read_code"
+		return "read_file"
 	case method == http.MethodGet && (path == "/api/tree" || path == "/api/config"):
 		return "workspace_info"
 	default:

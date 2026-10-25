@@ -200,6 +200,19 @@ func (s *Server) handleListCodeRepos(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	if grant, known := s.agentGrantForRequest(r); known {
+		allowed := make(map[string]bool, len(grant.RepoIDs))
+		for _, id := range grant.RepoIDs {
+			allowed[id] = true
+		}
+		filtered := items[:0]
+		for _, item := range items {
+			if allowed[item.ID] {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
 	for i := range items {
 		items[i] = s.codeRepos.enriched(items[i], false)
 	}
