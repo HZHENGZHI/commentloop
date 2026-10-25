@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   fetchCodeFile,
   fetchCodeFiles,
@@ -186,6 +187,7 @@ export function CodeBrowserModal({
   onManageRepos,
   onBranchChanged,
 }: CodeBrowserModalProps) {
+  const { t } = useTranslation();
   const [repoID, setRepoID] = useState(() => repos[0]?.id ?? "");
   const [files, setFiles] = useState<CodeFileEntry[]>([]);
   const [fileListMeta, setFileListMeta] = useState<CodeFileList | null>(null);
@@ -257,7 +259,7 @@ export function CodeBrowserModal({
       .catch((err) => {
         if (!alive) return;
         setMessage(
-          err instanceof Error ? err.message : "读取代码文件列表失败",
+          err instanceof Error ? err.message : t("读取代码文件列表失败"),
         );
       })
       .finally(() => {
@@ -284,7 +286,7 @@ export function CodeBrowserModal({
       .catch((err) => {
         if (!alive) return;
         setContent("");
-        setMessage(err instanceof Error ? err.message : "读取代码文件失败");
+        setMessage(err instanceof Error ? err.message : t("读取代码文件失败"));
       })
       .finally(() => {
         if (alive) setCodeLoading(false);
@@ -301,7 +303,7 @@ export function CodeBrowserModal({
       character: pending.character,
       nonce: Date.now(),
     });
-    setMessage(`已跳转到 ${pending.path}:${pending.line}`);
+    setMessage(t("已跳转到 {{path}}:{{line}}", { path: pending.path, line: pending.line }));
     setPending(null);
   }, [pending, selectedFile, content]);
 
@@ -329,7 +331,7 @@ export function CodeBrowserModal({
       const result = await fetchCodeRepoBranches(repo.id);
       setBranches(result.branches ?? []);
     } catch (err) {
-      setBranchError(err instanceof Error ? err.message : "读取分支失败");
+      setBranchError(err instanceof Error ? err.message : t("读取分支失败"));
     } finally {
       setBranchLoading(false);
     }
@@ -340,7 +342,7 @@ export function CodeBrowserModal({
     if (
       repo.kind !== "github" &&
       !window.confirm(
-        `切换本地仓库分支会更新工作区文件为「${branch}」。\n\n本地仓库有未提交改动时会被拒绝。继续？`,
+        t("切换本地仓库分支会更新工作区文件为「{{branch}}」。\n\n本地仓库有未提交改动时会被拒绝。继续？", { branch }),
       )
     ) {
       return;
@@ -354,10 +356,10 @@ export function CodeBrowserModal({
       setContent("");
       setTarget(null);
       setPending(null);
-      setMessage(`已切换到分支 ${branch}`);
+      setMessage(t("已切换到分支 {{branch}}", { branch }));
       onBranchChanged();
     } catch (err) {
-      setBranchError(err instanceof Error ? err.message : "切换分支失败");
+      setBranchError(err instanceof Error ? err.message : t("切换分支失败"));
     } finally {
       setBranchBusy(false);
     }
@@ -395,7 +397,7 @@ export function CodeBrowserModal({
   const openLocation = (location: LSPLocation) => {
     if (location.external) {
       setMessage(
-        `定义在代码仓库外：${location.path}:${location.line}:${location.character}`,
+        t("定义在代码仓库外：{{path}}:{{line}}:{{character}}", { path: location.path, line: location.line, character: location.character }),
       );
       return;
     }
@@ -405,18 +407,18 @@ export function CodeBrowserModal({
         character: location.character,
         nonce: Date.now(),
       });
-      setMessage(`已跳转到 ${location.path}:${location.line}`);
+      setMessage(t("已跳转到 {{path}}:{{line}}", { path: location.path, line: location.line }));
       return;
     }
     setPending(location);
     setSelectedFile(location.path);
-    setMessage(`正在打开 ${location.path}:${location.line}`);
+    setMessage(t("正在打开 {{path}}:{{line}}", { path: location.path, line: location.line }));
   };
 
   const definition = async (line: number, character: number) => {
     if (!repo || !selectedFile || lspBusy) return;
     setLspBusy(true);
-    setMessage("正在查询定义…");
+    setMessage(t("正在查询定义…"));
     try {
       const result = await lspDefinition(
         repo.id,
@@ -426,17 +428,17 @@ export function CodeBrowserModal({
       );
       const location = result.locations?.[0];
       if (!location) {
-        setMessage("没有找到定义；请确认 LSP 已完成索引后重试");
+        setMessage(t("没有找到定义；请确认 LSP 已完成索引后重试"));
         return;
       }
       openLocation(location);
       if ((result.locations?.length ?? 0) > 1) {
         setMessage(
-          `找到 ${result.locations.length} 个定义，已打开第一个 · ${location.path}:${location.line}`,
+          t("找到 {{count}} 个定义，已打开第一个 · {{path}}:{{line}}", { count: result.locations.length, path: location.path, line: location.line }),
         );
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "LSP 查询失败");
+      setMessage(err instanceof Error ? err.message : t("LSP 查询失败"));
     } finally {
       setLspBusy(false);
     }
@@ -453,12 +455,12 @@ export function CodeBrowserModal({
         className="modal code-browser-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="代码浏览"
+        aria-label={t("代码浏览")}
       >
         <div className="code-browser-head">
           <div className="code-browser-title">
             <IconGitBranch size={16} />
-            代码浏览
+            {t("代码浏览")}
             <span>{fileName(docPath)}</span>
           </div>
           {repos.length > 0 ? (
@@ -467,22 +469,22 @@ export function CodeBrowserModal({
               className="code-browser-repo"
               value={repo?.id ?? ""}
               onChange={(event) => setRepoID(event.target.value)}
-              aria-label="选择代码仓库"
+              aria-label={t("选择代码仓库")}
             >
               {repos.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                   {item.branch ? ` · ${item.branch}` : ""}
-                  {item.dirty ? " · 有改动" : ""}
+                  {item.dirty ? ` · ${t("有改动")}` : ""}
                 </option>
               ))}
             </select>
             {repo && repo.kind === "local" && !repo.branch ? (
               <span
                 className="code-browser-no-branch"
-                title="这个本地目录不是 Git 仓库，无法切换分支；请关联仓库根目录或初始化 Git"
+                title={t("这个本地目录不是 Git 仓库，无法切换分支；请关联仓库根目录或初始化 Git")}
               >
-                非 Git 仓库
+                {t("非 Git 仓库")}
               </span>
             ) : null}
             {repo && (repo.kind === "github" || repo.branch) ? (
@@ -491,17 +493,17 @@ export function CodeBrowserModal({
                   type="button"
                   className={`code-browser-branch${branchOpen ? " active" : ""}`}
                   onClick={() => void openBranchMenu()}
-                  title="切换分支"
+                  title={t("切换分支")}
                 >
                   <IconGitBranch size={11} />
-                  {repo.branch || repo.remoteBranch || "分支"}
+                  {repo.branch || repo.remoteBranch || t("分支")}
                   <IconChevronDown size={10} />
                 </button>
                 {branchOpen ? (
                   <div className="code-browser-branch-menu">
-                    <div className="code-browser-branch-head">切换分支</div>
+                    <div className="code-browser-branch-head">{t("切换分支")}</div>
                     {branchLoading ? (
-                      <div className="code-browser-branch-empty">正在读取分支…</div>
+                      <div className="code-browser-branch-empty">{t("正在读取分支…")}</div>
                     ) : branchError ? (
                       <div className="code-browser-branch-empty error">{branchError}</div>
                     ) : (
@@ -532,13 +534,13 @@ export function CodeBrowserModal({
             className="code-browser-manage"
             onClick={onManageRepos}
           >
-            管理仓库
+            {t("管理仓库")}
           </button>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭代码浏览"
+            aria-label={t("关闭代码浏览")}
           >
             <IconX size={15} />
           </button>
@@ -550,22 +552,22 @@ export function CodeBrowserModal({
               <input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
-                placeholder="筛选文件…"
+                placeholder={t("筛选文件…")}
               />
             </div>
             <div className="code-browser-files">
               {repos.length === 0 ? (
                 <div className="code-browser-empty">
-                  <p>还没有关联代码仓库</p>
+                  <p>{t("还没有关联代码仓库")}</p>
                   <button type="button" className="btn primary" onClick={onManageRepos}>
-                    关联代码仓库
+                    {t("关联代码仓库")}
                   </button>
                 </div>
               ) : filesLoading ? (
-                <div className="code-browser-empty">正在读取文件…</div>
+                <div className="code-browser-empty">{t("正在读取文件…")}</div>
               ) : visibleFiles.length === 0 ? (
                 <div className="code-browser-empty">
-                  {files.length === 0 ? "仓库中没有源码文件" : "没有匹配的文件"}
+                  {files.length === 0 ? t("仓库中没有源码文件") : t("没有匹配的文件")}
                 </div>
               ) : (
                 <CodeTree
@@ -594,7 +596,7 @@ export function CodeBrowserModal({
             </div>
             {fileListMeta?.truncated ? (
               <div className="code-browser-truncated">
-                文件列表已截断（共 {fileListMeta.total} 个匹配）
+                {t("文件列表已截断（共 {{count}} 个匹配）", { count: fileListMeta.total })}
               </div>
             ) : null}
           </aside>
@@ -602,11 +604,11 @@ export function CodeBrowserModal({
           <section className="code-browser-main">
             <div className="code-browser-file-head">
               <span className="code-browser-path">
-                {selectedFile || "选择一个代码文件"}
+                {selectedFile || t("选择一个代码文件")}
               </span>
               <div className="code-browser-lsp-actions">
                 <span className="code-browser-lsp-hint">
-                  {lspBusy ? "LSP 查询中…" : "⌘/Ctrl + 点击代码符号"}
+                  {lspBusy ? t("LSP 查询中…") : t("⌘/Ctrl + 点击代码符号")}
                 </span>
                 <button
                   type="button"
@@ -617,15 +619,15 @@ export function CodeBrowserModal({
                       void definition(cursor.line, cursor.character);
                     }
                   }}
-                  title="跳转到光标位置的定义"
+                  title={t("跳转到光标位置的定义")}
                 >
                   <IconLocate size={11} />
-                  跳转定义
+                  {t("跳转定义")}
                 </button>
               </div>
             </div>
             {codeLoading ? (
-              <div className="code-browser-code-empty">正在读取代码…</div>
+              <div className="code-browser-code-empty">{t("正在读取代码…")}</div>
             ) : selectedFile ? (
               <CodeViewer
                 filename={selectedFile}
@@ -642,14 +644,14 @@ export function CodeBrowserModal({
             ) : (
               <div className="code-browser-code-empty">
                 {repos.length === 0
-                  ? "关联代码仓库后可以浏览源码"
-                  : "从左侧选择文件查看代码"}
+                  ? t("关联代码仓库后可以浏览源码")
+                  : t("从左侧选择文件查看代码")}
               </div>
             )}
           </section>
         </div>
         <div className={`code-browser-status${message ? " visible" : ""}`}>
-          {message || "代码只读；不会修改仓库文件"}
+          {message || t("代码只读；不会修改仓库文件")}
         </div>
       </div>
     </div>

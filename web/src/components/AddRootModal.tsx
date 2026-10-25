@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   browseDirectories,
   browseRemoteDirectories,
@@ -41,6 +42,7 @@ export function AddRootModal({
   onAddLocal,
   onAddRemote,
 }: AddRootModalProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"local" | "remote">("local");
   const [data, setData] = useState<BrowseResponse | null>(null);
   const [pathInput, setPathInput] = useState(initialPath);
@@ -85,7 +87,7 @@ export function AddRootModal({
       setPathInput(next.path);
     } catch (err) {
       if (id !== seq.current) return;
-      setError(err instanceof Error ? err.message : "无法读取目录");
+      setError(err instanceof Error ? err.message : t("无法读取目录"));
     } finally {
       if (id === seq.current) setLoading(false);
     }
@@ -149,7 +151,7 @@ export function AddRootModal({
     try {
       await onAddLocal(currentPath);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "添加目录失败");
+      setError(err instanceof Error ? err.message : t("添加目录失败"));
       setLocalBusy(false);
     }
   };
@@ -178,7 +180,7 @@ export function AddRootModal({
     } catch (err) {
       if (id !== remoteSeq.current) return;
       setRemoteBrowseError(
-        err instanceof Error ? err.message : "无法读取远程目录",
+        err instanceof Error ? err.message : t("无法读取远程目录"),
       );
     } finally {
       if (id === remoteSeq.current) setRemoteLoading(false);
@@ -189,11 +191,11 @@ export function AddRootModal({
     setRemoteError(null);
     const port = Number(remotePort);
     if (!remoteHost.trim() || !remoteUser.trim()) {
-      setRemoteError("主机和用户名不能为空");
+      setRemoteError(t("主机和用户名不能为空"));
       return;
     }
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      setRemoteError("端口必须是 1–65535 之间的整数");
+      setRemoteError(t("端口必须是 1–65535 之间的整数"));
       return;
     }
     const seq = ++connectSeq.current;
@@ -229,7 +231,7 @@ export function AddRootModal({
     } catch (err) {
       if (controller.signal.aborted || seq !== connectSeq.current) return;
       setRemoteError(
-        err instanceof Error ? err.message : "连接远程服务器失败",
+        err instanceof Error ? err.message : t("连接远程服务器失败"),
       );
       endRemoteSession();
       setRemoteBrowsing(false);
@@ -271,7 +273,7 @@ export function AddRootModal({
       });
     } catch (err) {
       setRemoteBrowseError(
-        err instanceof Error ? err.message : "添加远程目录失败",
+        err instanceof Error ? err.message : t("添加远程目录失败"),
       );
       setRemoteBusy(false);
       setRemoteAdding(false);
@@ -344,7 +346,7 @@ export function AddRootModal({
         className="modal browser-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="添加目录或远程服务器"
+        aria-label={t("添加目录或远程服务器")}
       >
         <div className="modal-head">
           <div className="modal-title">
@@ -354,22 +356,22 @@ export function AddRootModal({
               <IconServer size={17} />
             )}
             {tab === "local"
-              ? "添加本地目录"
+              ? t("添加本地目录")
               : remoteBrowsing
-                ? "浏览远程目录"
-                : "添加远程服务器"}
+                ? t("浏览远程目录")
+                : t("添加远程服务器")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
 
-        <div className="root-tabs" role="tablist" aria-label="目录类型">
+        <div className="root-tabs" role="tablist" aria-label={t("目录类型")}>
           <button
             type="button"
             role="tab"
@@ -379,7 +381,7 @@ export function AddRootModal({
             disabled={remoteBusy}
           >
             <IconFolder size={14} />
-            本地目录
+            {t("本地目录")}
           </button>
           <button
             type="button"
@@ -390,7 +392,7 @@ export function AddRootModal({
             disabled={remoteBusy}
           >
             <IconServer size={14} />
-            远程服务器
+            {t("远程服务器")}
           </button>
         </div>
 
@@ -402,8 +404,8 @@ export function AddRootModal({
                 className="browser-up"
                 onClick={() => navigate(data?.parent ?? "")}
                 disabled={!data?.parent}
-                title="上一级"
-                aria-label="上一级"
+                title={t("上一级")}
+                aria-label={t("上一级")}
               >
                 <IconArrowUp size={15} />
               </button>
@@ -413,14 +415,14 @@ export function AddRootModal({
                   ref={pathRef}
                   value={pathInput}
                   onChange={(event) => setPathInput(event.target.value)}
-                  placeholder="~/Documents/notes 或 /Volumes/notes"
+                  placeholder={t("~/Documents/notes 或 /Volumes/notes")}
                   spellCheck={false}
                   autoComplete="off"
-                  aria-label="当前目录"
+                  aria-label={t("当前目录")}
                 />
               </div>
               <button type="submit" className="btn ghost">
-                转到
+                {t("转到")}
               </button>
             </form>
 
@@ -437,7 +439,7 @@ export function AddRootModal({
                     onClick={() => navigate(shortcut.path)}
                   >
                     <IconFolder size={12} />
-                    {shortcut.name}
+                    {t(shortcut.name)}
                   </button>
                 ))}
               </div>
@@ -447,13 +449,13 @@ export function AddRootModal({
               {loading ? (
                 <div className="browser-loading">
                   <span className="spinner" />
-                  读取目录…
+                  {t("读取目录…")}
                 </div>
               ) : data?.entries.length ? (
                 data.entries.map(renderEntry)
               ) : (
                 <div className="browser-empty">
-                  {error ? "无法读取此目录" : "这里没有子目录"}
+                  {error ? t("无法读取此目录") : t("这里没有子目录")}
                 </div>
               )}
             </div>
@@ -465,31 +467,31 @@ export function AddRootModal({
                   checked={showHidden}
                   onChange={(event) => toggleHidden(event.target.checked)}
                 />
-                显示隐藏目录
+                {t("显示隐藏目录")}
               </label>
               <span>
-                {data?.entries.length ?? 0} 个子目录
-                {data?.truncated ? "（已截断）" : ""}
+                {t("{{count}} 个子目录", { count: data?.entries.length ?? 0 })}
+                {data?.truncated ? t("（已截断）") : ""}
               </span>
             </div>
 
             <p className="modal-hint browser-hint">
-              选择目录后，commentloop 会递归读取其中的 Markdown 并监听外部修改。
-              当前工作区已有 {roots.length} 个目录。
+              {t("选择目录后，Commentloop 会递归读取其中的 Markdown 并监听外部修改。")}
+              {t("当前工作区已有 {{count}} 个目录", { count: roots.length })}
             </p>
             {error ? <p className="modal-error">{error}</p> : null}
 
             <div className="browser-selection">
-              <span>当前目录</span>
-              <code title={currentPath}>{currentPath || "选择中…"}</code>
+              <span>{t("当前目录")}</span>
+              <code title={currentPath}>{currentPath || t("选择中…")}</code>
               {alreadyAdded ? (
-                <span className="browser-added">已添加</span>
+                <span className="browser-added">{t("已添加")}</span>
               ) : null}
             </div>
 
             <div className="modal-actions">
               <button type="button" className="btn ghost" onClick={onClose}>
-                取消
+                {t("取消")}
               </button>
               <button
                 type="button"
@@ -497,45 +499,44 @@ export function AddRootModal({
                 onClick={() => void addLocal()}
                 disabled={!currentPath || loading || localBusy || alreadyAdded}
               >
-                {localBusy ? "添加中…" : "添加此目录"}
+                {localBusy ? t("添加中…") : t("添加此目录")}
               </button>
             </div>
           </>
         ) : remoteConnecting ? (
           <div className="remote-connecting" role="status" aria-live="polite">
             <span className="spinner remote-spinner" />
-            <h3>正在连接远程服务器…</h3>
+            <h3>{t("正在连接远程服务器…")}</h3>
             <code>
               {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
             </code>
-            <p>首次连接需要验证 SSH 密钥和主机指纹，可能需要几秒。</p>
+            <p>{t("首次连接需要验证 SSH 密钥和主机指纹，可能需要几秒。")}</p>
             <div className="remote-connecting-actions">
               <button type="button" className="btn primary" disabled>
-                连接中…
+                {t("连接中…")}
               </button>
               <button
                 type="button"
                 className="btn ghost"
                 onClick={cancelRemoteConnect}
               >
-                关闭
+                {t("关闭")}
               </button>
             </div>
           </div>
         ) : remoteAdding ? (
           <div className="remote-connecting" role="status" aria-live="polite">
             <span className="spinner remote-spinner" />
-            <h3>正在读取远程文件…</h3>
+            <h3>{t("正在读取远程文件…")}</h3>
             <code>
               {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
             </code>
             <p>
-              连接已建立，正在索引 Markdown 文件。目录较大时可能需要几秒，
-              完成后文件会立即出现在侧栏。
+              {t("连接已建立，正在索引 Markdown 文件。目录较大时可能需要几秒，完成后文件会立即出现在侧栏。")}
             </p>
             <div className="remote-connecting-actions">
               <button type="button" className="btn ghost" onClick={onClose}>
-                关闭
+                {t("关闭")}
               </button>
             </div>
           </div>
@@ -551,8 +552,8 @@ export function AddRootModal({
                   }
                 }}
                 disabled={!remoteData?.parent}
-                title="上一级"
-                aria-label="上一级"
+                title={t("上一级")}
+                aria-label={t("上一级")}
               >
                 <IconArrowUp size={15} />
               </button>
@@ -561,14 +562,14 @@ export function AddRootModal({
                 <input
                   value={remoteBrowseInput}
                   onChange={(event) => setRemoteBrowseInput(event.target.value)}
-                  placeholder="远程目录路径"
+                  placeholder={t("远程目录路径")}
                   spellCheck={false}
                   autoComplete="off"
-                  aria-label="远程目录"
+                  aria-label={t("远程目录")}
                 />
               </div>
               <button type="submit" className="btn ghost">
-                转到
+                {t("转到")}
               </button>
             </form>
 
@@ -587,7 +588,7 @@ export function AddRootModal({
                     }
                   >
                     <IconFolder size={12} />
-                    {shortcut.name}
+                    {t(shortcut.name)}
                   </button>
                 ))}
               </div>
@@ -597,13 +598,13 @@ export function AddRootModal({
               {remoteLoading ? (
                 <div className="browser-loading">
                   <span className="spinner" />
-                  读取远程目录…
+                  {t("读取远程目录…")}
                 </div>
               ) : remoteData?.entries.length ? (
                 remoteData.entries.map(renderRemoteEntry)
               ) : (
                 <div className="browser-empty">
-                  {remoteBrowseError ? "无法读取此目录" : "这里没有子目录"}
+                  {remoteBrowseError ? t("无法读取此目录") : t("这里没有子目录")}
                 </div>
               )}
             </div>
@@ -615,25 +616,26 @@ export function AddRootModal({
                   checked={remoteShowHidden}
                   onChange={(event) => toggleRemoteHidden(event.target.checked)}
                 />
-                显示隐藏目录
+                {t("显示隐藏目录")}
               </label>
               <span>
-                {remoteData?.entries.length ?? 0} 个子目录
-                {remoteData?.truncated ? "（已截断）" : ""}
+                {t("{{count}} 个子目录", {
+                  count: remoteData?.entries.length ?? 0,
+                })}
+                {remoteData?.truncated ? t("（已截断）") : ""}
               </span>
             </div>
 
             <p className="modal-hint remote-hint">
-              已连接 {remoteUser}@{remoteHost}:{remotePort}。点击目录进入，选择
-              要加入工作区的远程目录。
+              {t("已连接 {{user}}@{{host}}:{{port}}。点击目录进入，选择要加入工作区的远程目录。", { user: remoteUser, host: remoteHost, port: remotePort })}
             </p>
             {remoteBrowseError ? (
               <p className="modal-error">{remoteBrowseError}</p>
             ) : null}
             <div className="browser-selection">
-              <span>当前目录</span>
+              <span>{t("当前目录")}</span>
               <code title={remoteData?.path ?? ""}>
-                {remoteData?.path || "读取中…"}
+                {remoteData?.path || t("读取中…")}
               </code>
             </div>
 
@@ -643,7 +645,7 @@ export function AddRootModal({
                 className="btn ghost"
                 onClick={backToRemoteForm}
               >
-                返回连接设置
+                {t("返回连接设置")}
               </button>
               <button
                 type="button"
@@ -651,7 +653,7 @@ export function AddRootModal({
                 onClick={() => void addFromRemoteBrowser()}
                 disabled={!remoteData?.path || remoteLoading || remoteBusy}
               >
-                {remoteBusy ? "添加中…" : "添加此目录"}
+                {remoteBusy ? t("添加中…") : t("添加此目录")}
               </button>
             </div>
           </>
@@ -665,28 +667,28 @@ export function AddRootModal({
           >
             <div className="remote-grid">
               <label>
-                名称（可选）
+                {t("名称（可选）")}
                 <input
                   value={remoteName}
                   onChange={(event) => setRemoteName(event.target.value)}
-                  placeholder="例如 dev-notes"
+                  placeholder={t("例如 dev-notes")}
                   autoComplete="off"
                 />
               </label>
               <label>
-                主机
+                {t("主机")}
                 <input
                   ref={hostRef}
                   value={remoteHost}
                   onChange={(event) => setRemoteHost(event.target.value)}
-                  placeholder="192.168.1.10 或 example.com"
+                  placeholder={t("192.168.1.10 或 example.com")}
                   spellCheck={false}
                   autoComplete="off"
                   required
                 />
               </label>
               <label>
-                端口
+                {t("端口")}
                 <input
                   type="number"
                   min={1}
@@ -697,7 +699,7 @@ export function AddRootModal({
                 />
               </label>
               <label>
-                用户名
+                {t("用户名")}
                 <input
                   value={remoteUser}
                   onChange={(event) => setRemoteUser(event.target.value)}
@@ -708,22 +710,22 @@ export function AddRootModal({
                 />
               </label>
               <label className="wide">
-                私钥路径（可选）
+                {t("私钥路径（可选）")}
                 <input
                   value={remoteKeyPath}
                   onChange={(event) => setRemoteKeyPath(event.target.value)}
-                  placeholder="~/.ssh/id_ed25519；留空则尝试 ssh-agent / 默认私钥"
+                  placeholder={t("~/.ssh/id_ed25519；留空则尝试 ssh-agent / 默认私钥")}
                   spellCheck={false}
                   autoComplete="off"
                 />
               </label>
               <label className="wide">
-                远程目录
+                {t("远程目录")}
                 <div className="remote-path-line">
                   <input
                     value={remotePath}
                     onChange={(event) => setRemotePath(event.target.value)}
-                    placeholder="可留空；或填写浏览起点，如 /home/me/notes"
+                    placeholder={t("可留空；或填写浏览起点，如 /home/me/notes")}
                     spellCheck={false}
                     autoComplete="off"
                   />
@@ -731,8 +733,8 @@ export function AddRootModal({
               </label>
             </div>
             <p className="modal-hint remote-hint">
-              使用 SSH Agent 或本机私钥认证，不支持密码 / ProxyJump。
-              首次连接前请先在终端执行一次{" "}
+              {t("使用 SSH Agent 或本机私钥认证，不支持密码 / ProxyJump。")}
+              {t("首次连接前请先在终端执行一次")}{" "}
               <code>
                 ssh
                 {Number(remotePort) && Number(remotePort) !== 22
@@ -740,14 +742,14 @@ export function AddRootModal({
                   : ""}{" "}
                 {remoteUser || "user"}@{remoteHost || "host"}
               </code>{" "}
-              接受主机指纹。远程文件变更每 5 秒轮询同步。
+              {t("接受主机指纹。远程文件变更每 5 秒轮询同步。")}
             </p>
             {remoteError ? (
               <p className="modal-error">{remoteError}</p>
             ) : null}
             <div className="modal-actions">
               <button type="button" className="btn ghost" onClick={onClose}>
-                取消
+                {t("取消")}
               </button>
               <button
                 type="submit"
@@ -755,10 +757,10 @@ export function AddRootModal({
                 disabled={remoteBusy || remoteConnecting}
               >
                 {remoteBusy || remoteConnecting
-                  ? "连接中…"
+                  ? t("连接中…")
                   : remoteError
-                    ? "重新连接"
-                    : "浏览远程目录"}
+                    ? t("重新连接")
+                    : t("浏览远程目录")}
               </button>
             </div>
           </form>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   checkCommand,
   fetchDefaultSettings,
@@ -45,7 +46,7 @@ const AGENT_PRESETS: {
     command: "cursor-agent",
     hint: "Cursor Agent CLI",
   },
-  { type: "custom", name: "Code Agent", command: "", hint: "自定义 Agent" },
+  { type: "custom", name: "Code Agent", command: "", hint: "custom agent" },
 ];
 
 function argsText(values?: string[]): string {
@@ -73,6 +74,7 @@ function setLSP(
 }
 
 export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsModalProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"lsp" | "agent" | "prompts">("lsp");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
         if (alive) setSettings(result);
       })
       .catch((err) => {
-        if (alive) setError(err instanceof Error ? err.message : "读取设置失败");
+        if (alive) setError(err instanceof Error ? err.message : t("读取设置失败"));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -123,7 +125,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
         ...current,
         [item.id]: {
           found: false,
-          error: err instanceof Error ? err.message : "检查失败",
+          error: err instanceof Error ? err.message : t("检查失败"),
         },
       }));
     } finally {
@@ -140,7 +142,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
     } catch (err) {
       setAgentCheck({
         found: false,
-        error: err instanceof Error ? err.message : "检查失败",
+        error: err instanceof Error ? err.message : t("检查失败"),
       });
     } finally {
       setChecking(null);
@@ -156,7 +158,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
       setChecks({});
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取默认配置失败");
+      setError(err instanceof Error ? err.message : t("读取默认配置失败"));
     }
   };
 
@@ -168,7 +170,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
       const result = await saveSettings(settings);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存设置失败");
+      setError(err instanceof Error ? err.message : t("保存设置失败"));
       setSaving(false);
     }
   };
@@ -184,18 +186,18 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
         className="modal settings-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="设置"
+        aria-label={t("设置")}
       >
         <div className="modal-head">
           <div className="modal-title">
             <IconSettings size={17} />
-            设置
+            {t("设置")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭设置"
+            aria-label={t("关闭设置")}
           >
             <IconX size={15} />
           </button>
@@ -208,7 +210,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
             onClick={() => setTab("lsp")}
           >
             <IconServer size={14} />
-            LSP 服务器
+            {t("LSP 服务器")}
           </button>
           <button
             type="button"
@@ -216,7 +218,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
             onClick={() => setTab("agent")}
           >
             <IconGitBranch size={14} />
-            后台 Code Agent
+            {t("后台 Code Agent")}
           </button>
           <button
             type="button"
@@ -224,27 +226,27 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
             onClick={() => setTab("prompts")}
           >
             <IconMessage size={14} />
-            提示词
+            {t("提示词")}
           </button>
         </div>
 
         {loading ? (
-          <div className="settings-loading">正在读取设置…</div>
+          <div className="settings-loading">{t("正在读取设置…")}</div>
         ) : !settings ? (
-          <div className="settings-loading error">{error || "无法读取设置"}</div>
+          <div className="settings-loading error">{error || t("无法读取设置")}</div>
         ) : tab === "lsp" ? (
           <div className="settings-body">
             <div className="settings-intro">
-              为不同代码文件配置 LSP 服务器。修改后保存会重启语言服务器连接。
+              {t("为不同代码文件配置 LSP 服务器。修改后保存会重启语言服务器连接。")}
               <button type="button" className="settings-text-btn" onClick={() => void resetLSP()}>
-                恢复默认
+                {t("恢复默认")}
               </button>
             </div>
             <div className="settings-lsp-head">
-              <span>语言</span>
-              <span>命令</span>
-              <span>参数（空格分隔）</span>
-              <span>状态</span>
+              <span>{t("语言")}</span>
+              <span>{t("命令")}</span>
+              <span>{t("参数（空格分隔）")}</span>
+              <span>{t("状态")}</span>
             </div>
             <div className="settings-lsp-list">
               {settings.lspServers.map((item, index) => (
@@ -274,7 +276,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                         setLSP(settings, index, { command: event.target.value }),
                       )
                     }
-                    placeholder="命令，例如 gopls"
+                    placeholder={t("命令，例如 gopls")}
                   />
                   <input
                     className="settings-input"
@@ -286,7 +288,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                         }),
                       )
                     }
-                    placeholder="例如 --stdio"
+                    placeholder={t("例如 --stdio")}
                   />
                   <div className="settings-check-cell">
                     <button
@@ -295,7 +297,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                       disabled={checking === `lsp:${item.id}`}
                       onClick={() => void checkLSP(item)}
                     >
-                      {checking === `lsp:${item.id}` ? "检查中…" : "检查"}
+                      {checking === `lsp:${item.id}` ? t("检查中…") : t("检查")}
                     </button>
                     {checks[item.id] ? (
                       <span
@@ -304,7 +306,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                         }`}
                         title={checks[item.id].path || checks[item.id].error}
                       >
-                        {checks[item.id].found ? "已找到" : "未找到"}
+                        {checks[item.id].found ? t("已找到") : t("未找到")}
                       </span>
                     ) : null}
                   </div>
@@ -317,11 +319,10 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
         ) : (
           <div className="settings-body settings-agent">
             <div className="settings-intro">
-              选择你在后台使用的 Code Agent。它通过 MCP 读写文档；这里保存显示名称和可选的启动命令，
-              用于界面标识和命令检查，不会自动启动模型进程。
+              {t("选择你在后台使用的 Code Agent。它通过 MCP 读写文档；这里保存显示名称和可选的启动命令，用于界面标识和命令检查，不会自动启动模型进程。")}
             </div>
             <label className="settings-field">
-              <span>Agent 类型</span>
+              <span>{t("Agent 类型")}</span>
               <select
                 value={settings.agent.type}
                 onChange={(event) => {
@@ -351,7 +352,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
               </select>
             </label>
             <label className="settings-field">
-              <span>界面显示名称</span>
+              <span>{t("界面显示名称")}</span>
               <input
                 className="settings-input"
                 value={settings.agent.name}
@@ -360,7 +361,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
               />
             </label>
             <label className="settings-field">
-              <span>启动命令（可选）</span>
+              <span>{t("启动命令（可选）")}</span>
               <input
                 className="settings-input"
                 value={settings.agent.command}
@@ -369,18 +370,18 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
               />
             </label>
             <label className="settings-field">
-              <span>命令参数</span>
+              <span>{t("命令参数")}</span>
               <input
                 className="settings-input"
                 value={argsText(settings.agent.args)}
                 onChange={(event) =>
                   updateAgent({ args: parseArgs(event.target.value) })
                 }
-                placeholder="参数用空格分隔"
+                placeholder={t("参数用空格分隔")}
               />
             </label>
             <label className="settings-field">
-              <span>自动运行方式</span>
+              <span>{t("自动运行方式")}</span>
               <select
                 value={settings.agent.runner}
                 onChange={(event) =>
@@ -395,8 +396,8 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                   })
                 }
               >
-                <option value="embedded">嵌入 Pi RPC（当前进程启动）</option>
-                <option value="external">外部 Agent Runner</option>
+                <option value="embedded">{t("嵌入 Pi RPC（当前进程启动）")}</option>
+                <option value="external">{t("外部 Agent Runner")}</option>
               </select>
             </label>
             <label className="settings-auto-run">
@@ -409,11 +410,11 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                 }
               />
               <span>
-                用户提交评论后自动运行 Agent
+                {t("用户提交评论后自动运行 Agent")}
                 <em>
                   {settings.agent.runner === "external"
-                    ? "由外部 commentloop agent-runner 领取任务；需要先启动 runner"
-                    : "嵌入模式目前仅支持 pi Agent；需要已配置 MCP 和模型"}
+                    ? t("由外部 commentloop agent-runner 领取任务；需要先启动 runner")
+                    : t("嵌入模式目前仅支持 pi Agent；需要已配置 MCP 和模型")}
                 </em>
               </span>
             </label>
@@ -424,7 +425,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                 disabled={checking === "agent" || !settings.agent.command}
                 onClick={() => void checkAgent()}
               >
-                {checking === "agent" ? "检查中…" : "检查命令"}
+                {checking === "agent" ? t("检查中…") : t("检查命令")}
               </button>
               {agentCheck ? (
                 <span
@@ -433,13 +434,12 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                   }`}
                   title={agentCheck.path || agentCheck.error}
                 >
-                  {agentCheck.found ? `已找到：${agentCheck.path}` : "未找到命令"}
+                  {agentCheck.found ? t("已找到：{{path}}", { path: agentCheck.path }) : t("未找到命令")}
                 </span>
               ) : null}
             </div>
             <p className="settings-note">
-              自动运行会复用同一个 pi RPC 进程 / 会话，不会每条评论都新建会话；应用重启、进程异常或修改命令后才会重建。
-              界面中的“Code Agent”名称会使用这里的显示名称。
+              {t("自动运行会复用同一个 pi RPC 进程 / 会话，不会每条评论都新建会话；应用重启、进程异常或修改命令后才会重建。界面中的“Code Agent”名称会使用这里的显示名称。")}
             </p>
           </div>
         )}
@@ -448,12 +448,12 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
         <div className="modal-actions settings-actions">
           {tab === "prompts" ? (
             <button type="button" className="btn ghost" onClick={onClose}>
-              关闭
+              {t("关闭")}
             </button>
           ) : (
             <>
               <button type="button" className="btn ghost" onClick={onClose}>
-                取消
+                {t("取消")}
               </button>
               <button
                 type="button"
@@ -461,7 +461,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                 disabled={!settings || saving}
                 onClick={() => void save()}
               >
-                {saving ? "保存中…" : "保存设置"}
+                {saving ? t("保存中…") : t("保存设置")}
               </button>
             </>
           )}

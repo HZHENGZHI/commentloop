@@ -213,7 +213,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             codeLanguages: languages,
           }),
           EditorView.lineWrapping,
-          placeholder("开始写点什么，右侧会实时预览…"),
+          placeholder("Start writing; the preview appears on the right…"),
           themeCompartment.current.of(themeExtensions(themeRef.current)),
           Prec.highest(
             keymap.of([
@@ -228,7 +228,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             ]),
           ),
           EditorView.contentAttributes.of({
-            "aria-label": "Markdown 编辑区",
+            "aria-label": "Markdown editor",
             spellcheck: "false",
           }),
           EditorView.updateListener.of((update) => {

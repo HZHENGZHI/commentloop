@@ -494,7 +494,7 @@ export function CommentsPanel({
                   className="comment-agent-trigger"
                   onClick={() => void onTrigger(comment)}
                 >
-                  让 Agent 处理
+                  {t("让 Agent 处理")}
                 </button>
               ) : null}
 
@@ -547,7 +547,7 @@ export function CommentsPanel({
                         setReplyTemplateId("");
                       }}
                     >
-                      取消
+                      {t("取消")}
                     </button>
                     <button
                       type="submit"

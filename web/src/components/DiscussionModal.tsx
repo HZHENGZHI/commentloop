@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   deleteDiscussion,
   fetchAvailableDiscussionSessions,
@@ -51,17 +53,17 @@ function consensusStage(status: ConsensusPhase): number {
 function consensusLabel(status: ConsensusPhase): string {
   switch (status) {
     case "queued":
-      return "准备更新共识…";
+      return i18n.t("准备更新共识…");
     case "collecting":
-      return "正在整理讨论内容…";
+      return i18n.t("正在整理讨论内容…");
     case "summarizing":
-      return "Agent 正在提炼共识…";
+      return i18n.t("Agent 正在提炼共识…");
     case "saving":
-      return "正在保存共识…";
+      return i18n.t("正在保存共识…");
     case "done":
-      return "共识已更新";
+      return i18n.t("共识已更新");
     case "error":
-      return "共识更新失败";
+      return i18n.t("共识更新失败");
   }
 }
 
@@ -82,10 +84,10 @@ function consensusWidth(status: ConsensusPhase): string {
   }
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string, locale: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -100,6 +102,7 @@ export function DiscussionModal({
   onClose,
   onChanged,
 }: DiscussionModalProps) {
+  const { t, i18n } = useTranslation();
   const [data, setData] = useState<DiscussionListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -123,7 +126,7 @@ export function DiscussionModal({
       setData(next);
     } catch (err) {
       if (seq !== loadSeq.current) return;
-      setError(err instanceof Error ? err.message : "读取讨论上下文失败");
+      setError(err instanceof Error ? err.message : t("读取讨论上下文失败"));
     } finally {
       if (showLoading && seq === loadSeq.current) setLoading(false);
     }
@@ -140,7 +143,7 @@ export function DiscussionModal({
       setAgents(result.agents ?? []);
     } catch (err) {
       if (seq !== sessionsSeq.current) return;
-      setSessionsError(err instanceof Error ? err.message : "读取会话失败");
+      setSessionsError(err instanceof Error ? err.message : t("读取会话失败"));
     } finally {
       if (seq === sessionsSeq.current) setSessionsLoading(false);
     }
@@ -173,7 +176,7 @@ export function DiscussionModal({
       await load();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "刷新共识失败");
+      setError(err instanceof Error ? err.message : t("刷新共识失败"));
     } finally {
       setBusy("");
     }
@@ -198,19 +201,19 @@ export function DiscussionModal({
       await load();
       onChanged();
       if (result.consensusError) {
-        setError(`会话已导入，但共识提炼失败：${result.consensusError}`);
+        setError(t("会话已导入，但共识提炼失败：{{error}}", { error: result.consensusError }));
       }
       setSessionsOpen(true);
       void loadSessions();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "导入会话失败");
+      setError(err instanceof Error ? err.message : t("导入会话失败"));
     } finally {
       setBusy("");
     }
   };
 
   const doDelete = async (id: string) => {
-    if (!window.confirm("从当前文档移除这个讨论会话？不会删除原始会话文件。")) {
+    if (!window.confirm(t("从当前文档移除这个讨论会话？不会删除原始会话文件。"))) {
       return;
     }
     setBusy(id);
@@ -221,7 +224,7 @@ export function DiscussionModal({
       onChanged();
       void loadSessions();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "删除讨论失败");
+      setError(err instanceof Error ? err.message : t("删除讨论失败"));
     } finally {
       setBusy("");
     }
@@ -235,12 +238,12 @@ export function DiscussionModal({
   const effectiveActivity =
     activity ??
     (busy === "import"
-      ? { path: docPath, status: "queued" as const, message: "正在导入会话…" }
+      ? { path: docPath, status: "queued" as const, message: t("正在导入会话…") }
       : busy === "refresh"
         ? {
             path: docPath,
             status: "collecting" as const,
-            message: "正在准备刷新共识…",
+            message: t("正在准备刷新共识…"),
           }
         : undefined);
   const stage = effectiveActivity
@@ -262,24 +265,24 @@ export function DiscussionModal({
         className="modal discussion-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="讨论上下文"
+        aria-label={t("讨论上下文")}
       >
         <div className="modal-head">
           <div className="modal-title">
             <IconMessage size={17} />
-            讨论上下文
+            {t("讨论上下文")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
         <p className="discussion-hint">
-          导入之前与 Agent 的讨论，提炼成文档共识。之后评论修改会自动参考共识，你也可以在评论里额外选择具体讨论。
+          {t("导入之前与 Agent 的讨论，提炼成文档共识。之后评论修改会自动参考共识，你也可以在评论里额外选择具体讨论。")}
         </p>
 
         {error ? (
@@ -290,25 +293,25 @@ export function DiscussionModal({
 
         <section className="discussion-section">
           <div className="discussion-section-head">
-            <span>文档共识</span>
+            <span>{t("文档共识")}</span>
             <span className="discussion-section-meta">
               {data?.consensus
-                ? `v${data.consensus.version} · ${formatDate(data.consensus.updatedAt)}`
-                : "尚未生成"}
+                ? `v${data.consensus.version} · ${formatDate(data.consensus.updatedAt, i18n.language)}`
+                : t("尚未生成")}
             </span>
             <button
               type="button"
               className="btn ghost discussion-refresh"
               onClick={() => void doRefresh()}
               disabled={Boolean(busy) || discussions.length === 0}
-              title={discussions.length === 0 ? "先导入讨论会话" : "重新提炼共识"}
+              title={discussions.length === 0 ? t("先导入讨论会话") : t("重新提炼共识")}
             >
               {busy === "refresh" ? (
                 <span className="spinner" />
               ) : (
                 <IconRefresh size={12} />
               )}
-              刷新共识
+              {t("刷新共识")}
             </button>
           </div>
           {effectiveActivity ? (
@@ -347,28 +350,28 @@ export function DiscussionModal({
                           : ""
                     }
                   >
-                    {label}
+                    {t(label)}
                   </span>
                 ))}
               </div>
             </div>
           ) : null}
           {loading ? (
-            <div className="discussion-empty">正在读取…</div>
+            <div className="discussion-empty">{t("正在读取…")}</div>
           ) : data?.consensus ? (
             <pre className="discussion-consensus">{data.consensus.content}</pre>
           ) : (
             <div className="discussion-empty">
-              导入讨论后会自动提炼目标、决策、约束和待确认事项。
+              {t("导入讨论后会自动提炼目标、决策、约束和待确认事项。")}
             </div>
           )}
         </section>
 
         <section className="discussion-section">
           <div className="discussion-section-head">
-            <span>已导入讨论</span>
+            <span>{t("已导入讨论")}</span>
             <span className="discussion-section-meta">
-              {discussions.length} 个会话
+              {t("{{count}} 个会话", { count: discussions.length })}
             </span>
             <button
               type="button"
@@ -376,11 +379,11 @@ export function DiscussionModal({
               onClick={openSessions}
             >
               <IconPlus size={12} />
-              导入会话
+              {t("导入会话")}
             </button>
           </div>
           {discussions.length === 0 ? (
-            <div className="discussion-empty">还没有导入讨论会话</div>
+            <div className="discussion-empty">{t("还没有导入讨论会话")}</div>
           ) : (
             <div className="discussion-list">
               {discussions.map((item) => (
@@ -389,8 +392,10 @@ export function DiscussionModal({
                   <div className="discussion-row-main">
                     <div className="discussion-row-title">{item.title}</div>
                     <div className="discussion-row-meta">
-                      {item.agentName || item.sourceKind} · {item.messageCount} 条消息 · 导入于{" "}
-                      {formatDate(item.importedAt)}
+                      {item.agentName || item.sourceKind} ·{" "}
+                      {t("{{count}} 条消息", { count: item.messageCount })} ·{" "}
+                      {t("导入于")}{" "}
+                      {formatDate(item.importedAt, i18n.language)}
                     </div>
                     <div className="discussion-row-path">{item.sourcePath}</div>
                   </div>
@@ -399,8 +404,8 @@ export function DiscussionModal({
                     className="icon-btn small"
                     onClick={() => void doDelete(item.id)}
                     disabled={busy === item.id}
-                    title="移除讨论"
-                    aria-label="移除讨论"
+                    title={t("移除讨论")}
+                    aria-label={t("移除讨论")}
                   >
                     {busy === item.id ? (
                       <span className="spinner" />
@@ -417,16 +422,16 @@ export function DiscussionModal({
         {sessionsOpen ? (
           <section className="discussion-section discussion-sessions">
             <div className="discussion-section-head">
-              <span>检测到的 Agent</span>
+              <span>{t("检测到的 Agent")}</span>
               <span className="discussion-section-meta">
-                {agents.filter((item) => item.installed).length} 个 Agent ·{" "}
-                {sessions.length} 个会话
+                {t("{{count}} 个 Agent", { count: agents.filter((item) => item.installed).length })} ·{" "}
+                {t("{{count}} 个会话", { count: sessions.length })}
               </span>
               <button
                 type="button"
                 className="icon-btn small"
                 onClick={() => setSessionsOpen(false)}
-                aria-label="收起会话列表"
+                aria-label={t("收起会话列表")}
               >
                 <IconX size={13} />
               </button>
@@ -437,7 +442,7 @@ export function DiscussionModal({
                 className={!agentFilter ? "active" : ""}
                 onClick={() => setAgentFilter("")}
               >
-                全部
+                {t("全部")}
                 <span>{sessions.length}</span>
               </button>
               {agents.map((agent) => (
@@ -448,25 +453,25 @@ export function DiscussionModal({
                   onClick={() => setAgentFilter(agent.id)}
                   title={
                     agent.supported
-                      ? `已检测到 ${agent.count} 个 ${agent.name} 会话`
-                      : "已检测到这个 Agent，但暂未支持读取它的会话"
+                      ? t("已检测到 {{count}} 个 {{name}} 会话", { count: agent.count, name: agent.name })
+                      : t("已检测到这个 Agent，但暂未支持读取它的会话")
                   }
                 >
                   {agent.name}
                   <span>{agent.count}</span>
-                  {!agent.supported ? <em>暂未支持</em> : null}
+                  {!agent.supported ? <em>{t("暂未支持")}</em> : null}
                 </button>
               ))}
             </div>
             {sessionsLoading ? (
-              <div className="discussion-empty">正在扫描会话…</div>
+              <div className="discussion-empty">{t("正在扫描会话…")}</div>
             ) : sessionsError ? (
               <div className="discussion-empty error">{sessionsError}</div>
             ) : visibleSessions.length === 0 ? (
               <div className="discussion-empty">
                 {selectedAgent && !selectedAgent.supported
-                  ? `已检测到 ${selectedAgent.name}，但暂未支持读取它的会话`
-                  : "没有可导入的会话"}
+                  ? t("已检测到 {{name}}，但暂未支持读取它的会话", { name: selectedAgent.name })
+                  : t("没有可导入的会话")}
               </div>
             ) : (
               <div className="discussion-session-list">
@@ -476,8 +481,9 @@ export function DiscussionModal({
                     <div className="discussion-row-main">
                       <div className="discussion-row-title">{session.title}</div>
                       <div className="discussion-row-meta">
-                        {session.agentName || session.sourceKind} · {session.messageCount} 条消息 ·{" "}
-                        {formatDate(session.updatedAt)}
+                        {session.agentName || session.sourceKind} ·{" "}
+                        {t("{{count}} 条消息", { count: session.messageCount })} ·{" "}
+                        {formatDate(session.updatedAt, i18n.language)}
                       </div>
                       <div className="discussion-row-path">
                         {session.cwd || session.path}
@@ -490,10 +496,10 @@ export function DiscussionModal({
                       disabled={Boolean(busy) || session.imported}
                     >
                       {session.imported
-                        ? "已导入"
+                        ? t("已导入")
                         : busy === "import"
-                          ? "提炼中…"
-                          : "导入"}
+                          ? t("提炼中…")
+                          : t("导入")}
                     </button>
                   </div>
                 ))}
@@ -505,11 +511,11 @@ export function DiscussionModal({
         <div className="modal-actions">
           {data?.consensus ? (
             <span className="discussion-saved">
-              <IconCheck size={12} /> 评论修改会自动参考这份共识
+              <IconCheck size={12} /> {t("评论修改会自动参考这份共识")}
             </span>
           ) : null}
           <button type="button" className="btn ghost" onClick={onClose}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       </div>

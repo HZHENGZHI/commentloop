@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { IconFilePlus, IconX } from "./Icons";
 import { withMarkdownExtension } from "../utils";
 
@@ -17,6 +18,7 @@ export function NewDocModal({
   onClose,
   onCreate,
 }: NewDocModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +41,7 @@ export function NewDocModal({
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("请输入文件名");
+      setError(t("请输入文件名"));
       return;
     }
     const full = withMarkdownExtension(
@@ -53,11 +55,11 @@ export function NewDocModal({
             segment === ".." || segment === "." || segment.startsWith("."),
         )
     ) {
-      setError("文件名不能以 . 开头或包含 ..");
+      setError(t("文件名不能以 . 开头或包含 .."));
       return;
     }
     if (exists(full)) {
-      setError("同名文件已存在");
+      setError(t("同名文件已存在"));
       return;
     }
     setBusy(true);
@@ -65,7 +67,7 @@ export function NewDocModal({
     try {
       await onCreate(full);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建失败");
+      setError(err instanceof Error ? err.message : t("创建失败"));
       setBusy(false);
     }
   };
@@ -77,24 +79,24 @@ export function NewDocModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-label="新建文档">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={t("新建文档")}>
         <div className="modal-head">
           <div className="modal-title">
             <IconFilePlus size={17} />
-            新建 Markdown 文档
+            {t("新建 Markdown 文档")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
         <form onSubmit={submit}>
           <label className="modal-label" htmlFor="new-doc-name">
-            文件路径
+            {t("文件路径")}
           </label>
           <div className="modal-input-wrap">
             {displayDir ? <span className="modal-prefix">{displayDir}/</span> : null}
@@ -106,7 +108,7 @@ export function NewDocModal({
                 setName(event.target.value);
                 setError(null);
               }}
-              placeholder="未命名.md"
+              placeholder={t("未命名.md")}
               spellCheck={false}
               autoComplete="off"
             />
@@ -114,19 +116,19 @@ export function NewDocModal({
           <p className="modal-hint">
             {preview ? (
               <>
-                将创建 <code>{preview}</code>
+                {t("将创建")} <code>{preview}</code>
               </>
             ) : (
-              "可以输入子目录，如 notes/想法.md"
+              t("可以输入子目录，如 notes/想法.md")
             )}
           </p>
           {error ? <p className="modal-error">{error}</p> : null}
           <div className="modal-actions">
             <button type="button" className="btn ghost" onClick={onClose}>
-              取消
+              {t("取消")}
             </button>
             <button type="submit" className="btn primary" disabled={busy}>
-              {busy ? "创建中…" : "创建"}
+              {busy ? t("创建中…") : t("创建")}
             </button>
           </div>
         </form>

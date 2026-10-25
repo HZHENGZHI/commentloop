@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import {
   addDocCodeRepo,
   browseDirectories,
@@ -26,11 +28,11 @@ interface CodeRepoModalProps {
 function repoMeta(repo: CodeRepo): string {
   const parts: string[] = [];
   if (repo.kind === "local" && !repo.branch) {
-    return "非 Git 目录";
+    return i18n.t("非 Git 目录");
   }
   if (repo.branch) parts.push(repo.branch);
   if (repo.head) parts.push(repo.head);
-  if (repo.dirty) parts.push("有未提交改动");
+  if (repo.dirty) parts.push(i18n.t("有未提交改动"));
   return parts.join(" · ");
 }
 
@@ -40,6 +42,7 @@ export function CodeRepoModal({
   onClose,
   onChanged,
 }: CodeRepoModalProps) {
+  const { t } = useTranslation();
   const [repos, setRepos] = useState<CodeRepo[]>([]);
   const [linkedIDs, setLinkedIDs] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
@@ -70,7 +73,7 @@ export function CodeRepoModal({
       setRepos(all.repos ?? []);
       setLinkedIDs(new Set((linked.repos ?? []).map((repo) => repo.id)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取代码仓库失败");
+      setError(err instanceof Error ? err.message : t("读取代码仓库失败"));
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -96,7 +99,7 @@ export function CodeRepoModal({
       setBrowseInput(data.path);
     } catch (err) {
       if (id !== browseSeq.current) return;
-      setBrowseError(err instanceof Error ? err.message : "无法读取目录");
+      setBrowseError(err instanceof Error ? err.message : t("无法读取目录"));
     } finally {
       if (id === browseSeq.current) setBrowseLoading(false);
     }
@@ -114,9 +117,9 @@ export function CodeRepoModal({
     try {
       await addDocCodeRepo(docPath, { repoId: repo.id });
       await load();
-      onChanged(`已关联代码仓库：${repo.name}`);
+      onChanged(t("已关联代码仓库：{{name}}", { name: repo.name }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "关联代码仓库失败");
+      setError(err instanceof Error ? err.message : t("关联代码仓库失败"));
     } finally {
       setBusyID(null);
     }
@@ -128,9 +131,9 @@ export function CodeRepoModal({
     try {
       await removeDocCodeRepo(docPath, repo.id);
       await load();
-      onChanged(`已取消关联：${repo.name}`);
+      onChanged(t("已取消关联：{{name}}", { name: repo.name }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "取消关联失败");
+      setError(err instanceof Error ? err.message : t("取消关联失败"));
     } finally {
       setBusyID(null);
     }
@@ -140,7 +143,7 @@ export function CodeRepoModal({
     event.preventDefault();
     const path = pathInput.trim();
     if (!path) {
-      setError("请输入代码仓库路径");
+      setError(t("请输入代码仓库路径"));
       return;
     }
     setAddBusy(true);
@@ -150,9 +153,9 @@ export function CodeRepoModal({
       setPathInput("");
       setBrowseOpen(false);
       await load();
-      onChanged(`已关联代码仓库：${repo.name}`);
+      onChanged(t("已关联代码仓库：{{name}}", { name: repo.name }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "添加代码仓库失败");
+      setError(err instanceof Error ? err.message : t("添加代码仓库失败"));
     } finally {
       setAddBusy(false);
     }
@@ -161,7 +164,7 @@ export function CodeRepoModal({
   const addGitHub = async (event: FormEvent) => {
     event.preventDefault();
     if (!githubUrl.trim()) {
-      setError("请输入 GitHub 仓库地址");
+      setError(t("请输入 GitHub 仓库地址"));
       return;
     }
     setGithubBusy(true);
@@ -174,9 +177,9 @@ export function CodeRepoModal({
       setGithubUrl("");
       setGithubBranch("");
       await load();
-      onChanged(`已克隆并关联 GitHub 仓库：${repo.name}`);
+      onChanged(t("已克隆并关联 GitHub 仓库：{{name}}", { name: repo.name }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "克隆 GitHub 仓库失败");
+      setError(err instanceof Error ? err.message : t("克隆 GitHub 仓库失败"));
     } finally {
       setGithubBusy(false);
     }
@@ -196,25 +199,24 @@ export function CodeRepoModal({
         className="modal code-repo-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="关联代码仓库"
+        aria-label={t("关联代码仓库")}
       >
         <div className="modal-head">
           <div className="modal-title">
             <IconGitBranch size={17} />
-            关联代码仓库
+            {t("关联代码仓库")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
         <p className="code-repo-hint">
-          关联后，代码 Agent 可以通过 MCP 读取仓库文件、搜索代码和查看 Git
-          状态，用来分析并撰写这份文档。代码仓库是只读的。
+          {t("关联后，代码 Agent 可以通过 MCP 读取仓库文件、搜索代码和查看 Git 状态，用来分析并撰写这份文档。代码仓库是只读的。")}
         </p>
 
         <div className="root-tabs code-repo-tabs">
@@ -224,7 +226,7 @@ export function CodeRepoModal({
             onClick={() => setTab("local")}
           >
             <IconFolder size={13} />
-            本地目录
+            {t("本地目录")}
           </button>
           <button
             type="button"
@@ -232,17 +234,17 @@ export function CodeRepoModal({
             onClick={() => setTab("github")}
           >
             <IconGitBranch size={13} />
-            GitHub 仓库
+            {t("GitHub 仓库")}
           </button>
         </div>
 
         <div className="code-repo-section">
           <div className="code-repo-section-head">
-            <span>已关联</span>
+            <span>{t("已关联")}</span>
             <span className="code-repo-count">{linked.length}</span>
           </div>
           {linked.length === 0 ? (
-            <div className="code-repo-empty">还没有关联代码仓库</div>
+            <div className="code-repo-empty">{t("还没有关联代码仓库")}</div>
           ) : (
             <div className="code-repo-list">
               {linked.map((repo) => (
@@ -264,8 +266,8 @@ export function CodeRepoModal({
                     className="icon-btn small"
                     disabled={busyID === repo.id}
                     onClick={() => void unlink(repo)}
-                    title="取消关联"
-                    aria-label={`取消关联 ${repo.name}`}
+                    title={t("取消关联")}
+                    aria-label={t("取消关联 {{name}}", { name: repo.name })}
                   >
                     <IconX size={13} />
                   </button>
@@ -279,7 +281,7 @@ export function CodeRepoModal({
         <>
         <form className="code-repo-add" onSubmit={addPath}>
           <label className="modal-label" htmlFor="code-repo-path">
-            添加代码仓库
+            {t("添加代码仓库")}
           </label>
           <div className="code-repo-path-row">
             <input
@@ -294,14 +296,14 @@ export function CodeRepoModal({
             />
             <button type="button" className="btn ghost" onClick={openBrowser}>
               <IconFolderOpen size={14} />
-              浏览
+              {t("浏览")}
             </button>
             <button type="submit" className="btn primary" disabled={addBusy}>
-              {addBusy ? "关联中…" : "关联"}
+              {addBusy ? t("关联中…") : t("关联")}
             </button>
           </div>
           <p className="code-repo-hint small">
-            选择代码仓库根目录；支持 Git 仓库，也支持普通代码目录。
+            {t("选择代码仓库根目录；支持 Git 仓库，也支持普通代码目录。")}
           </p>
         </form>
 
@@ -315,7 +317,7 @@ export function CodeRepoModal({
                   if (browse?.parent) void loadBrowse(browse.parent, browseHidden);
                 }}
                 disabled={!browse?.parent || browseLoading}
-                title="上一级"
+                title={t("上一级")}
               >
                 <IconArrowUp size={14} />
               </button>
@@ -341,7 +343,7 @@ export function CodeRepoModal({
                     void loadBrowse(browse?.path ?? browseInput, event.target.checked);
                   }}
                 />
-                显示隐藏
+                {t("显示隐藏")}
               </label>
             </div>
             {browse?.shortcuts?.length ? (
@@ -359,7 +361,7 @@ export function CodeRepoModal({
             ) : null}
             <div className="code-browse-list">
               {browseLoading ? (
-                <div className="code-browse-empty">正在读取…</div>
+                <div className="code-browse-empty">{t("正在读取…")}</div>
               ) : browseError ? (
                 <div className="code-browse-empty error">{browseError}</div>
               ) : browse?.entries.length ? (
@@ -376,7 +378,7 @@ export function CodeRepoModal({
                   </button>
                 ))
               ) : (
-                <div className="code-browse-empty">没有子目录</div>
+                <div className="code-browse-empty">{t("没有子目录")}</div>
               )}
             </div>
             <div className="code-browse-actions">
@@ -385,7 +387,7 @@ export function CodeRepoModal({
                 className="btn ghost"
                 onClick={() => setBrowseOpen(false)}
               >
-                关闭浏览
+                {t("关闭浏览")}
               </button>
               <button
                 type="button"
@@ -397,7 +399,7 @@ export function CodeRepoModal({
                   setBrowseOpen(false);
                 }}
               >
-                选择此目录
+                {t("选择此目录")}
               </button>
             </div>
           </div>
@@ -407,7 +409,7 @@ export function CodeRepoModal({
         ) : (
           <form className="code-repo-add" onSubmit={addGitHub}>
             <label className="modal-label" htmlFor="github-repo-url">
-              GitHub 仓库
+              {t("GitHub 仓库")}
             </label>
             <div className="code-repo-path-row">
               <input
@@ -417,37 +419,36 @@ export function CodeRepoModal({
                   setGithubUrl(event.target.value);
                   setError(null);
                 }}
-                placeholder="https://github.com/owner/repo 或 git@github.com:owner/repo.git"
+                placeholder="https://github.com/owner/repo or git@github.com:owner/repo.git"
                 autoComplete="off"
               />
               <input
                 className="code-repo-branch-input"
                 value={githubBranch}
                 onChange={(event) => setGithubBranch(event.target.value)}
-                placeholder="分支（可选）"
+                placeholder={t("分支（可选）")}
                 autoComplete="off"
               />
               <button type="submit" className="btn primary" disabled={githubBusy}>
-                {githubBusy ? "克隆中…" : "克隆并关联"}
+                {githubBusy ? t("克隆中…") : t("克隆并关联")}
               </button>
             </div>
             <p className="code-repo-hint small">
-              公开仓库直接填写地址；私有仓库使用 SSH 地址（已配置 SSH key），或在本机设置
-              `GITHUB_TOKEN` / `GH_TOKEN`，或先执行 `gh auth login`。克隆为只读缓存，之后可在代码浏览里随时切换分支。
+              {t("公开仓库直接填写地址；私有仓库使用 SSH 地址（已配置 SSH key），或在本机设置 GITHUB_TOKEN / GH_TOKEN，或先执行 gh auth login。克隆为只读缓存，之后可在代码浏览里随时切换分支。")}
             </p>
           </form>
         )}
 
         <div className="code-repo-section">
           <div className="code-repo-section-head">
-            <span>可用仓库</span>
+            <span>{t("可用仓库")}</span>
             <span className="code-repo-count">{available.length}</span>
           </div>
           {loading ? (
-            <div className="code-repo-empty">正在读取…</div>
+            <div className="code-repo-empty">{t("正在读取…")}</div>
           ) : available.length === 0 ? (
             <div className="code-repo-empty">
-              {repos.length === 0 ? "还没有注册代码仓库" : "所有仓库都已关联"}
+              {repos.length === 0 ? t("还没有注册代码仓库") : t("所有仓库都已关联")}
             </div>
           ) : (
             <div className="code-repo-list">
@@ -471,7 +472,7 @@ export function CodeRepoModal({
                     disabled={busyID === repo.id}
                     onClick={() => void link(repo)}
                   >
-                    {busyID === repo.id ? "关联中…" : "关联"}
+                    {busyID === repo.id ? t("关联中…") : t("关联")}
                   </button>
                 </div>
               ))}
@@ -482,7 +483,7 @@ export function CodeRepoModal({
         {error ? <p className="modal-error">{error}</p> : null}
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>
-            关闭
+            {t("关闭")}
           </button>
         </div>
       </div>

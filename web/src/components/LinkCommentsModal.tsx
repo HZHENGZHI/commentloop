@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Comment } from "../types";
 import { IconLink, IconSearch, IconX } from "./Icons";
 
@@ -22,6 +23,7 @@ export function LinkCommentsModal({
   onClose,
   onSave,
 }: LinkCommentsModalProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,7 +99,7 @@ export function LinkCommentsModal({
       await onSave(Array.from(selected));
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存关联失败");
+      setError(err instanceof Error ? err.message : t("保存关联失败"));
       setBusy(false);
     }
   };
@@ -113,28 +115,27 @@ export function LinkCommentsModal({
         className="modal link-comments-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="关联评论"
+        aria-label={t("关联评论")}
       >
         <div className="modal-head">
           <div className="modal-title">
             <IconLink size={17} />
-            关联评论
+            {t("关联评论")}
           </div>
           <button
             type="button"
             className="icon-btn small"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("关闭")}
           >
             <IconX size={15} />
           </button>
         </div>
         <p className="link-comments-hint">
-          同组评论会作为一条关联需求交给 {agentName}：它会一起阅读、一起修改，
-          每一条都会收到本轮修改前后的记录。
+          {t("同组评论会作为一条关联需求交给 {{agent}}：它会一起阅读、一起修改，每一条都会收到本轮修改前后的记录。", { agent: agentName })}
         </p>
         <div className="link-comments-current">
-          <span>当前评论</span>
+          <span>{t("当前评论")}</span>
           <blockquote>{shortQuote(comment.quote)}</blockquote>
         </div>
         <label className="link-comments-search">
@@ -143,15 +144,15 @@ export function LinkCommentsModal({
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索评论内容或行号"
+            placeholder={t("搜索评论内容或行号")}
           />
         </label>
         <div className="link-comments-list">
           {candidates.length === 0 ? (
             <div className="link-comments-empty">
               {comments.length <= 1
-                ? "还没有其他评论可以关联"
-                : "没有匹配的评论"}
+                ? t("还没有其他评论可以关联")
+                : t("没有匹配的评论")}
             </div>
           ) : (
             candidates.map((item) => {
@@ -167,16 +168,16 @@ export function LinkCommentsModal({
                     onChange={() => toggle(item)}
                   />
                   <span className="link-comment-line">
-                    {item.line > 0 ? `第 ${item.line} 行` : "未定位"}
+                    {item.line > 0 ? t("第 {{line}} 行", { line: item.line }) : t("未定位")}
                   </span>
                   <span className="link-comment-quote">
                     {shortQuote(item.quote)}
                   </span>
                   {item.groupId ? (
-                    <span className="link-comment-group-tag">已有关联</span>
+                    <span className="link-comment-group-tag">{t("已有关联")}</span>
                   ) : null}
                   {item.resolved ? (
-                    <span className="link-comment-resolved">已解决</span>
+                    <span className="link-comment-resolved">{t("已解决")}</span>
                   ) : null}
                 </label>
               );
@@ -186,10 +187,10 @@ export function LinkCommentsModal({
         {error ? <p className="modal-error">{error}</p> : null}
         <div className="modal-actions link-comments-actions">
           <span className="link-comments-count">
-            {selected.size > 0 ? `${selected.size + 1} 条评论同组` : "未关联"}
+            {selected.size > 0 ? t("{{count}} 条评论同组", { count: selected.size + 1 }) : t("未关联")}
           </span>
           <button type="button" className="btn ghost" onClick={onClose}>
-            取消
+            {t("取消")}
           </button>
           <button
             type="button"
@@ -198,10 +199,10 @@ export function LinkCommentsModal({
             onClick={() => void save()}
           >
             {busy
-              ? "保存中…"
+              ? t("保存中…")
               : selected.size === 0
-                ? "取消关联"
-                : "保存关联"}
+                ? t("取消关联")
+                : t("保存关联")}
           </button>
         </div>
       </div>

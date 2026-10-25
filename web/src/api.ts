@@ -37,7 +37,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!res.ok) {
-    let message = `请求失败 (${res.status})`;
+    let message = `Request failed (${res.status})`;
     try {
       const body = (await res.json()) as { error?: string };
       if (body.error) message = body.error;

@@ -283,7 +283,7 @@ export default function App() {
       setTree(next);
       return next;
     } catch (error) {
-      toast(`读取文件列表失败：${errorMessage(error)}`, "error");
+      toast(i18n.t("读取文件列表失败：{{error}}", { error: errorMessage(error) }), "error");
       return null;
     }
   }, [toast]);
@@ -559,8 +559,10 @@ export default function App() {
       setCommentsNonce((value) => value + 1);
       toast(
         memberIds.length > 0
-          ? `已关联 ${memberIds.length + 1} 条评论，Code Agent 会一起处理`
-          : "已取消关联",
+          ? i18n.t("已关联 {{count}} 条评论，Code Agent 会一起处理", {
+              count: memberIds.length + 1,
+            })
+          : i18n.t("已取消关联"),
         "success",
       );
     },
@@ -579,9 +581,12 @@ export default function App() {
         toast(i18n.t("当前没有打开的文档"), "error");
         return;
       }
-      const sideLabel = side === "before" ? "前" : "后";
+      const sideLabel = side === "before" ? i18n.t("前") : i18n.t("后");
       const confirmed = window.confirm(
-        `只把这个评论对应的段落恢复为「第 ${round} 次修改${sideLabel}」的内容？\n\n其他位置的修改会保留。`,
+        i18n.t(
+          "只把这个评论对应的段落恢复为「第 {{round}} 次修改{{side}}」的内容？\n\n其他位置的修改会保留。",
+          { round, side: sideLabel },
+        ),
       );
       if (!confirmed) return;
       try {
@@ -592,11 +597,14 @@ export default function App() {
         }
         setCommentsNonce((value) => value + 1);
         toast(
-          `已局部回滚到第 ${result.round} 次修改${sideLabel}的段落，等待你的确认`,
+          i18n.t("已局部回滚到第 {{round}} 次修改{{side}}的段落，等待你的确认", {
+            round: result.round,
+            side: sideLabel,
+          }),
           "success",
         );
       } catch (error) {
-        toast(`回滚失败：${errorMessage(error)}`, "error");
+        toast(i18n.t("回滚失败：{{error}}", { error: errorMessage(error) }), "error");
       }
     },
     [applySavedDoc, toast],
@@ -733,7 +741,7 @@ export default function App() {
       setAddRootOpen(false);
       if (!currentPathRef.current) initialPickRef.current = false;
       await refreshTree();
-      toast(`已添加目录 “${result.root.name}”`, "success");
+      toast(i18n.t("已添加目录 “{{name}}”", { name: result.root.name }), "success");
       if (result.warning) toast(result.warning, "warn");
     },
     [refreshTree, toast],
@@ -761,7 +769,9 @@ export default function App() {
       if (removingRoot) return;
       if (
         !window.confirm(
-          `从工作区移除目录 “${root.name}”？\n不会删除磁盘上的文件。`,
+          i18n.t("从工作区移除目录 “{{name}}”？\n不会删除磁盘上的文件。", {
+            name: root.name,
+          }),
         )
       ) {
         return;
@@ -783,7 +793,9 @@ export default function App() {
             initialPickRef.current = false;
             setRemovingRoot(null);
             toast(
-              `当前文档保存失败，已取消移除目录：${errorMessage(error)}`,
+              i18n.t("当前文档保存失败，已取消移除目录：{{error}}", {
+                error: errorMessage(error),
+              }),
               "error",
             );
             return;
@@ -959,7 +971,7 @@ export default function App() {
             applySavedDoc(incomingContent, incomingHtml);
           } else if (incomingContent !== savedContentRef.current) {
             toast(
-              "另一个窗口保存了不同内容；本地改动会在自动保存后覆盖",
+              i18n.t("另一个窗口保存了不同内容；本地改动会在自动保存后覆盖"),
               "warn",
             );
           }
@@ -1061,7 +1073,7 @@ export default function App() {
           });
           if (status === "queued" || status === "done" || status === "error") {
             toast(
-              message.message || "后台 Agent 状态更新",
+              message.message || i18n.t("后台 Agent 状态更新"),
               status === "error" ? "error" : status === "done" ? "success" : "info",
             );
           }
@@ -1774,7 +1786,7 @@ export default function App() {
               title={roots.map((root) => root.path).join("\n")}
             >
               {roots.length
-                ? `${roots.length} 个目录`
+                ? t("{{count}} 个目录", { count: roots.length })
                 : (config?.root ?? "")}
             </span>
           )}
@@ -2072,11 +2084,11 @@ function Welcome({
         {typeof navigator !== "undefined" &&
         /Mac|iPhone|iPad/i.test(navigator.platform)
           ? readOnly
-            ? "⌘B 侧边栏 · 文件变化自动更新"
-            : "⌘S 保存 · ⌘B 侧边栏 · ⌘\\ 切换视图"
+            ? t("⌘B 侧边栏 · 文件变化自动更新")
+            : t("⌘S 保存 · ⌘B 侧边栏 · ⌘\\ 切换视图")
           : readOnly
-            ? "Ctrl+B 侧边栏 · 文件变化自动更新"
-            : "Ctrl+S 保存 · Ctrl+B 侧边栏 · Ctrl+\\ 切换视图"}
+            ? t("Ctrl+B 侧边栏 · 文件变化自动更新")
+            : t("Ctrl+S 保存 · Ctrl+B 侧边栏 · Ctrl+\\ 切换视图")}
       </span>
     </div>
   );

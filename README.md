@@ -8,6 +8,8 @@ Commentloop is a local-first review loop for Markdown documents and AI agents.
 
 You read, comment, and review in the browser. Your agent edits through MCP or the CLI. Comments, before/after changes, consensus, and rollbacks stay attached to the same Markdown file.
 
+The interface follows your browser language (English or 简体中文); use the **EN / 中** button in the top bar to switch at any time.
+
 ```text
 comment → agent edit → human review → reply / rollback → updated document
 ```
