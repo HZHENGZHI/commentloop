@@ -317,6 +317,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get("X-Mdlive-Agent-Token")
 			tool := r.Header.Get("X-Mdlive-MCP-Tool")
 			s.agentJobs.audit(grant.JobID, token, tool, r.Method, r.URL.Path, true, "")
+			if tool != "" && grant.DocPath != "" {
+				s.broadcastAgent(grant.DocPath, "working", agentToolProgress(tool))
+			}
 		}
 		return
 	}

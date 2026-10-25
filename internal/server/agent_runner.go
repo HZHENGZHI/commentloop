@@ -710,6 +710,9 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 			fmt.Fprintf(&b, "- id=%s name=%s path=%s\n", repo.ID, repo.Name, repo.Path)
 		}
 	}
+	b.WriteString("\nTask capabilities:\n")
+	fmt.Fprintf(&b, "- read_docs: yes\n- read_code: %s\n- reply_comments: %s\n- write_docs: %s\n",
+		yesNo(allowCodeRead), yesNo(allowCommentReply), yesNo(hasTemplate && template.AllowDocumentEdit))
 	b.WriteString("\nInstructions:\n")
 	b.WriteString("1. Use mdlive MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
 	b.WriteString("2. Read the document and the full comment thread with read_file/list_comments.\n")
@@ -740,6 +743,13 @@ func linkedRepoIDs(repos []codeRepoRecord) []string {
 		out = append(out, repo.ID)
 	}
 	return out
+}
+
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
 }
 
 func lastUserMessage(comment Comment) string {

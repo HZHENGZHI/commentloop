@@ -189,6 +189,23 @@ func (s *Server) recordAgentDenial(r *http.Request, message string) {
 	s.agentJobs.audit(jobID, token, r.Header.Get("X-Mdlive-MCP-Tool"), r.Method, r.URL.Path, false, message)
 }
 
+func agentToolProgress(tool string) string {
+	switch tool {
+	case "read_file", "list_comments":
+		return "Agent 正在读取文档和评论…"
+	case "write_file":
+		return "Agent 正在写入文档…"
+	case "reply_comment":
+		return "Agent 正在回复评论…"
+	case "read_code", "search_code", "list_code_files", "list_code_repos", "code_repo_info":
+		return "Agent 正在读取代码…"
+	case "list_files", "search_files", "changes", "workspace_info":
+		return "Agent 正在检查工作区…"
+	default:
+		return "Agent 正在使用 " + tool + "…"
+	}
+}
+
 func (s *Server) rejectAgentWrite(w http.ResponseWriter, r *http.Request) bool {
 	return s.rejectAgentCapability(w, r, func(c agentCapabilities) bool { return c.WriteDocs }, "当前任务模板不允许修改文档")
 }
