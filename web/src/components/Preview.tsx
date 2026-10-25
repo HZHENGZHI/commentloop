@@ -112,11 +112,11 @@ export function Preview({
         css.highlights?.delete(name);
       }
     };
-    apply("mdlive-comment-open", openRanges);
-    apply("mdlive-comment-resolved", resolvedRanges);
+    apply("commentloop-comment-open", openRanges);
+    apply("commentloop-comment-resolved", resolvedRanges);
     return () => {
-      css.highlights?.delete("mdlive-comment-open");
-      css.highlights?.delete("mdlive-comment-resolved");
+      css.highlights?.delete("commentloop-comment-open");
+      css.highlights?.delete("commentloop-comment-resolved");
     };
   }, [html, comments, currentPath]);
 
@@ -155,11 +155,11 @@ export function Preview({
 
     // Add copy buttons to highlighted code blocks.
     article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
-      if (pre.querySelector(":scope > .mdlive-copy")) return;
-      pre.classList.add("mdlive-pre");
+      if (pre.querySelector(":scope > .commentloop-copy")) return;
+      pre.classList.add("commentloop-pre");
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "mdlive-copy";
+      button.className = "commentloop-copy";
       button.textContent = "复制";
       button.addEventListener("click", (event) => {
         event.preventDefault();

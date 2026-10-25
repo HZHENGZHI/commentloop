@@ -38,7 +38,7 @@ type Renderer struct {
 
 var docPathKey = parser.NewContextKey()
 
-// New builds a renderer configured for mdlive's preview.
+// New builds a renderer configured for commentloop's preview.
 func New() *Renderer {
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -104,7 +104,7 @@ func (r *Renderer) HighlightCSS(theme string) string {
 	if err := formatter.WriteCSS(&buf, style); err != nil {
 		return ""
 	}
-	css := buf.String() + "\n/* mdlive: let the preview surface show through */\n" +
+	css := buf.String() + "\n/* commentloop: let the preview surface show through */\n" +
 		"pre.chroma, .chroma { background: transparent !important; }\n"
 	r.css.Store(styleName, css)
 	return css

@@ -123,11 +123,11 @@ func (s *agentCapabilityStore) lookupGrant(session string) (agentGrant, bool) {
 }
 
 func (s *Server) agentGrantForRequest(r *http.Request) (agentGrant, bool) {
-	if token := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Token")); token != "" {
+	if token := strings.TrimSpace(r.Header.Get("X-Commentloop-Agent-Token")); token != "" {
 		grant, ok := s.agentCaps.lookupToken(token)
 		return grant, ok
 	}
-	session := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Session"))
+	session := strings.TrimSpace(r.Header.Get("X-Commentloop-Agent-Session"))
 	if session == "" {
 		return agentGrant{}, false
 	}
@@ -139,7 +139,7 @@ func (s *Server) agentGrantForRequest(r *http.Request) (agentGrant, bool) {
 }
 
 func (s *Server) agentTokenInvalid(r *http.Request) bool {
-	token := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Token"))
+	token := strings.TrimSpace(r.Header.Get("X-Commentloop-Agent-Token"))
 	if token == "" {
 		return false
 	}
@@ -201,8 +201,8 @@ func (s *Server) recordAgentDenial(r *http.Request, message string) {
 	jobID := ""
 	grant, _ := s.agentGrantForRequest(r)
 	jobID = grant.JobID
-	token := strings.TrimSpace(r.Header.Get("X-Mdlive-Agent-Token"))
-	s.agentJobs.audit(jobID, token, r.Header.Get("X-Mdlive-MCP-Tool"), r.Method, r.URL.Path, false, message)
+	token := strings.TrimSpace(r.Header.Get("X-Commentloop-Agent-Token"))
+	s.agentJobs.audit(jobID, token, r.Header.Get("X-Commentloop-MCP-Tool"), r.Method, r.URL.Path, false, message)
 }
 
 func inferAgentTool(method, path string) string {

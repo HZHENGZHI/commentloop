@@ -75,7 +75,7 @@ func (s *Server) sessionRootSpecs() []sessionRoot {
 	}
 	home, _ := os.UserHomeDir()
 	if s.stateDir != "" {
-		add(filepath.Join(s.stateDir, "pi-sessions"), "pi", "mdlive")
+		add(filepath.Join(s.stateDir, "pi-sessions"), "pi", "commentloop")
 	}
 	piHome := os.Getenv("PI_CODING_AGENT_DIR")
 	if piHome == "" {
@@ -470,7 +470,7 @@ func isHumanPrompt(body string) bool {
 	if body == "" {
 		return false
 	}
-	if strings.HasPrefix(body, "You are the background Code Agent for mdlive.") {
+	if strings.HasPrefix(body, "You are the background Code Agent for commentloop.") {
 		return false
 	}
 	if strings.HasPrefix(body, "<") {

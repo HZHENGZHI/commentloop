@@ -83,7 +83,7 @@ function textNodes(root: HTMLElement): { node: Text; start: number; end: number 
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent) return NodeFilter.FILTER_REJECT;
-      if (parent.closest(".mdlive-copy")) return NodeFilter.FILTER_REJECT;
+      if (parent.closest(".commentloop-copy")) return NodeFilter.FILTER_REJECT;
       if (parent.closest("script,style")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },

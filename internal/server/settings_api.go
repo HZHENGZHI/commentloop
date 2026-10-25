@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {

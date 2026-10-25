@@ -312,7 +312,7 @@ export interface Discussion {
   id: string;
   title: string;
   sourcePath: string;
-  sourceKind: "mdlive" | "pi" | "claude" | "codex" | string;
+  sourceKind: "commentloop" | "pi" | "claude" | "codex" | string;
   agent: string;
   agentName: string;
   cwd?: string;
@@ -352,7 +352,7 @@ export interface DiscussionListResponse {
 export interface DiscussionSession {
   path: string;
   title: string;
-  sourceKind: "mdlive" | "pi" | "claude" | "codex" | string;
+  sourceKind: "commentloop" | "pi" | "claude" | "codex" | string;
   agent: string;
   agentName: string;
   cwd?: string;

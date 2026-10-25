@@ -1,4 +1,4 @@
-// Package agentmcp exposes mdlive's local/remote Markdown workspace as an MCP
+// Package agentmcp exposes commentloop's local/remote Markdown workspace as an MCP
 // stdio server for coding agents.
 package agentmcp
 
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/agentclient"
+	"github.com/hzhengzhi/commentloop/internal/agentclient"
 )
 
 const protocolVersion = "2024-11-05"
@@ -62,9 +62,9 @@ type toolDef struct {
 }
 
 func Run(args []string, version string) error {
-	fs := flag.NewFlagSet("mdlive mcp", flag.ContinueOnError)
+	fs := flag.NewFlagSet("commentloop mcp", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "mdlive server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
+	urlFlag := fs.String("url", "", "commentloop server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func Run(args []string, version string) error {
 		client:      agentclient.New(agentclient.DefaultURL(*urlFlag)),
 		explicitURL: *urlFlag,
 	}
-	fmt.Fprintf(os.Stderr, "mdlive mcp: connecting to %s\n", s.client.BaseURL())
+	fmt.Fprintf(os.Stderr, "commentloop mcp: connecting to %s\n", s.client.BaseURL())
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 64*1024), 20*1024*1024)
@@ -86,7 +86,7 @@ func Run(args []string, version string) error {
 		}
 		var req request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			fmt.Fprintf(os.Stderr, "mdlive mcp: invalid JSON: %v\n", err)
+			fmt.Fprintf(os.Stderr, "commentloop mcp: invalid JSON: %v\n", err)
 			continue
 		}
 		if req.Method == "" {
@@ -117,8 +117,8 @@ func (s *server) handle(req request, version string) (any, *rpcError) {
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
-			"serverInfo": map[string]any{"name": "mdlive", "version": version},
-			"instructions": "mdlive exposes the Markdown workspace currently open in the mdlive app, " +
+			"serverInfo": map[string]any{"name": "commentloop", "version": version},
+			"instructions": "commentloop exposes the Markdown workspace currently open in the commentloop app, " +
 				"including local and SSH/SFTP remote roots. Use list_files to discover canonical paths, " +
 				"read_file to read, and write_file to create or overwrite. Remote changes are cached; " +
 				"set refresh=true to force a remote rescan. When editing in response to review comments, " +
@@ -171,12 +171,12 @@ func tools() []toolDef {
 	return []toolDef{
 		{
 			Name:        "workspace_info",
-			Description: "Show mdlive server URL, mode, and the local/remote roots in the current workspace.",
+			Description: "Show commentloop server URL, mode, and the local/remote roots in the current workspace.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 		},
 		{
 			Name:        "list_files",
-			Description: "List Markdown files in the mdlive workspace. Paths returned as canonical <rootID>/<relPath> can be passed to read_file/write_file. Remote tree data can be stale; set refresh=true to rescan remote roots.",
+			Description: "List Markdown files in the commentloop workspace. Paths returned as canonical <rootID>/<relPath> can be passed to read_file/write_file. Remote tree data can be stale; set refresh=true to rescan remote roots.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -212,7 +212,7 @@ func tools() []toolDef {
 		},
 		{
 			Name:        "write_file",
-			Description: "Create or overwrite a Markdown file in the current workspace, including remote SFTP roots. The mdlive preview updates and the file is written to disk. Use a canonical path or <rootName>/<relPath>. For related comments (same groupId), make one coordinated edit and pass all group comment IDs in comment_ids. Replies made through comment_ids automatically store a full-document snapshot for user rollback.",
+			Description: "Create or overwrite a Markdown file in the current workspace, including remote SFTP roots. The commentloop preview updates and the file is written to disk. Use a canonical path or <rootName>/<relPath>. For related comments (same groupId), make one coordinated edit and pass all group comment IDs in comment_ids. Replies made through comment_ids automatically store a full-document snapshot for user rollback.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -330,7 +330,7 @@ func tools() []toolDef {
 func (s *server) callTool(params toolCallParams) toolResult {
 	s.client.SetTool(params.Name)
 	defer s.client.SetTool("")
-	// Re-read the discovery file so a restarted mdlive (possibly on another
+	// Re-read the discovery file so a restarted commentloop (possibly on another
 	// port) is picked up without restarting the MCP server.
 	s.client = agentclient.New(agentclient.DefaultURL(s.explicitURL))
 	args := map[string]any{}

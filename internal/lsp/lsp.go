@@ -206,7 +206,7 @@ func startClient(root string, spec ServerConfig) (*client, error) {
 	defer cancel()
 	params := map[string]any{
 		"processId":  os.Getpid(),
-		"clientInfo": map[string]any{"name": "mdlive"},
+		"clientInfo": map[string]any{"name": "commentloop"},
 		"rootUri":    fileURI(root),
 		"rootPath":   root,
 		"workspaceFolders": []map[string]string{{

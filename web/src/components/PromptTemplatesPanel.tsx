@@ -182,7 +182,7 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
     <div className="settings-body prompt-templates-panel">
       <div className="settings-intro">
         为不同场景配置 Agent 的任务模板。模板只描述任务，MCP 工具规则、不能 resolve
-        评论等底层约束仍由 mdlive 强制附加。
+        评论等底层约束仍由 commentloop 强制附加。
       </div>
       <div className="prompt-template-layout">
         <div className="prompt-template-sidebar">

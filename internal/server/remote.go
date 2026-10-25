@@ -18,7 +18,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"mdlive/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/ignore"
 )
 
 const (
@@ -388,7 +388,7 @@ func (r *remoteFS) write(rel string, data []byte) error {
 	if info, err := r.sftp.Stat(full); err == nil {
 		mode = info.Mode().Perm()
 	}
-	tmp := path.Join(dir, fmt.Sprintf(".mdlive-%d", time.Now().UnixNano()))
+	tmp := path.Join(dir, fmt.Sprintf(".commentloop-%d", time.Now().UnixNano()))
 	f, err := r.sftp.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
 		return r.opError(err)

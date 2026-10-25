@@ -474,7 +474,7 @@ export function AddRootModal({
             </div>
 
             <p className="modal-hint browser-hint">
-              选择目录后，mdlive 会递归读取其中的 Markdown 并监听外部修改。
+              选择目录后，commentloop 会递归读取其中的 Markdown 并监听外部修改。
               当前工作区已有 {roots.length} 个目录。
             </p>
             {error ? <p className="modal-error">{error}</p> : null}

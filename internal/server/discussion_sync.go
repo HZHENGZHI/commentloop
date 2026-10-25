@@ -70,7 +70,7 @@ func (s *discussionSyncService) syncAll() {
 		if err := s.srv.discussions.updateSessionMessages(
 			item.ID, item.DocPath, parsed, item.SourcePath, item.SourceKind, item.Agent, mtime, size,
 		); err != nil {
-			log.Printf("mdlive: sync discussion %s: %v", item.ID, err)
+			log.Printf("commentloop: sync discussion %s: %v", item.ID, err)
 			continue
 		}
 		changedDocs[item.DocPath] = true

@@ -1,4 +1,4 @@
-// Package server implements mdlive's HTTP API, live preview WebSocket and
+// Package server implements commentloop's HTTP API, live preview WebSocket and
 // static frontend hosting.
 package server
 
@@ -19,10 +19,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"mdlive/internal/ignore"
-	"mdlive/internal/lsp"
-	"mdlive/internal/render"
-	"mdlive/internal/watcher"
+	"github.com/hzhengzhi/commentloop/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/render"
+	"github.com/hzhengzhi/commentloop/internal/watcher"
 )
 
 // Options configures a Server.
@@ -41,7 +41,7 @@ type Options struct {
 	// server is intentionally bound to a non-loopback interface.
 	AllowRemote bool
 	// PreviewOnly hides the editor and blocks frontend saves/deletes. Agent
-	// CLI/MCP writes marked with X-Mdlive-Agent and review rollbacks remain
+	// CLI/MCP writes marked with X-Commentloop-Agent and review rollbacks remain
 	// available so the frontend can be a review surface.
 	PreviewOnly bool
 	// Debug enables asset hot reload (used together with WebDir).
@@ -50,7 +50,7 @@ type Options struct {
 	WebDir string
 }
 
-// Server is the mdlive HTTP application.
+// Server is the commentloop HTTP application.
 type Server struct {
 	primaryPath string
 	web         fs.FS
@@ -178,8 +178,8 @@ func New(opts Options) (*Server, error) {
 }
 
 // Close stops background work.
-// SetAgentBaseURL tells automatically spawned agents which mdlive instance to
-// connect to through MDLIVE_URL, even when multiple instances are running.
+// SetAgentBaseURL tells automatically spawned agents which commentloop instance to
+// connect to through COMMENTLOOP_URL, even when multiple instances are running.
 func (s *Server) SetAgentBaseURL(baseURL string) {
 	s.agentBaseURL = strings.TrimSpace(baseURL)
 }
@@ -320,8 +320,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		aw := &auditResponseWriter{ResponseWriter: w, status: http.StatusOK}
 		s.mux.ServeHTTP(aw, r)
 		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {
-			token := r.Header.Get("X-Mdlive-Agent-Token")
-			tool := r.Header.Get("X-Mdlive-MCP-Tool")
+			token := r.Header.Get("X-Commentloop-Agent-Token")
+			tool := r.Header.Get("X-Commentloop-MCP-Tool")
 			if tool == "" {
 				tool = inferAgentTool(r.Method, r.URL.Path)
 			}

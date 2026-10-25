@@ -526,7 +526,7 @@ func piSessionTitle(body string) string {
 	if isHumanPrompt(body) {
 		return sessionTitle(body)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(body), "You are the background Code Agent for mdlive.") {
+	if !strings.HasPrefix(strings.TrimSpace(body), "You are the background Code Agent for commentloop.") {
 		return ""
 	}
 	doc := ""

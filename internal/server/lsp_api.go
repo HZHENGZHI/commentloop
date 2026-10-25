@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/coderepo"
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/coderepo"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 type lspDefinitionRequest struct {

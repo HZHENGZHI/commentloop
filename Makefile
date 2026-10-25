@@ -18,19 +18,19 @@ web-build: web/node_modules/.package-lock.json
 
 build: web-build
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive .
+	CGO_ENABLED=0 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/commentloop .
 
 run: build
-	./$(BIN_DIR)/mdlive run
+	./$(BIN_DIR)/commentloop run
 
 start: build
-	./$(BIN_DIR)/mdlive start
+	./$(BIN_DIR)/commentloop start
 
 stop:
-	./$(BIN_DIR)/mdlive stop
+	./$(BIN_DIR)/commentloop stop
 
 status:
-	./$(BIN_DIR)/mdlive status
+	./$(BIN_DIR)/commentloop status
 
 # Two terminals: backend here, `make dev-web` in another.
 DEV_FLAGS ?= --dev
@@ -71,10 +71,10 @@ tidy:
 
 cross: web-build
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive-darwin-arm64 .
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive-darwin-amd64 .
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive-linux-arm64 .
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/mdlive-linux-amd64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/commentloop-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/commentloop-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/commentloop-linux-arm64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/commentloop-linux-amd64 .
 
 clean:
 	rm -rf $(BIN_DIR) web/dist

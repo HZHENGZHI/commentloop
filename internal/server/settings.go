@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 type codeAgentSettings struct {

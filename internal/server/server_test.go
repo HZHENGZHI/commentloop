@@ -18,14 +18,14 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"mdlive/internal/coderepo"
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/coderepo"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 func mapFS() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":    &fstest.MapFile{Data: []byte("<!doctype html><title>mdlive test</title>")},
-		"assets/app.js": &fstest.MapFile{Data: []byte("console.log('mdlive')")},
+		"index.html":    &fstest.MapFile{Data: []byte("<!doctype html><title>commentloop test</title>")},
+		"assets/app.js": &fstest.MapFile{Data: []byte("console.log('commentloop')")},
 	}
 }
 
@@ -294,11 +294,11 @@ func TestStaticAndConfig(t *testing.T) {
 	app, _ := newTestApp(t)
 
 	rec := doJSON(t, app, http.MethodGet, "/", nil)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "mdlive test") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "commentloop test") {
 		t.Fatalf("index status = %d body=%q", rec.Code, rec.Body)
 	}
 	rec = doJSON(t, app, http.MethodGet, "/some/client/route", nil)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "mdlive test") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "commentloop test") {
 		t.Fatalf("spa fallback status = %d body=%q", rec.Code, rec.Body)
 	}
 	rec = doJSON(t, app, http.MethodGet, "/api/config", nil)
@@ -724,12 +724,12 @@ func TestAgentJobQueueTokenAndPathACL(t *testing.T) {
 	if claimed.ID != job.ID || claimed.Token == "" {
 		t.Fatalf("claimed = %+v", claimed)
 	}
-	headers := map[string]string{"X-Mdlive-Agent-Token": claimed.Token, "X-Mdlive-Agent": "1"}
+	headers := map[string]string{"X-Commentloop-Agent-Token": claimed.Token, "X-Commentloop-Agent": "1"}
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: docPath, Content: "# changed"}, headers)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("current doc write status=%d body=%s", rec.Code, rec.Body)
 	}
-	invalidHeaders := map[string]string{"X-Mdlive-Agent-Token": "job_invalid", "X-Mdlive-Agent": "1"}
+	invalidHeaders := map[string]string{"X-Commentloop-Agent-Token": "job_invalid", "X-Commentloop-Agent": "1"}
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: docPath, Content: "# invalid"}, invalidHeaders)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("invalid token write status=%d body=%s", rec.Code, rec.Body)
@@ -763,8 +763,8 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 	t.Cleanup(func() { _ = app.Close() })
 	path := canonical(app, "doc.md")
 	headers := map[string]string{
-		"X-Mdlive-Agent":         "1",
-		"X-Mdlive-Agent-Session": "session-analysis",
+		"X-Commentloop-Agent":         "1",
+		"X-Commentloop-Agent-Session": "session-analysis",
 	}
 	app.agentCaps.set("session-analysis", agentCapabilities{
 		WriteDocs: false, ReadCode: true, ReplyComments: true,
@@ -798,7 +798,7 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 	// An external Agent CLI without the managed session header keeps its
 	// existing permission behavior.
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# manual"}, map[string]string{
-		"X-Mdlive-Agent": "1",
+		"X-Commentloop-Agent": "1",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("manual agent PUT status=%d body=%s", rec.Code, rec.Body)
@@ -953,7 +953,7 @@ func TestDiscussionImportAndCommentContext(t *testing.T) {
 	if imported.Discussion.MessageCount != 2 {
 		t.Fatalf("discussion = %+v", imported.Discussion)
 	}
-	if imported.Discussion.SourceKind != "mdlive" {
+	if imported.Discussion.SourceKind != "commentloop" {
 		t.Fatalf("source kind = %q", imported.Discussion.SourceKind)
 	}
 	rec = doJSON(t, app, http.MethodGet, "/api/doc/discussions/available?path="+url.QueryEscape(path), nil)
@@ -1272,7 +1272,7 @@ func TestPreviewAllowsAgentWritesAndRollback(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = app.Close() })
 	path := canonical(app, "review.md")
-	agentHeaders := map[string]string{"X-Mdlive-Agent": "1"}
+	agentHeaders := map[string]string{"X-Commentloop-Agent": "1"}
 
 	v1 := "# Review\n\nAgent first."
 	rec := doJSONHeaders(t, app, http.MethodPut, "/api/doc",
@@ -1733,7 +1733,7 @@ func TestRootStateV1Migration(t *testing.T) {
 	if len(defs) != 2 || defs[1].Kind != rootKindLocal {
 		t.Fatalf("migrated roots = %+v", defs)
 	}
-	if _, err := os.Stat(filepath.Join(stateDir, "mdlive.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(stateDir, "commentloop.db")); err != nil {
 		t.Fatalf("sqlite database missing: %v", err)
 	}
 }
@@ -1845,7 +1845,7 @@ func TestCommentsSQLitePersistence(t *testing.T) {
 	if err := app.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(stateDir, "mdlive.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(stateDir, "commentloop.db")); err != nil {
 		t.Fatalf("sqlite db missing: %v", err)
 	}
 

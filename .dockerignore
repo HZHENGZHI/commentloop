@@ -1,5 +1,5 @@
 *
 !Dockerfile
 !bin
-!bin/mdlive-linux-arm64
-!bin/mdlive-linux-amd64
+!bin/commentloop-linux-arm64
+!bin/commentloop-linux-amd64

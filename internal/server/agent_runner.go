@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 type reviewAgentJob struct {
@@ -152,7 +152,7 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 	if err := proc.runPrompt(job.Prompt, 15*time.Minute, progress); err != nil {
 		r.dropProcess(proc)
 		r.srv.broadcastAgent(job.Path, "error", fmt.Sprintf("%s 处理失败：%v", agent.Name, err))
-		log.Printf("mdlive: pi agent: %v", err)
+		log.Printf("commentloop: pi agent: %v", err)
 		return
 	}
 	r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))
@@ -380,10 +380,10 @@ func startPiRPC(command string, args []string, cwd, baseURL, agentSessionID stri
 		cmd.Dir = cwd
 	}
 	if baseURL != "" {
-		cmd.Env = append(os.Environ(), "MDLIVE_URL="+baseURL)
+		cmd.Env = append(os.Environ(), "COMMENTLOOP_URL="+baseURL)
 	}
 	if agentSessionID != "" {
-		cmd.Env = append(cmd.Env, "MDLIVE_AGENT_SESSION="+agentSessionID)
+		cmd.Env = append(cmd.Env, "COMMENTLOOP_AGENT_SESSION="+agentSessionID)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -448,7 +448,7 @@ func (p *piRPC) writeJSON(value any) error {
 
 func (p *piRPC) runPrompt(prompt string, timeout time.Duration, progress func(string)) error {
 	p.promptID++
-	id := fmt.Sprintf("mdlive-review-%d", p.promptID)
+	id := fmt.Sprintf("commentloop-review-%d", p.promptID)
 	if err := p.writeJSON(map[string]any{
 		"id": id, "type": "prompt", "message": prompt,
 	}); err != nil {
@@ -677,7 +677,7 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	}
 	templateVars["code_repos"] = strings.TrimSpace(repoText.String())
 	var b strings.Builder
-	b.WriteString("You are the background Code Agent for mdlive. The user just submitted or updated a review comment. Act on it now via the mdlive MCP server.\n\n")
+	b.WriteString("You are the background Code Agent for commentloop. The user just submitted or updated a review comment. Act on it now via the commentloop MCP server.\n\n")
 	b.WriteString("Document: " + path + "\n")
 	b.WriteString("Comment ID: " + comment.ID + "\n")
 	if len(groupIDs) > 1 {
@@ -714,7 +714,7 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 	fmt.Fprintf(&b, "- read_docs: yes\n- read_code: %s\n- reply_comments: %s\n- write_docs: %s\n",
 		yesNo(allowCodeRead), yesNo(allowCommentReply), yesNo(hasTemplate && template.AllowDocumentEdit))
 	b.WriteString("\nInstructions:\n")
-	b.WriteString("1. Use mdlive MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
+	b.WriteString("1. Use commentloop MCP tools only. Do NOT run bash, find, grep, or local filesystem tools to locate the document or repository. The canonical document path below is directly readable through MCP read_file.\n")
 	b.WriteString("2. Read the document and the full comment thread with read_file/list_comments.\n")
 	if allowCodeRead {
 		b.WriteString("3. If code repositories are linked, inspect relevant code with list_code_files/search_code/read_code and consider Git state. Do not modify code.\n")

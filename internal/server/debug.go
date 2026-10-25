@@ -22,16 +22,16 @@ const assetPollInterval = 400 * time.Millisecond
 func (s *Server) configureDiskAssets(dir string) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		log.Printf("mdlive: debug: invalid web dir %q: %v", dir, err)
+		log.Printf("commentloop: debug: invalid web dir %q: %v", dir, err)
 		return
 	}
 	index := filepath.Join(abs, "index.html")
 	if info, err := os.Stat(index); err != nil || info.IsDir() {
-		log.Printf("mdlive: debug: %s 不存在，回退到内嵌前端（热更新不可用）", index)
+		log.Printf("commentloop: debug: %s 不存在，回退到内嵌前端（热更新不可用）", index)
 		return
 	}
 	s.webDir = abs
-	log.Printf("mdlive: debug: 从磁盘加载前端 %s", abs)
+	log.Printf("commentloop: debug: 从磁盘加载前端 %s", abs)
 }
 
 // startAssetPoll compares index.html between ticks. Vite writes index.html
@@ -60,7 +60,7 @@ func (s *Server) startAssetPoll() {
 					continue
 				}
 				if last != "" && sig != last {
-					log.Printf("mdlive: debug: 前端资源已更新，通知浏览器刷新")
+					log.Printf("commentloop: debug: 前端资源已更新，通知浏览器刷新")
 					s.hub.broadcast(outMessage{Type: "reload", Message: "frontend assets changed"})
 				}
 				last = sig
@@ -153,13 +153,13 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, p, modTime, bytes.NewReader(data))
 }
 
-// rejectReadOnly blocks frontend document writes when mdlive runs in review
+// rejectReadOnly blocks frontend document writes when commentloop runs in review
 // mode. Requests marked by the Agent CLI/MCP are allowed through.
 func (s *Server) rejectReadOnly(w http.ResponseWriter, r *http.Request) bool {
 	if !s.previewOnly {
 		return false
 	}
-	if r != nil && r.Header.Get("X-Mdlive-Agent") == "1" {
+	if r != nil && r.Header.Get("X-Commentloop-Agent") == "1" {
 		return false
 	}
 	writeJSON(w, http.StatusForbidden, map[string]string{"error": "审阅模式下前台不能修改文件；后台 Agent 使用 MCP/CLI 写入"})

@@ -1,8 +1,8 @@
-# mdlive
+# Commentloop
 
-本地优先的 Markdown 审阅工作区：**Go 后端 + React 前端**，编译后是单个可执行文件，macOS 与 Linux 通用。
+本地优先的 AI 协作审阅循环：**Go 后端 + React 前端**，编译后是单个可执行文件，macOS 与 Linux 通用。评论、Agent 修改、审阅、共识和回滚都围绕同一份文档发生。
 
-mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和回滚；文档由后台 Agent 通过 MCP/CLI 写入。服务只监听本机回环地址，文件读写、Markdown 渲染、文件监听全部由 Go 进程完成。一个工作区可以同时添加多个分散在不同位置的目录，运行时也能随时新增 / 移除。前端静态资源通过 `go:embed` 打进二进制，所以分发时不需要 Node.js，也不需要拷贝 `web/dist`。
+Commentloop 不提供浏览器内编辑。前台只负责阅读、评论、审阅和回滚；文档由后台 Agent 通过 MCP/CLI 写入。服务只监听本机回环地址，文件读写、Markdown 渲染、文件监听全部由 Go 进程完成。一个工作区可以同时添加多个分散在不同位置的目录，运行时也能随时新增 / 移除。前端静态资源通过 `go:embed` 打进二进制，所以分发时不需要 Node.js，也不需要拷贝 `web/dist`。
 
 ## 特性
 
@@ -10,11 +10,11 @@ mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和�
 - **外部修改同步**：用 Obsidian、VS Code 等外部工具或 Agent 修改文件时，`fsnotify` 会监听变化并把新内容推送到页面。
 - **多目录工作区**：可同时添加多个目录（笔记可能散落在不同磁盘 / 文件夹），侧栏按目录分组展示；支持运行时添加 / 移除，移除只影响工作区、不删除磁盘文件。
 - **远程服务器（SSH）**：通过 SSH + SFTP 添加远程目录，像本地目录一样浏览、预览和评审远程 Markdown；写入由 Agent 完成；支持图片、相对链接和每 15 秒轮询外部变更。
-- **Code Agent 集成**：内置 `mdlive agent` CLI 与 MCP stdio server，代码 Agent 可以发现、读取、写入本地和远程 Markdown，支持搜索和“最近修改”查询。
+- **Code Agent 集成**：内置 `commentloop agent` CLI 与 MCP stdio server，代码 Agent 可以发现、读取、写入本地和远程 Markdown，支持搜索和“最近修改”查询。
 - **文档结合代码仓库**：每篇文档可以关联一个或多个本机目录或 GitHub 仓库（浅克隆到本地缓存）；Agent 通过 MCP 读取代码文件、搜索符号、查看 Git 分支 / 未提交改动，从而按真实代码情况写文档。代码仓库只读，不会被修改。
 - **页面内代码浏览 + LSP 跳转**：在预览右上角 **代码** 中浏览仓库文件、查看只读源码；支持在代码中 `⌘/Ctrl + 点击` 符号或点 **跳转定义**，通过 gopls / TypeScript / Python / Rust 语言服务器跳转到定义位置。
 - **设置页**：顶部齿轮打开设置，可配置各语言的 LSP 服务器命令 / 参数 / 启用状态，以及后台 Code Agent 类型、显示名称和启动命令。
-- **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，mdlive 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
+- **评论自动唤醒 pi Agent**：开启后，用户新增评论或回复评论时，commentloop 会通过 pi 的 RPC 模式立即启动后台 Agent；Agent 通过 MCP 读取文档 / 代码、写回修改并回复评论，完成后等待用户确认。
 - **每文档独立 Agent 会话**：每篇文档有自己的 pi 会话，可以新建多个会话；顶部文档标题下方可切换当前会话，切换后新的评论任务使用所选会话，历史上下文互相隔离。
 - **讨论上下文与文档共识**：自动检测本机 Pi / Claude Code / Codex / Cursor 的会话，导入当前文档并提炼成结构化“文档共识”；之后评论修改自动参考共识，也可以在评论里手动勾选具体讨论片段；每轮 Agent 修改完成后会自动更新共识，减少与早期讨论的偏差。
 - **任务提示词模板**：内置“文档评审修改 / 需求拆解 / Bug 排查”等任务类型，也支持自定义模板和变量；评论可以选择任务类型，让 Agent 按分析、排查或改稿的不同契约工作。
@@ -22,7 +22,7 @@ mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和�
 - **前后端热重载**：`make debug` 在 React / CSS 改动后自动刷新页面；Go 代码改动由仓库内置的 supervisor 重新编译并热重启后端，浏览器 WebSocket 自动重连。调试模式默认是审阅模式（前台只读，Agent 可写）。
 - **文件树与搜索**：跨目录搜索、切换文档，保留新建 / 导入 / 删除文档入口；每个目录独立递归监听。
 - **行内评论 / Review**：在预览中选中文字直接评论；评论锚定到 Markdown 位置，Code Agent 修改后可以回复修改前后内容，形成可追溯的审阅线程。可以把不同位置的评论标记为一组，Code Agent 会一起阅读并要求一起修改；如果后面的修改不如前面，还可以只回滚某条评论所在的段落。
-- **SQLite 持久化**：工作区目录和评论统一存储在本地 SQLite（`mdlive.db`），支持自动迁移旧 `roots.json`。
+- **SQLite 持久化**：工作区目录和评论统一存储在本地 SQLite（`commentloop.db`），支持自动迁移旧 `roots.json`。
 - **安全保存**：原子写入（临时文件 + rename），保留原文件权限；每个文件只能在其所属目录内解析，拦截 `..` 和越界软链接。
 - **本地运行**：默认绑定 `127.0.0.1`，校验 Host / Origin，避免局域网和跨站访问。
 - **跨平台**：纯 Go（无 cgo）+ 标准浏览器；macOS 用 `open`、Linux 用 `xdg-open` 自动打开发页面。
@@ -38,33 +38,33 @@ mdlive 不提供浏览器内编辑。前台只负责阅读、评论、审阅和�
 ### 构建与运行
 
 ```bash
-cd ~/Desktop/coding/mdlive
+cd ~/Desktop/coding/commentloop
 
 # 首次构建会自动安装前端依赖、执行 vite build，再编译二进制
 make build
 
 # 后台启动并打开一个笔记目录；命令会立即返回
-./bin/mdlive ~/Documents/notes
+./bin/commentloop ~/Documents/notes
 
 # 同时添加多个目录（可重复 --add-dir）
-./bin/mdlive ~/Documents/notes --add-dir ~/obsidian-vault --add-dir /Volumes/work/wiki
+./bin/commentloop ~/Documents/notes --add-dir ~/obsidian-vault --add-dir /Volumes/work/wiki
 
 # 也可以直接打开某个 Markdown 文件
-./bin/mdlive ~/Documents/notes/日记.md
+./bin/commentloop ~/Documents/notes/日记.md
 
 # 指定端口，或禁止自动打开浏览器
-./bin/mdlive --addr 127.0.0.1:8080 --no-open ~/Documents/notes
+./bin/commentloop --addr 127.0.0.1:8080 --no-open ~/Documents/notes
 ```
 
 不传目录时默认打开当前工作目录：
 
 ```bash
-cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
+cd ~/Documents/notes && ~/Desktop/coding/commentloop/bin/commentloop
 ```
 
 ## 外部 Agent Runner（P0）
 
-嵌入模式会由 mdlive 进程直接启动 Pi。容器或云端前端部署时，改用外部 Runner：mdlive 只创建 `agent_jobs` 任务，宿主机上的 Runner 主动领取并启动 Agent。
+嵌入模式会由 commentloop 进程直接启动 Pi。容器或云端前端部署时，改用外部 Runner：commentloop 只创建 `agent_jobs` 任务，宿主机上的 Runner 主动领取并启动 Agent。
 
 ### 配置
 
@@ -78,33 +78,33 @@ cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 
 ```bash
 # Pi：使用 pi --print --no-builtin-tools
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type pi
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type pi
 
 # Claude Code 预设：claude --print
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type claude-code
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type claude-code
 
 # Codex 预设：codex exec
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type codex
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type codex
 
 # 通用 CLI：自定义命令，prompt 通过参数传入
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent
 
 # prompt 通过 stdin
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent --prompt-mode stdin
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent --prompt-mode stdin
 
 # 只处理一个任务后退出
-./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type pi --once
+./bin/commentloop agent-runner --url http://127.0.0.1:4571 --agent-type pi --once
 ```
 
 Runner 会：
 
-1. 向 mdlive 领取任务
-2. 启动本机 Agent，注入 `MDLIVE_URL` 和一次性 `MDLIVE_AGENT_TOKEN`
+1. 向 commentloop 领取任务
+2. 启动本机 Agent，注入 `COMMENTLOOP_URL` 和一次性 `COMMENTLOOP_AGENT_TOKEN`
 3. 同时把 token / URL 写入用户配置目录的短生命周期文件，供不继承环境变量的 Agent（例如 Cursor worker）读取
 4. Agent 通过 MCP 读写；Go 后端按 token 校验能力、文档路径和代码仓库，并广播 MCP 工具阶段
-5. Agent 退出后上报 done / error，mdlive 清理 token 文件
+5. Agent 退出后上报 done / error，commentloop 清理 token 文件
 
-Runner 不把模型凭据放进服务端镜像。Agent 需要已配置 `mdlive mcp`（或通过环境变量/临时 MCP 配置连接到 mdlive）。
+Runner 不把模型凭据放进服务端镜像。Agent 需要已配置 `commentloop mcp`（或通过环境变量/临时 MCP 配置连接到 commentloop）。
 
 ### Cursor CLI
 
@@ -125,33 +125,33 @@ cursor-agent status      # 应显示已登录
 cursor-agent mcp list
 ```
 
-mdlive MCP 配置在 `~/.cursor/mcp.json`（或项目的 `.cursor/mcp.json`）：
+commentloop MCP 配置在 `~/.cursor/mcp.json`（或项目的 `.cursor/mcp.json`）：
 
 ```json
 {
   "mcpServers": {
-    "mdlive": {
-      "command": "/Users/iamkkk/Desktop/coding/mdlive/bin/mdlive",
+    "commentloop": {
+      "command": "/Users/iamkkk/Desktop/coding/commentloop/bin/commentloop",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-Cursor 需要允许 mdlive MCP，同时禁止 Cursor 自带的文件写入和 Shell，避免绕过 mdlive 的路径 ACL。在 `~/.cursor/cli-config.json` 的 `permissions` 中至少保留：
+Cursor 需要允许 commentloop MCP，同时禁止 Cursor 自带的文件写入和 Shell，避免绕过 commentloop 的路径 ACL。在 `~/.cursor/cli-config.json` 的 `permissions` 中至少保留：
 
 ```json
 {
   "permissions": {
-    "allow": ["Mcp(mdlive:*)"],
+    "allow": ["Mcp(commentloop:*)"],
     "deny": ["Shell(*)", "Write(**)","Read(.env*)"]
   }
 }
 ```
 
-（保留原有 allow，只追加 `Mcp(mdlive:*)`；deny 规则优先。）
+（保留原有 allow，只追加 `Mcp(commentloop:*)`；deny 规则优先。）
 
-mdlive 设置：
+commentloop 设置：
 
 ```text
 自动运行方式：外部 Agent Runner
@@ -163,7 +163,7 @@ Agent 类型：Cursor
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
-./bin/mdlive agent-runner   --url http://127.0.0.1:4571   --agent-type cursor   --once
+./bin/commentloop agent-runner   --url http://127.0.0.1:4571   --agent-type cursor   --once
 ```
 
 Runner 预设会执行：
@@ -172,11 +172,11 @@ Runner 预设会执行：
 cursor-agent --print --approve-mcps --trust --sandbox enabled "<prompt>"
 ```
 
-不会传 `--force`；Cursor 的内置 Write/Shell 由上面的 deny 规则挡住。MCP 的 `write_file` 仍经过 mdlive 的后端权限和路径 ACL。
+不会传 `--force`；Cursor 的内置 Write/Shell 由上面的 deny 规则挡住。MCP 的 `write_file` 仍经过 commentloop 的后端权限和路径 ACL。
 
 注意：
 
-- Cursor CLI 已登录；tokens 由用户配置目录（macOS：`~/Library/Application Support/mdlive/`，Linux：`~/.config/mdlive/`）下的 `agent-token` / `agent-url` 短生命周期文件传给不继承环境变量的 worker
+- Cursor CLI 已登录；tokens 由用户配置目录（macOS：`~/Library/Application Support/commentloop/`，Linux：`~/.config/commentloop/`）下的 `agent-token` / `agent-url` 短生命周期文件传给不继承环境变量的 worker
 - Cursor CLI 的 MCP 配置由用户维护；Runner 暂不自动写 `~/.cursor/mcp.json`
 - Cursor CLI 预设尚未做真实端到端写回验证；配置完成后建议先用 `--mode ask` 做只读测试，再开自动运行
 
@@ -220,9 +220,9 @@ cursor-agent --print --approve-mcps --trust --sandbox enabled "<prompt>"
 {{code_repos}}          关联代码仓库
 ```
 
-创建评论或回复时可以手动选择任务类型。模板只控制任务指令，MCP 工具约束、不能 resolve 评论、路径沙箱等底层规则仍由 mdlive 强制附加。
+创建评论或回复时可以手动选择任务类型。模板只控制任务指令，MCP 工具约束、不能 resolve 评论、路径沙箱等底层规则仍由 commentloop 强制附加。
 
-“只分析”模式不只靠提示词：自动 Agent 运行时会带上受管会话标识，mdlive 在 Go 后端按当前任务拒绝 `write_file` / 文档新建 / 删除请求，并按模板限制代码仓库读取和评论回复。只有全部权限满足的请求才会通过；没有受管会话标识的手动 Agent CLI/MCP 仍保持原有权限。
+“只分析”模式不只靠提示词：自动 Agent 运行时会带上受管会话标识，commentloop 在 Go 后端按当前任务拒绝 `write_file` / 文档新建 / 删除请求，并按模板限制代码仓库读取和评论回复。只有全部权限满足的请求才会通过；没有受管会话标识的手动 Agent CLI/MCP 仍保持原有权限。
 
 模板的“工具权限”目前包括：
 
@@ -247,33 +247,33 @@ API：
 已发布多架构镜像：
 
 ```text
-docker.io/iankkk/mdlive:0.1.0
-docker.io/iankkk/mdlive:latest
+docker.io/iankkk/commentloop:0.1.0
+docker.io/iankkk/commentloop:latest
 ```
 
 支持 `linux/arm64` 和 `linux/amd64`。镜像是只读评审模式，固定以前台 `run` 启动，适合交给 Docker / Apple container 管理：
 
 ```bash
-docker run -d --name mdlive \
+docker run -d --name commentloop \
   -p 127.0.0.1:4571:4571 \
   -v "$HOME/Documents/notes:/notes" \
-  -v mdlive-data:/data \
-  iankkk/mdlive:latest
+  -v commentloop-data:/data \
+  iankkk/commentloop:latest
 ```
 
 - `/notes`：要评审的 Markdown 目录
 - `/data`：SQLite、discovery 和日志；建议使用命名 volume
 - 容器用户 UID/GID 为 `10001:10001`；如果用 bind mount 且需要可写，注意宿主机目录权限
-- `docker stop mdlive` / `docker rm mdlive` 管理容器；镜像内的进程本身用 `mdlive run` 前台运行
+- `docker stop commentloop` / `docker rm commentloop` 管理容器；镜像内的进程本身用 `commentloop run` 前台运行
 
 Apple container 同理：
 
 ```bash
-container run -d --name mdlive \
+container run -d --name commentloop \
   -p 127.0.0.1:4571:4571 \
   -v "$HOME/Documents/notes:/notes" \
-  -v mdlive-data:/data \
-  iankkk/mdlive:latest
+  -v commentloop-data:/data \
+  iankkk/commentloop:latest
 ```
 
 本地重新构建：
@@ -281,7 +281,7 @@ container run -d --name mdlive \
 ```bash
 make cross
 container build --platform linux/arm64 --platform linux/amd64 \
-  -t iankkk/mdlive:0.1.0 -t iankkk/mdlive:latest .
+  -t iankkk/commentloop:0.1.0 -t iankkk/commentloop:latest .
 ```
 
 ## 后台运行（start / stop / status）
@@ -290,27 +290,27 @@ container build --platform linux/arm64 --platform linux/amd64 \
 
 ```bash
 # 后台启动（默认行为；--no-open 不自动打开浏览器）
-./bin/mdlive start --no-open ~/Documents/notes
+./bin/commentloop start --no-open ~/Documents/notes
 
 # 查看最近启动的实例、URL、PID、运行时长和健康状态
-./bin/mdlive status
+./bin/commentloop status
 
 # 停止最近启动的实例（先 SIGTERM；后台任务不退出时再强制停止）
-./bin/mdlive stop
+./bin/commentloop stop
 
 # 前台运行，适合调试或交给 launchd / systemd
-./bin/mdlive run --no-open ~/Documents/notes
+./bin/commentloop run --no-open ~/Documents/notes
 
 # 查看版本 / 帮助
-./bin/mdlive --version
-./bin/mdlive --help
+./bin/commentloop --version
+./bin/commentloop --help
 ```
 
 后台日志在用户配置目录下：
 
 ```text
-~/Library/Application Support/mdlive/mdlive.log   # macOS
-~/.config/mdlive/mdlive.log                        # Linux
+~/Library/Application Support/commentloop/commentloop.log   # macOS
+~/.config/commentloop/commentloop.log                        # Linux
 ```
 
 `start` 发现已有实例时会拒绝重复启动；先 `stop`。启动完成后会打印 PID、URL、日志和停止 / 状态命令。
@@ -320,14 +320,14 @@ container build --platform linux/arm64 --platform linux/amd64 \
 ### 安装到 PATH
 
 ```bash
-cp bin/mdlive /usr/local/bin/mdlive   # 或者 ~/.local/bin
-mdlive ~/notes
+cp bin/commentloop /usr/local/bin/commentloop   # 或者 ~/.local/bin
+commentloop ~/notes
 ```
 
 macOS 如果提示“无法验证开发者”，可对自行构建的二进制执行：
 
 ```bash
-xattr -d com.apple.quarantine /usr/local/bin/mdlive
+xattr -d com.apple.quarantine /usr/local/bin/commentloop
 ```
 
 ## 命令行参数
@@ -336,11 +336,11 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 | --- | --- | --- |
 | `--dir <path>` | 当前目录 | 主目录 |
 | `--add-dir <path>` | 可重复 | 追加一个目录到工作区 |
-| `--state-dir <path>` | 用户配置目录/mdlive | 保存运行时添加目录的位置 |
+| `--state-dir <path>` | 用户配置目录/commentloop | 保存运行时添加目录的位置 |
 | `--no-state` | `false` | 不读取 / 保存额外目录配置 |
 | `--addr <host:port>` | `127.0.0.1:4571` | 监听地址；端口占用会自动递增重试 |
 | `--no-open` | `false` | 不自动打开浏览器 |
-| `--preview` | `false` | 兼容保留：mdlive 默认就是评审模式；前台不能编辑已有文档，但可新建 / 导入 / 删除，Agent MCP/CLI 可写 |
+| `--preview` | `false` | 兼容保留：commentloop 默认就是评审模式；前台不能编辑已有文档，但可新建 / 导入 / 删除，Agent MCP/CLI 可写 |
 | `--debug` | `false` | 调试模式：审阅模式 + 前端资源热更新 |
 | `--web-dir <path>` | `web/dist` | 调试模式下从磁盘加载的前端目录 |
 | `--dev` | `false` | 开发模式：即使 `web/dist` 尚未构建也启动后端 |
@@ -366,8 +366,8 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 
 **当前工作区的所有目录都会持久化**，包括主目录、`--add-dir` 目录和界面添加的目录；重启时自动合并并去重。配置保存到：
 
-- macOS：`~/Library/Application Support/mdlive/mdlive.db`
-- Linux：`~/.config/mdlive/mdlive.db`（遵循 `os.UserConfigDir()`）
+- macOS：`~/Library/Application Support/commentloop/commentloop.db`
+- Linux：`~/.config/commentloop/commentloop.db`（遵循 `os.UserConfigDir()`）
 
 数据库使用纯 Go 的 `modernc.org/sqlite`，因此 `CGO_ENABLED=0` 交叉编译仍然可用。旧的 `roots.json` 会在首次启动时自动导入 SQLite，并保留为备份。评论、锚点、回复、修改前后内容、完整文档快照和代码仓库关联都存在同一个数据库中。
 
@@ -411,22 +411,22 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
 - 远端目录选择器使用应用内浏览 UI，不调用系统原生文件夹对话框。
 - 远程服务器启动时不可达会跳过该目录；网络恢复后重新添加或重启。
 - 远程根目录过大（例如整个 `/root`）时首次扫描可能较慢；建议添加具体的笔记目录。
-- 远程连接使用 Go 原生 SSH/SFTP 库，无需在远程安装 mdlive。
+- 远程连接使用 Go 原生 SSH/SFTP 库，无需在远程安装 commentloop。
 
 ## 讨论上下文与文档共识
 
 在预览右上角点击 **讨论**：
 
-1. 点 **导入会话**。mdlive 会检查本机已安装 / 有会话数据的 Agent，并按 Agent 分栏显示，不再靠手动筛选标题或目录：
-   - Pi：mdlive 状态目录和 `~/.pi/agent/sessions`
+1. 点 **导入会话**。commentloop 会检查本机已安装 / 有会话数据的 Agent，并按 Agent 分栏显示，不再靠手动筛选标题或目录：
+   - Pi：commentloop 状态目录和 `~/.pi/agent/sessions`
    - Claude Code：`~/.claude/projects`
    - Codex：`~/.codex/sessions` / `archived_sessions`
    - Cursor：`~/.cursor/projects/*/agent-transcripts`
    - 其他已安装但暂未实现读取的 Agent 会显示“暂未支持”
 2. 导入后会调用已配置的 pi Agent，从会话中提炼结构化共识：目标、已确认决策、约束与术语、已否决方案、待确认事项、最近修改。
 3. 共识会自动带入之后的评论修改 Prompt；不需要每次手动粘贴长对话。
-4. 每轮 Agent 成功完成评论修改后，mdlive 会在后台重新提炼共识（同一文档串行合并），并实时刷新页面。
-5. 已导入的会话文件会每 5 秒检查一次；原 Agent 继续对话、追加消息后，mdlive 会自动同步会话内容并刷新共识。
+4. 每轮 Agent 成功完成评论修改后，commentloop 会在后台重新提炼共识（同一文档串行合并），并实时刷新页面。
+5. 已导入的会话文件会每 5 秒检查一次；原 Agent 继续对话、追加消息后，commentloop 会自动同步会话内容并刷新共识。
 6. 新增评论或回复时，还可以展开 **参考讨论**，手动勾选特定导入会话；选中的会话会附带相关片段给 Agent。
 7. 如果当前评论和旧共识冲突，Prompt 明确要求以最新用户反馈为准；无法判断时由 Agent 说明冲突。
 
@@ -448,7 +448,7 @@ xattr -d com.apple.quarantine /usr/local/bin/mdlive
    - 关联组回滚时，会恢复组内各评论对应的段落，而不是整篇文档。
    - 回滚会追加一条“版本回滚”系统记录（含回滚前 / 恢复后片段），评论重新打开等你确认。
    - `write_file` 自动回复会同时保存 before/after 完整快照；更早的历史回复如果只有 before/after 片段，会使用片段作为回滚前内容的兜底。
-   - 如果当前文档结构变化太大，无法可靠定位该段落，mdlive 会拒绝回滚并提示，而不是粗暴覆盖整篇文档。
+   - 如果当前文档结构变化太大，无法可靠定位该段落，commentloop 会拒绝回滚并提示，而不是粗暴覆盖整篇文档。
    - 只保留每篇文档最近 30 个快照；更早的版本按钮会消失。
    - 只有用户能回滚；Agent 没有回滚工具。
    - `write_file` 的 `comment_ids` 流程会带上精确的修改后内容；手动 `reply_comment`、Agent CLI 或旧版 MCP 回复时，服务端也会读取当前磁盘文档补一份快照。只有升级前的旧回复没有快照。
@@ -487,12 +487,12 @@ Code Agent 通过 MCP / CLI 读取并回复评论：
 - 可修改界面显示名称和可选启动命令
 - 显示名称会用于评论、回复、状态提示中的 “Code Agent” 文案
 - **检查命令** 只验证可执行文件是否存在
-- 打开 **用户提交评论后自动运行 Agent** 后，新增评论或用户回复会通过 pi RPC 自动启动后台 pi Agent；提示词包含文档路径、评论 ID、thread 和已关联代码仓库；自动任务会禁用 pi 内置 bash/find 工具，只允许通过 mdlive MCP 访问文档和代码
+- 打开 **用户提交评论后自动运行 Agent** 后，新增评论或用户回复会通过 pi RPC 自动启动后台 pi Agent；提示词包含文档路径、评论 ID、thread 和已关联代码仓库；自动任务会禁用 pi 内置 bash/find 工具，只允许通过 commentloop MCP 访问文档和代码
 - **每篇文档有自己的 Agent 会话**，可在文档标题下方的会话选择器中新建 / 切换；不同会话的 pi 上下文互相隔离
-- 会话元数据存在 SQLite；pi 会话文件存放在 mdlive 状态目录的 `pi-sessions/` 下，应用重启后可以继续使用同一会话
+- 会话元数据存在 SQLite；pi 会话文件存放在 commentloop 状态目录的 `pi-sessions/` 下，应用重启后可以继续使用同一会话
 - Agent 运行时，预览标题栏显示转圈和当前阶段，例如“正在读取文档”“正在写入文档”“正在生成修改内容”；完成后显示绿色确认，失败显示错误提示
 - 自动运行目前只支持 pi；其他 Agent 类型只保存显示名 / 命令，仍由外部客户端通过 MCP 接入
-- 自动运行需要本机 `pi` 已配置模型和 mdlive MCP；会使用真实的模型调用来修改文档，默认关闭，需要手动开启
+- 自动运行需要本机 `pi` 已配置模型和 commentloop MCP；会使用真实的模型调用来修改文档，默认关闭，需要手动开启
 - 每个文档 / 选中的 Agent 会话独立维护一个 pi RPC 进程；同一会话内多条评论按顺序排队处理，不会每条评论新建会话
 - 不同文档、不同会话之间的上下文隔离；切换会话后新的评论任务进入新会话，已排队的旧任务仍在原会话执行
 - 只有应用重启、pi 进程崩溃 / 超时，或 Agent 命令 / 参数修改后才会重建进程；会话文件可用于恢复上下文
@@ -521,13 +521,13 @@ Agent 代码工具：
 - `read_code`：按行读取文件（单文件上限 1 MiB）
 - `search_code`：大小写不敏感文本搜索，返回路径、行号和匹配行
 
-代码仓库是**只读**的；mdlive 不会修改代码。关联关系保存在本机 SQLite，不写入 Markdown。GitHub 私有仓库可以使用 SSH 地址（需要已配置 SSH key），或在本机设置 `GITHUB_TOKEN` / `GH_TOKEN`，或先 `gh auth login`。
+代码仓库是**只读**的；commentloop 不会修改代码。关联关系保存在本机 SQLite，不写入 Markdown。GitHub 私有仓库可以使用 SSH 地址（需要已配置 SSH key），或在本机设置 `GITHUB_TOKEN` / `GH_TOKEN`，或先 `gh auth login`。
 
 ### 切换分支（本地 / GitHub）
 
 代码浏览窗口顶部会显示当前分支。点击分支按钮可以读取分支列表并随时切换：
 
-- **GitHub 仓库**：读取远程分支列表，拉取后更新 mdlive 克隆缓存；不会修改远程仓库
+- **GitHub 仓库**：读取远程分支列表，拉取后更新 commentloop 克隆缓存；不会修改远程仓库
 - **本地 Git 仓库**：列出本地分支，执行 `git checkout`；切换前会二次确认
 - 本地仓库有未提交改动时会拒绝切换，避免把未提交内容带到另一个分支
 - 切换后会更新代码浏览文件树 / 源码，并重置 LSP 连接
@@ -550,29 +550,29 @@ Agent 代码工具：
 
 ## 给 Code Agent 使用（CLI / MCP）
 
-mdlive 启动后会把实际地址写入：
+commentloop 启动后会把实际地址写入：
 
-- macOS：`~/Library/Application Support/mdlive/server.json`
-- Linux：`~/.config/mdlive/server.json`
+- macOS：`~/Library/Application Support/commentloop/server.json`
+- Linux：`~/.config/commentloop/server.json`
 
 ### CLI
 
 ```bash
 # 工作区概览
-./bin/mdlive agent info
+./bin/commentloop agent info
 
 # 列出文件（--refresh 强制刷新远程目录）
-./bin/mdlive agent list --refresh
+./bin/commentloop agent list --refresh
 
 # 读取远程 Markdown
-./bin/mdlive agent read Ali/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0/README.md
+./bin/commentloop agent read Ali/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0/README.md
 
 # 写入 / 新建（stdin 或 --content）
-printf '# Hello\n' | ./bin/mdlive agent write Ali/notes/hello.md
+printf '# Hello\n' | ./bin/commentloop agent write Ali/notes/hello.md
 
 # 搜索 / 最近修改
-./bin/mdlive agent search todo
-./bin/mdlive agent changes --since 30m --refresh
+./bin/commentloop agent search todo
+./bin/commentloop agent changes --since 30m --refresh
 ```
 
 路径支持：
@@ -581,16 +581,16 @@ printf '# Hello\n' | ./bin/mdlive agent write Ali/notes/hello.md
 - 友好路径：`<目录名>/<相对路径>`，例如 `Ali/notes/todo.md`
 - 唯一文件名 / 相对路径
 
-默认连接 discovery 文件中的 mdlive；也可以 `--url http://127.0.0.1:4571` 或环境变量 `MDLIVE_URL` 指定。
+默认连接 discovery 文件中的 commentloop；也可以 `--url http://127.0.0.1:4571` 或环境变量 `COMMENTLOOP_URL` 指定。
 
 ### MCP
 
 本机已配置的 pi MCP 入口：
 
 ```bash
-pi mcp add mdlive --exposure direct \
-  --description "Read and write the mdlive local + SSH/SFTP remote Markdown workspace" \
-  -- /Users/iamkkk/Desktop/coding/mdlive/bin/mdlive mcp
+pi mcp add commentloop --exposure direct \
+  --description "Read and write the commentloop local + SSH/SFTP remote Markdown workspace" \
+  -- /Users/iamkkk/Desktop/coding/commentloop/bin/commentloop mcp
 
 pi mcp list
 ```
@@ -611,23 +611,23 @@ MCP 工具（共 13 个）：
 - `search_code`（跨代码文件搜索）
 - `changes`（最近修改）
 
-在已有 pi 会话中添加后需要 `/reload` 或新开会话。CLI/MCP 都通过本机 mdlive 服务操作工作区，因此需要 mdlive 正在运行；mdlive 默认前台不能编辑已有文档，普通 `PUT` 写请求会被拒绝；新建 / 导入 / 删除文档仍可用。Agent CLI/MCP 会带 `agent` 标记，可写入。已经运行的旧 MCP 进程不会发送这个标记，需要重启 MCP（pi 中使用 `/reload` 或新开会话）。
+在已有 pi 会话中添加后需要 `/reload` 或新开会话。CLI/MCP 都通过本机 commentloop 服务操作工作区，因此需要 commentloop 正在运行；commentloop 默认前台不能编辑已有文档，普通 `PUT` 写请求会被拒绝；新建 / 导入 / 删除文档仍可用。Agent CLI/MCP 会带 `agent` 标记，可写入。已经运行的旧 MCP 进程不会发送这个标记，需要重启 MCP（pi 中使用 `/reload` 或新开会话）。
 
 ## 评审模式（默认，前台不编辑，Agent 写入）
 
-mdlive 现在默认后台启动，前台是审阅窗口、后台由 Agent 改稿：
+commentloop 现在默认后台启动，前台是审阅窗口、后台由 Agent 改稿：
 
 ```bash
-./bin/mdlive start --no-open ~/Documents/notes
-./bin/mdlive start --no-open ~/Documents/notes/当前笔记.md
-./bin/mdlive status
-./bin/mdlive stop
+./bin/commentloop start --no-open ~/Documents/notes
+./bin/commentloop start --no-open ~/Documents/notes/当前笔记.md
+./bin/commentloop status
+./bin/commentloop stop
 ```
 
-需要前台日志时使用 `./bin/mdlive run ...`。
+需要前台日志时使用 `./bin/commentloop run ...`。
 
 - 不渲染编辑器，不自动保存；保留新建 / 导入 / 删除文档入口，方便管理评审材料。
-- 前台修改已有文档的 `PUT /api/doc` 会返回 403；新建（`POST`）、删除（`DELETE`）、导入仍可用。Agent CLI/MCP 的请求带 `X-Mdlive-Agent` 标记，仍可写入已有文档。
+- 前台修改已有文档的 `PUT /api/doc` 会返回 403；新建（`POST`）、删除（`DELETE`）、导入仍可用。Agent CLI/MCP 的请求带 `X-Commentloop-Agent` 标记，仍可写入已有文档。
 - 评论、关联、局部回滚属于审阅操作，在审阅模式下可用；回滚只替换评论所在段落。
 - 仍可通过文件树切换文档；后台 Agent 或外部编辑器保存后，预览经 fsnotify + WebSocket 自动更新。
 - 快捷键只保留 `Mod+B`（侧边栏）和 `Mod+K`（搜索）。
@@ -648,8 +648,8 @@ make debug DIR=~/Documents/notes OPEN=--no-open
 `make debug` 启动三层：
 
 1. `vite build --watch`：React / CSS 改动自动重建；
-2. Go supervisor（`cmd/debugrun`）：监听 `.go` / `go.mod` / `go.sum`，重新编译 mdlive；
-3. mdlive（`--debug`）：从磁盘 `web/dist` 加载前端，审阅模式。
+2. Go supervisor（`cmd/debugrun`）：监听 `.go` / `go.mod` / `go.sum`，重新编译 commentloop；
+3. commentloop（`--debug`）：从磁盘 `web/dist` 加载前端，审阅模式。
 
 热重载行为：
 
@@ -668,7 +668,7 @@ make debug DIR=~/Documents/notes OPEN=--no-open
 - 后端热重载依靠自动重启进程（约零点几秒中断），不是 Go 语言层面的 in-process 热替换。
 - 调试模式默认审阅模式；前台不显示编辑器、不手动写文件，后台 Agent 仍可通过 MCP/CLI 写入。
 - `--debug` 找不到 `web/dist` 时会回退到内嵌前端，并在界面提示热更新不可用。
-- 安装后的 `bin/mdlive --debug` 只负责磁盘资源加载与审阅模式；监听源码、重新编译由 `make debug` / `cmd/debugrun` 提供（需要 Go 工具链）。
+- 安装后的 `bin/commentloop --debug` 只负责磁盘资源加载与审阅模式；监听源码、重新编译由 `make debug` / `cmd/debugrun` 提供（需要 Go 工具链）。
 
 ## 开发模式（Vite HMR）
 
@@ -701,10 +701,10 @@ make build     # 等价于 cd web && npm run build，然后 go build
 
 ```bash
 make cross
-# bin/mdlive-darwin-arm64
-# bin/mdlive-darwin-amd64
-# bin/mdlive-linux-arm64
-# bin/mdlive-linux-amd64
+# bin/commentloop-darwin-arm64
+# bin/commentloop-darwin-amd64
+# bin/commentloop-linux-arm64
+# bin/commentloop-linux-amd64
 ```
 
 把对应文件复制到目标机器即可运行，无需安装 Go/Node。前端资源已经嵌入。
@@ -736,7 +736,7 @@ Go 服务（标准库 net/http + gorilla/websocket）
 开发调试（make debug）
   ├── vite build --watch
   ├── cmd/debugrun：监听 .go → go build → 热重启后端
-  └── mdlive --debug：磁盘 web/dist + 评审模式
+  └── commentloop --debug：磁盘 web/dist + 评审模式
 ```
 
 - **预览渲染在 Go**：Agent / 外部写入后由服务端渲染 HTML；代码高亮和 GFM 扩展始终一致。
@@ -747,7 +747,7 @@ Go 服务（标准库 net/http + gorilla/websocket）
 ## 目录结构
 
 ```text
-mdlive/
+commentloop/
 ├── main.go                  # CLI、监听端口、打开浏览器、嵌入前端
 ├── internal/
 │   ├── server/              # HTTP API、WebSocket、目录注册 / 浏览、远程 SFTP、路径沙箱、调试热更新
@@ -837,7 +837,7 @@ mdlive/
 ## 可调参数与已知限制
 
 - 单文档上限 8 MiB；文件树最多展示 5000 个 Markdown 文件；远程附件读取上限 64 MiB。
-- 评论是 mdlive 本地审阅数据，不随 Markdown 文件同步；换机器/清空配置后不会带上。评论高亮依赖浏览器 Custom Highlight API（Chrome / Safari 支持；不支持时仍可在评论面板查看原文）。
+- 评论是 commentloop 本地审阅数据，不随 Markdown 文件同步；换机器/清空配置后不会带上。评论高亮依赖浏览器 Custom Highlight API（Chrome / Safari 支持；不支持时仍可在评论面板查看原文）。
 - 评论关联组目前只在同一个 Markdown 文档内建立；跨文档关联尚未支持。删除组内评论后，若组内只剩一条，关联会自动解除。
 - 代码仓库支持本机 Git / 非 Git 目录和 GitHub（HTTPS / SSH 浅克隆缓存）；不支持远程 SSH/SFTP 工作区中的代码目录直接作为代码仓库。代码只读，单文件读取上限 1 MiB，搜索有结果数和扫描量上限。
 - 本地 Git 仓库分支切换会改变本地工作区，并拒绝有未提交改动的仓库；只对代码仓库缓存执行分支切换。

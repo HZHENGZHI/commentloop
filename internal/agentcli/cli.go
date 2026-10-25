@@ -1,4 +1,4 @@
-// Package agentcli implements `mdlive agent ...` commands for coding agents.
+// Package agentcli implements `commentloop agent ...` commands for coding agents.
 package agentcli
 
 import (
@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/agentclient"
+	"github.com/hzhengzhi/commentloop/internal/agentclient"
 )
 
 func Run(args []string) error {
-	fs := flag.NewFlagSet("mdlive agent", flag.ContinueOnError)
+	fs := flag.NewFlagSet("commentloop agent", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "mdlive server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
+	urlFlag := fs.String("url", "", "commentloop server URL（默认读取 discovery 文件或 127.0.0.1:4571）")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "用法: mdlive agent [--url URL] <command> [args]")
+		fmt.Fprintln(os.Stderr, "用法: commentloop agent [--url URL] <command> [args]")
 		fmt.Fprintln(os.Stderr, "命令: list, info, read, write, search, changes, comments, reply, refresh")
-		fmt.Fprintln(os.Stderr, "示例: mdlive agent list --refresh")
-		fmt.Fprintln(os.Stderr, "      mdlive agent read Ali/notes/todo.md")
-		fmt.Fprintln(os.Stderr, "      printf '# hi' | mdlive agent write Ali/notes/todo.md")
+		fmt.Fprintln(os.Stderr, "示例: commentloop agent list --refresh")
+		fmt.Fprintln(os.Stderr, "      commentloop agent read Ali/notes/todo.md")
+		fmt.Fprintln(os.Stderr, "      printf '# hi' | commentloop agent write Ali/notes/todo.md")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -149,7 +149,7 @@ func runRead(client *agentclient.Client, args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("用法: mdlive agent read [--json] [--refresh] <path>")
+		return fmt.Errorf("用法: commentloop agent read [--json] [--refresh] <path>")
 	}
 	doc, resolved, err := client.Read(fs.Arg(0), *refresh)
 	if err != nil {
@@ -173,7 +173,7 @@ func runWrite(client *agentclient.Client, args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("用法: printf '...' | mdlive agent write [--json] <path>")
+		return fmt.Errorf("用法: printf '...' | commentloop agent write [--json] <path>")
 	}
 	content := *contentFlag
 	contentSet := false
@@ -211,7 +211,7 @@ func runSearch(client *agentclient.Client, args []string) error {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("用法: mdlive agent search [--json] [--refresh] <query>")
+		return fmt.Errorf("用法: commentloop agent search [--json] [--refresh] <query>")
 	}
 	files, err := client.Search(strings.Join(fs.Args(), " "), *refresh)
 	if err != nil {
@@ -338,7 +338,7 @@ func runReply(client *agentclient.Client, args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 || *path == "" || *message == "" {
-		return fmt.Errorf("用法: mdlive agent reply --path <文档> --message <内容> [--before ...] [--after ...] <commentID>（评论只能由用户在界面标记解决）")
+		return fmt.Errorf("用法: commentloop agent reply --path <文档> --message <内容> [--before ...] [--after ...] <commentID>（评论只能由用户在界面标记解决）")
 	}
 	comment, err := client.ReplyComment(*path, fs.Arg(0), *message, *before, *after, "", "")
 	if err != nil {

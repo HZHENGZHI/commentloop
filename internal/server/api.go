@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/ignore"
 )
 
 const (
@@ -408,7 +408,7 @@ func writeFileAtomic(name string, data []byte) error {
 		mode = info.Mode().Perm()
 	}
 	dir := filepath.Dir(name)
-	tmp, err := os.CreateTemp(dir, ".mdlive-*")
+	tmp, err := os.CreateTemp(dir, ".commentloop-*")
 	if err != nil {
 		return err
 	}

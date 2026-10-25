@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 const promptOptimizeTimeout = 2 * time.Minute
@@ -43,9 +43,9 @@ func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, 
 	if !allowCommentReply {
 		replyMode = "禁止回复评论"
 	}
-	prompt := fmt.Sprintf(`你是提示词工程专家。请优化下面这个 mdlive 后台 Code Agent 的任务提示词。
+	prompt := fmt.Sprintf(`你是提示词工程专家。请优化下面这个 commentloop 后台 Code Agent 的任务提示词。
 
-这个 Agent 通过 mdlive MCP 读取文档、评论、讨论共识和代码仓库，并按用户评论工作。
+这个 Agent 通过 commentloop MCP 读取文档、评论、讨论共识和代码仓库，并按用户评论工作。
 任务名称：%s
 任务说明：%s
 执行模式：%s

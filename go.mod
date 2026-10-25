@@ -1,4 +1,4 @@
-module mdlive
+module github.com/hzhengzhi/commentloop
 
 go 1.26.0
 

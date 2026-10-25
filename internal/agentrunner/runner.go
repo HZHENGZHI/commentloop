@@ -1,5 +1,5 @@
-// Package agentrunner claims mdlive comment jobs from a local or remote
-// mdlive server and runs one configured coding Agent CLI on the host.
+// Package agentrunner claims commentloop comment jobs from a local or remote
+// commentloop server and runs one configured coding Agent CLI on the host.
 package agentrunner
 
 import (
@@ -19,8 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"mdlive/internal/discovery"
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/discovery"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 type Job struct {
@@ -48,9 +48,9 @@ type Options struct {
 }
 
 func Run(args []string) error {
-	fs := flag.NewFlagSet("mdlive agent-runner", flag.ContinueOnError)
+	fs := flag.NewFlagSet("commentloop agent-runner", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	urlFlag := fs.String("url", "", "mdlive server URL（默认 discovery / MDLIVE_URL）")
+	urlFlag := fs.String("url", "", "commentloop server URL（默认 discovery / COMMENTLOOP_URL）")
 	runnerID := fs.String("id", "", "Runner ID（默认 hostname-pid）")
 	agentType := fs.String("agent-type", "pi", "要领取的 Agent 类型：pi / claude-code / codex / cursor / generic")
 	command := fs.String("command", "", "Agent 可执行文件（默认按 agent-type）")
@@ -70,7 +70,7 @@ func Run(args []string) error {
 	}
 	u := strings.TrimSpace(*urlFlag)
 	if u == "" {
-		u = strings.TrimSpace(os.Getenv("MDLIVE_URL"))
+		u = strings.TrimSpace(os.Getenv("COMMENTLOOP_URL"))
 	}
 	if u == "" {
 		u = "http://127.0.0.1:4571"
@@ -107,7 +107,7 @@ func runLoop(opts Options) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			fmt.Fprintf(os.Stderr, "mdlive agent-runner: claim: %v\n", err)
+			fmt.Fprintf(os.Stderr, "commentloop agent-runner: claim: %v\n", err)
 			if opts.Once {
 				return err
 			}
@@ -161,7 +161,7 @@ func claim(ctx context.Context, opts Options) (*Job, error) {
 }
 
 func runJob(ctx context.Context, opts Options, job Job) {
-	fmt.Fprintf(os.Stderr, "mdlive agent-runner: job %s doc=%s type=%s\n", job.ID, job.DocPath, job.AgentType)
+	fmt.Fprintf(os.Stderr, "commentloop agent-runner: job %s doc=%s type=%s\n", job.ID, job.DocPath, job.AgentType)
 	command, args, err := agentCommand(opts)
 	if err != nil {
 		finish(context.Background(), opts, job, err)
@@ -187,9 +187,9 @@ func runJob(ctx context.Context, opts Options, job Job) {
 		defer os.Remove(urlPath)
 	}
 	cmd.Env = append(os.Environ(),
-		"MDLIVE_URL="+opts.URL,
-		"MDLIVE_AGENT_TOKEN="+job.Token,
-		"MDLIVE_AGENT_TOKEN_FILE="+tokenPath,
+		"COMMENTLOOP_URL="+opts.URL,
+		"COMMENTLOOP_AGENT_TOKEN="+job.Token,
+		"COMMENTLOOP_AGENT_TOKEN_FILE="+tokenPath,
 	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -208,9 +208,9 @@ func runJob(ctx context.Context, opts Options, job Job) {
 		err = fmt.Errorf("%w\n%s", err, detail)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mdlive agent-runner: job %s failed: %v\n", job.ID, err)
+		fmt.Fprintf(os.Stderr, "commentloop agent-runner: job %s failed: %v\n", job.ID, err)
 	} else {
-		fmt.Fprintf(os.Stderr, "mdlive agent-runner: job %s done\n", job.ID)
+		fmt.Fprintf(os.Stderr, "commentloop agent-runner: job %s done\n", job.ID)
 	}
 	finish(context.Background(), opts, job, err)
 }
@@ -268,7 +268,7 @@ func agentCommand(opts Options) (string, []string, error) {
 			command = "cursor-agent"
 		}
 		// Do not pass --force: MCP tool permissions are handled by Cursor's
-		// own permissions file. --approve-mcps lets the mdlive MCP server load.
+		// own permissions file. --approve-mcps lets the commentloop MCP server load.
 		presetArgs = []string{"--print", "--approve-mcps", "--trust", "--sandbox", "enabled"}
 	default:
 		if command == "" {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"mdlive/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/ignore"
 )
 
 // Event describes one debounced filesystem change, relative to the root.
@@ -75,7 +75,7 @@ func (w *Watcher) addRecursive(root string) error {
 			return filepath.SkipDir
 		}
 		if e := w.fsw.Add(p); e != nil {
-			log.Printf("mdlive: watch %s: %v", p, e)
+			log.Printf("commentloop: watch %s: %v", p, e)
 		}
 		return nil
 	})
@@ -165,7 +165,7 @@ func (w *Watcher) translate(ev fsnotify.Event) (Event, bool) {
 		case ev.Op&fsnotify.Create != 0:
 			// Watch the new directory and everything below it.
 			if err := w.addRecursive(ev.Name); err != nil {
-				log.Printf("mdlive: add watch %s: %v", ev.Name, err)
+				log.Printf("commentloop: add watch %s: %v", ev.Name, err)
 			}
 			return Event{Rel: rel, IsDir: true}, true
 		case ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0:

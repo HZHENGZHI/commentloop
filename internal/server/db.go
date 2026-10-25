@@ -12,7 +12,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const dbFileName = "mdlive.db"
+const dbFileName = "commentloop.db"
 
 func openStateDB(stateDir string) (*sql.DB, error) {
 	dsn := ":memory:"
@@ -43,7 +43,7 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 	}
 	if stateDir != "" {
 		if err := migrateLegacyRoots(db, stateDir); err != nil {
-			log.Printf("mdlive: 迁移 roots.json 失败: %v", err)
+			log.Printf("commentloop: 迁移 roots.json 失败: %v", err)
 		}
 	}
 	return db, nil

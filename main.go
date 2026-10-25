@@ -1,4 +1,4 @@
-// mdlive is a local review workspace with a live, server-rendered preview.
+// commentloop is a local review workspace with a live, server-rendered preview.
 package main
 
 import (
@@ -21,12 +21,12 @@ import (
 	"syscall"
 	"time"
 
-	"mdlive/internal/agentcli"
-	"mdlive/internal/agentmcp"
-	"mdlive/internal/agentrunner"
-	"mdlive/internal/discovery"
-	"mdlive/internal/ignore"
-	"mdlive/internal/server"
+	"github.com/hzhengzhi/commentloop/internal/agentcli"
+	"github.com/hzhengzhi/commentloop/internal/agentmcp"
+	"github.com/hzhengzhi/commentloop/internal/agentrunner"
+	"github.com/hzhengzhi/commentloop/internal/discovery"
+	"github.com/hzhengzhi/commentloop/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/server"
 )
 
 //go:embed all:web/dist
@@ -35,24 +35,25 @@ var webFiles embed.FS
 var version = "dev"
 
 func main() {
+	migrateLegacyState()
 	args := os.Args[1:]
 	if len(args) > 0 {
 		switch args[0] {
 		case "agent":
 			if err := agentcli.Run(args[1:]); err != nil {
-				fmt.Fprintln(os.Stderr, "mdlive agent:", err)
+				fmt.Fprintln(os.Stderr, "commentloop agent:", err)
 				os.Exit(1)
 			}
 			return
 		case "mcp":
 			if err := agentmcp.Run(args[1:], version); err != nil {
-				fmt.Fprintln(os.Stderr, "mdlive mcp:", err)
+				fmt.Fprintln(os.Stderr, "commentloop mcp:", err)
 				os.Exit(1)
 			}
 			return
 		case "agent-runner":
 			if err := agentrunner.Run(args[1:]); err != nil {
-				fmt.Fprintln(os.Stderr, "mdlive agent-runner:", err)
+				fmt.Fprintln(os.Stderr, "commentloop agent-runner:", err)
 				os.Exit(1)
 			}
 			return
@@ -62,13 +63,13 @@ func main() {
 				return
 			}
 			if err := startDaemon(args[1:]); err != nil {
-				fmt.Fprintln(os.Stderr, "mdlive start:", err)
+				fmt.Fprintln(os.Stderr, "commentloop start:", err)
 				os.Exit(1)
 			}
 			return
 		case "stop":
 			if err := stopDaemon(); err != nil {
-				fmt.Fprintln(os.Stderr, "mdlive stop:", err)
+				fmt.Fprintln(os.Stderr, "commentloop stop:", err)
 				os.Exit(1)
 			}
 			return
@@ -86,15 +87,15 @@ func main() {
 
 	// The daemon child is the actual server process. It must not try to
 	// background itself again. --version/--help stay foreground too.
-	if os.Getenv("MDLIVE_DAEMON_CHILD") == "1" || hasImmediateFlag(args) {
+	if os.Getenv("COMMENTLOOP_DAEMON_CHILD") == "1" || hasImmediateFlag(args) {
 		runServer(args)
 		return
 	}
 
 	// Default invocation starts the server in the background. Use
-	// `mdlive run ...` for a foreground process.
+	// `commentloop run ...` for a foreground process.
 	if err := startDaemon(args); err != nil {
-		fmt.Fprintln(os.Stderr, "mdlive start:", err)
+		fmt.Fprintln(os.Stderr, "commentloop start:", err)
 		os.Exit(1)
 	}
 }
@@ -115,16 +116,16 @@ func runServer(args []string) {
 		noOpen    = flag.Bool("no-open", false, "不自动打开浏览器")
 		devMode   = flag.Bool("dev", false, "开发模式：前端未构建时也启动（配合 Vite）")
 		debugMode = flag.Bool("debug", false, "调试模式：审阅模式（前台只读、Agent 可写）+ 前端资源热更新")
-		preview   = flag.Bool("preview", false, "兼容保留：mdlive 默认就是审阅模式；前台只读，Agent 可通过 MCP/CLI 写入")
+		preview   = flag.Bool("preview", false, "兼容保留：commentloop 默认就是审阅模式；前台只读，Agent 可通过 MCP/CLI 写入")
 		webDir    = flag.String("web-dir", "web/dist", "调试模式从磁盘加载的前端目录")
 		noState   = flag.Bool("no-state", false, "不读取 / 保存目录列表")
-		stateDir  = flag.String("state-dir", "", "目录列表的保存位置（默认：用户配置目录/mdlive）")
+		stateDir  = flag.String("state-dir", "", "目录列表的保存位置（默认：用户配置目录/commentloop）")
 		showVer   = flag.Bool("version", false, "打印版本号后退出")
 	)
 	flag.BoolVar(showVer, "v", false, "打印版本号后退出")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "mdlive %s — Markdown 实时预览\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "用法: mdlive [start|run|stop|status] [选项] [目录或 Markdown 文件]\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "commentloop %s — AI 协作审阅循环\n\n", version)
+		fmt.Fprintf(flag.CommandLine.Output(), "用法: commentloop [start|run|stop|status] [选项] [目录或 Markdown 文件]\n\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "子命令:\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  start              后台启动（默认）\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  run                前台运行（调试 / 由进程管理器托管）\n")
@@ -181,7 +182,7 @@ func runServer(args []string) {
 		if !*devMode && !*debugMode {
 			fatal("前端尚未构建：请运行 make build，或在开发时使用 make dev-backend + make dev-web")
 		}
-		log.Println("mdlive: 内嵌前端尚未构建，继续使用磁盘前端或 Vite 开发服务器")
+		log.Println("commentloop: 内嵌前端尚未构建，继续使用磁盘前端或 Vite 开发服务器")
 	}
 
 	ln, actualAddr, err := listenWithFallback(*addrFlag)
@@ -194,7 +195,7 @@ func runServer(args []string) {
 		dir := *stateDir
 		if dir == "" {
 			if userDir, err := os.UserConfigDir(); err == nil {
-				dir = filepath.Join(userDir, "mdlive")
+				dir = filepath.Join(userDir, "commentloop")
 			}
 		}
 		if dir != "" {
@@ -205,7 +206,7 @@ func runServer(args []string) {
 		}
 	}
 
-	// mdlive is review-only: the browser is for reading, commenting and
+	// commentloop is review-only: the browser is for reading, commenting and
 	// reviewing; documents are written by the background Agent through MCP/CLI.
 	// --preview is kept as a compatibility flag.
 	_ = *preview
@@ -234,7 +235,7 @@ func runServer(args []string) {
 	}
 	discoveryPath, discoveryErr := discovery.Write(baseURL, version)
 	if discoveryErr != nil {
-		log.Printf("mdlive: 写入 Agent discovery 文件失败: %v", discoveryErr)
+		log.Printf("commentloop: 写入 Agent discovery 文件失败: %v", discoveryErr)
 	} else {
 		defer discovery.RemoveOwner(discoveryPath, os.Getpid())
 	}
@@ -245,7 +246,7 @@ func runServer(args []string) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	fmt.Printf("mdlive %s\n", version)
+	fmt.Printf("commentloop %s\n", version)
 	fmt.Printf("  主目录  %s\n", app.Root())
 	fmt.Printf("  目录数  %d\n", app.RootCount())
 	if *debugMode {
@@ -266,7 +267,7 @@ func runServer(args []string) {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
-		log.Println("mdlive: 正在退出…")
+		log.Println("commentloop: 正在退出…")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
@@ -321,7 +322,7 @@ func isBoolFlag(f *flag.Flag) bool {
 }
 
 func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "mdlive: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "commentloop: "+format+"\n", args...)
 	os.Exit(1)
 }
 
@@ -398,8 +399,79 @@ func openBrowser(u string) {
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		log.Printf("mdlive: 无法自动打开浏览器: %v", err)
+		log.Printf("commentloop: 无法自动打开浏览器: %v", err)
 		return
 	}
 	go func() { _ = cmd.Wait() }()
+}
+
+// migrateLegacyState moves the old mdlive state directory and database to the
+// Commentloop names. It is intentionally best-effort: a failed migration must
+// not prevent the server from starting with a fresh state directory.
+func migrateLegacyState() {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return
+	}
+	oldDir := filepath.Join(base, "mdlive")
+	newDir := filepath.Join(base, "commentloop")
+	if _, err := os.Stat(oldDir); err != nil {
+		return
+	}
+	if _, err := os.Stat(newDir); os.IsNotExist(err) {
+		if err := os.Rename(oldDir, newDir); err != nil {
+			log.Printf("commentloop: 迁移旧状态目录失败: %v", err)
+			return
+		}
+	} else {
+		// A new directory already exists (for example after a fresh start).
+		// Move known top-level entries without overwriting anything.
+		moveLegacyEntries(oldDir, newDir)
+	}
+	renameLegacyFile(newDir, "mdlive.db", "commentloop.db")
+	renameLegacyFile(newDir, "mdlive.db-wal", "commentloop.db-wal")
+	renameLegacyFile(newDir, "mdlive.db-shm", "commentloop.db-shm")
+	renameLegacyFile(newDir, "mdlive.log", "commentloop.log")
+	removeLegacyDirIfEmpty(oldDir)
+}
+
+func moveLegacyEntries(oldDir, newDir string) {
+	entries, err := os.ReadDir(oldDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		src := filepath.Join(oldDir, entry.Name())
+		dst := filepath.Join(newDir, entry.Name())
+		if _, err := os.Stat(dst); err == nil {
+			if entry.IsDir() {
+				moveLegacyEntries(src, dst)
+			}
+			continue
+		}
+		if err := os.Rename(src, dst); err != nil {
+			log.Printf("commentloop: 迁移旧状态 %s 失败: %v", entry.Name(), err)
+		}
+	}
+}
+
+func renameLegacyFile(dir, oldName, newName string) {
+	oldPath := filepath.Join(dir, oldName)
+	newPath := filepath.Join(dir, newName)
+	if _, err := os.Stat(oldPath); err != nil {
+		return
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		log.Printf("commentloop: 迁移旧状态文件 %s 失败: %v", oldName, err)
+	}
+}
+
+func removeLegacyDirIfEmpty(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err == nil && len(entries) == 0 {
+		_ = os.Remove(dir)
+	}
 }

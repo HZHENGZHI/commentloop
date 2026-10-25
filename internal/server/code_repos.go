@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/coderepo"
+	"github.com/hzhengzhi/commentloop/internal/coderepo"
 )
 
 type codeRepoRecord struct {
@@ -41,7 +41,7 @@ func newCodeRepoStore(db *sql.DB, stateDir string) *codeRepoStore {
 	if strings.TrimSpace(stateDir) != "" {
 		cacheRoot = filepath.Join(stateDir, "code-repos")
 	} else {
-		cacheRoot = filepath.Join(os.TempDir(), "mdlive-code-repos")
+		cacheRoot = filepath.Join(os.TempDir(), "commentloop-code-repos")
 	}
 	return &codeRepoStore{db: db, cacheRoot: cacheRoot}
 }

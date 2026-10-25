@@ -1,6 +1,6 @@
-// Package agentclient is a small client for mdlive's local HTTP API. It is
+// Package agentclient is a small client for commentloop's local HTTP API. It is
 // used by the agent CLI and the MCP server so coding agents can inspect and
-// edit the same local/remote workspace as the mdlive UI.
+// edit the same local/remote workspace as the commentloop UI.
 package agentclient
 
 import (
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"mdlive/internal/discovery"
+	"github.com/hzhengzhi/commentloop/internal/discovery"
 )
 
 type Root struct {
@@ -82,13 +82,13 @@ type Resolved struct {
 	File    *FileEntry
 }
 
-// DefaultURL returns explicit URL, MDLIVE_URL, the discovery file, or the
-// default mdlive port, in that order.
+// DefaultURL returns explicit URL, COMMENTLOOP_URL, the discovery file, or the
+// default commentloop port, in that order.
 func DefaultURL(explicit string) string {
 	if explicit != "" {
 		return normalizeURL(explicit)
 	}
-	if env := strings.TrimSpace(os.Getenv("MDLIVE_URL")); env != "" {
+	if env := strings.TrimSpace(os.Getenv("COMMENTLOOP_URL")); env != "" {
 		return normalizeURL(env)
 	}
 	if path, err := discovery.AgentURLPath(); err == nil {
@@ -111,7 +111,7 @@ func normalizeURL(value string) string {
 }
 
 func New(baseURL string) *Client {
-	tokenPath := strings.TrimSpace(os.Getenv("MDLIVE_AGENT_TOKEN_FILE"))
+	tokenPath := strings.TrimSpace(os.Getenv("COMMENTLOOP_AGENT_TOKEN_FILE"))
 	if tokenPath == "" {
 		if path, err := discovery.AgentTokenPath(); err == nil {
 			tokenPath = path
@@ -120,8 +120,8 @@ func New(baseURL string) *Client {
 	return &Client{
 		base:         normalizeURL(baseURL),
 		http:         &http.Client{Timeout: 120 * time.Second},
-		agentSession: strings.TrimSpace(os.Getenv("MDLIVE_AGENT_SESSION")),
-		agentToken:   strings.TrimSpace(os.Getenv("MDLIVE_AGENT_TOKEN")),
+		agentSession: strings.TrimSpace(os.Getenv("COMMENTLOOP_AGENT_SESSION")),
+		agentToken:   strings.TrimSpace(os.Getenv("COMMENTLOOP_AGENT_TOKEN")),
 		tokenPath:    tokenPath,
 	}
 }
@@ -303,7 +303,7 @@ func Resolve(tree Tree, input string, allowNew bool) (Resolved, error) {
 	if allowNew {
 		return Resolved{}, fmt.Errorf("找不到 %q；写入新文件请使用 <目录名>/<相对路径>，可选目录：%s", input, rootNames(tree))
 	}
-	return Resolved{}, fmt.Errorf("找不到文件 %q；可用 mdlive agent list 查看路径", input)
+	return Resolved{}, fmt.Errorf("找不到文件 %q；可用 commentloop agent list 查看路径", input)
 }
 
 func resolveUnderRoot(tree Tree, root Root, rel string, allowNew bool) (Resolved, error) {
@@ -360,19 +360,19 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 	req.Header.Set("Content-Type", "application/json")
 	// Mark requests made by the Agent CLI/MCP. In preview/review mode the
 	// frontend stays read-only while the background agent may still write.
-	req.Header.Set("X-Mdlive-Agent", "1")
+	req.Header.Set("X-Commentloop-Agent", "1")
 	if c.agentSession != "" {
-		req.Header.Set("X-Mdlive-Agent-Session", c.agentSession)
+		req.Header.Set("X-Commentloop-Agent-Session", c.agentSession)
 	}
 	if token := c.currentToken(); token != "" {
-		req.Header.Set("X-Mdlive-Agent-Token", token)
+		req.Header.Set("X-Commentloop-Agent-Token", token)
 	}
 	if c.agentTool != "" {
-		req.Header.Set("X-Mdlive-MCP-Tool", c.agentTool)
+		req.Header.Set("X-Commentloop-MCP-Tool", c.agentTool)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("无法连接 mdlive 服务 %s：%w", c.base, err)
+		return fmt.Errorf("无法连接 commentloop 服务 %s：%w", c.base, err)
 	}
 	defer res.Body.Close()
 	if out == nil {
@@ -392,15 +392,15 @@ func decodeResponse(res *http.Response, out any) error {
 		}
 		_ = json.Unmarshal(data, &payload)
 		if payload.Error != "" {
-			return fmt.Errorf("mdlive 返回错误：%s", payload.Error)
+			return fmt.Errorf("commentloop 返回错误：%s", payload.Error)
 		}
-		return fmt.Errorf("mdlive 返回 HTTP %d", res.StatusCode)
+		return fmt.Errorf("commentloop 返回 HTTP %d", res.StatusCode)
 	}
 	if out == nil || len(data) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("解析 mdlive 响应失败：%w", err)
+		return fmt.Errorf("解析 commentloop 响应失败：%w", err)
 	}
 	return nil
 }

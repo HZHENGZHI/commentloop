@@ -94,7 +94,7 @@ const lightTheme = EditorView.theme(
 );
 
 // oneDark provides the syntax colors; these overrides make the chrome blend
-// into mdlive's own dark surface.
+// into commentloop's own dark surface.
 const darkOverrides = EditorView.theme(
   {
     "&": {

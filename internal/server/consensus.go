@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"mdlive/internal/lsp"
+	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
 const (
@@ -65,7 +65,7 @@ func (c *consensusScheduler) run(docPath string, includeExisting bool) {
 		if err != nil {
 			// Keep the old consensus. The next review retries.
 			// The error is intentionally not surfaced as an agent failure.
-			fmt.Fprintf(os.Stderr, "mdlive: consensus refresh: %v\n", err)
+			fmt.Fprintf(os.Stderr, "commentloop: consensus refresh: %v\n", err)
 		}
 		c.mu.Lock()
 		if c.pending[docPath] && c.ctx.Err() == nil {
@@ -167,7 +167,7 @@ func (s *Server) consensusPrompt(docPath string, includeExisting bool) (string, 
 		return "", fmt.Errorf("还没有可提炼的讨论会话")
 	}
 	var b strings.Builder
-	b.WriteString("You maintain a compact, durable discussion consensus for a Markdown document in mdlive.\n")
+	b.WriteString("You maintain a compact, durable discussion consensus for a Markdown document in commentloop.\n")
 	b.WriteString("The user discussed the document with AI agents in imported sessions. Extract the decisions that should guide future comment-driven edits.\n\n")
 	b.WriteString("Return ONLY the updated consensus as Chinese Markdown. Do not use code fences. Keep it under 3500 Chinese characters.\n")
 	b.WriteString("Preserve still-valid decisions, update superseded ones, and never invent a decision that is not supported by the material.\n")

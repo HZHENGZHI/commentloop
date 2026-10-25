@@ -412,7 +412,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                 用户提交评论后自动运行 Agent
                 <em>
                   {settings.agent.runner === "external"
-                    ? "由外部 mdlive agent-runner 领取任务；需要先启动 runner"
+                    ? "由外部 commentloop agent-runner 领取任务；需要先启动 runner"
                     : "嵌入模式目前仅支持 pi Agent；需要已配置 MCP 和模型"}
                 </em>
               </span>

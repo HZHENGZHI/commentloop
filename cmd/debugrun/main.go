@@ -1,7 +1,7 @@
 // Command debugrun is a small backend hot-reload supervisor used by
 // `make debug`.
 //
-// It builds the mdlive server from the current sources, starts it, watches
+// It builds the commentloop server from the current sources, starts it, watches
 // .go files (plus go.mod/go.sum), and after a successful rebuild replaces the
 // old process. If a build fails, the previous server keeps running so the
 // preview stays usable while fixing compile errors.
@@ -40,8 +40,8 @@ type supervisor struct {
 func main() {
 	root := flag.String("root", ".", "project root to build and watch")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "用法: debugrun [选项] -- <mdlive 参数...>\n\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "构建 mdlive，监听 .go 变更并在编译成功后热重启后端。\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "用法: debugrun [选项] -- <commentloop 参数...>\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "构建 commentloop，监听 .go 变更并在编译成功后热重启后端。\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -57,7 +57,7 @@ func main() {
 	if goCmd == "" {
 		goCmd = "go"
 	}
-	tmpDir, err := os.MkdirTemp("", "mdlive-debug-*")
+	tmpDir, err := os.MkdirTemp("", "commentloop-debug-*")
 	if err != nil {
 		log.Fatalf("创建临时目录失败: %v", err)
 	}
@@ -106,7 +106,7 @@ func (s *supervisor) buildAndRun() error {
 
 func (s *supervisor) build() (string, error) {
 	s.buildSeq++
-	out := filepath.Join(s.tmpDir, fmt.Sprintf("mdlive-%d", s.buildSeq))
+	out := filepath.Join(s.tmpDir, fmt.Sprintf("commentloop-%d", s.buildSeq))
 
 	log.Printf("编译中…")
 	cmd := exec.Command(s.goCmd, "build", "-o", out, ".")

@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"mdlive/internal/watcher"
+	"github.com/hzhengzhi/commentloop/internal/watcher"
 )
 
 const maxRoots = 32
@@ -111,7 +111,7 @@ func (s *Server) initRoots(primary string, extras []string) error {
 			continue
 		}
 		if _, _, err := s.registerLocalRoot(extra, false); err != nil {
-			log.Printf("mdlive: 无法添加目录 %q: %v", extra, err)
+			log.Printf("commentloop: 无法添加目录 %q: %v", extra, err)
 		}
 	}
 
@@ -122,7 +122,7 @@ func (s *Server) initRoots(primary string, extras []string) error {
 		case rootKindRemote:
 			cfg := remoteConfigFromState(def)
 			if _, _, err := s.registerRemoteRoot(cfg, false); err != nil {
-				log.Printf("mdlive: 无法恢复远程目录 %s:%s: %v（保留为离线目录）", cfg.Host, cfg.Path, err)
+				log.Printf("commentloop: 无法恢复远程目录 %s:%s: %v（保留为离线目录）", cfg.Host, cfg.Path, err)
 				s.addOfflineRemoteRoot(cfg, err)
 			}
 		default:
@@ -130,14 +130,14 @@ func (s *Server) initRoots(primary string, extras []string) error {
 				continue
 			}
 			if _, _, err := s.registerLocalRoot(def.Path, false); err != nil {
-				log.Printf("mdlive: 跳过已保存但不可用的目录 %q: %v", def.Path, err)
+				log.Printf("commentloop: 跳过已保存但不可用的目录 %q: %v", def.Path, err)
 			}
 		}
 	}
 
 	// Persist the merged workspace (canonical paths, deduplicated).
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("mdlive: 保存目录列表失败: %v", err)
+		log.Printf("commentloop: 保存目录列表失败: %v", err)
 	}
 	return nil
 }
@@ -225,7 +225,7 @@ func (s *Server) registerRemoteRoot(cfg remoteConfig, primary bool) (*root, bool
 
 	lister, lerr := newRemoteFS(cfg)
 	if lerr != nil {
-		log.Printf("mdlive: 远程目录 %s 的轮询连接建立失败，暂用 IO 连接: %v", cfg.Host, lerr)
+		log.Printf("commentloop: 远程目录 %s 的轮询连接建立失败，暂用 IO 连接: %v", cfg.Host, lerr)
 	}
 
 	s.rootMu.Lock()
@@ -362,7 +362,7 @@ func (s *Server) handleAddRemoteRoot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) finishAddRoot(w http.ResponseWriter, ro *root, warning string) {
 	s.hub.broadcast(outMessage{Type: "tree"})
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("mdlive: 保存目录列表失败: %v", err)
+		log.Printf("commentloop: 保存目录列表失败: %v", err)
 		if warning == "" {
 			warning = "目录已添加，但写入本地配置失败"
 		} else {
@@ -414,7 +414,7 @@ func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("mdlive: 保存目录列表失败: %v", err)
+		log.Printf("commentloop: 保存目录列表失败: %v", err)
 	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -752,7 +752,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 		s.storeRemoteTree(ro, files)
 		s.hub.broadcast(outMessage{Type: "tree"})
 	} else {
-		log.Printf("mdlive: 远程目录 %s 初始扫描失败: %v", ro.Name, err)
+		log.Printf("commentloop: 远程目录 %s 初始扫描失败: %v", ro.Name, err)
 	}
 
 	ticker := time.NewTicker(s.remotePollInterval)
@@ -769,7 +769,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 			files, err := pollFS.list()
 			if err != nil {
 				if err.Error() != lastErr {
-					log.Printf("mdlive: 远程目录 %s 轮询失败: %v", ro.Name, err)
+					log.Printf("commentloop: 远程目录 %s 轮询失败: %v", ro.Name, err)
 					lastErr = err.Error()
 				}
 				if rerr := pollFS.reconnect(); rerr == nil {

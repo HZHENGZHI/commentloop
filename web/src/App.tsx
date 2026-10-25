@@ -95,10 +95,10 @@ import {
 
 const PREVIEW_DELAY = 80;
 const SAVE_DELAY = 850;
-const LAST_FILE_KEY = "mdlive:last";
-const SIDEBAR_KEY = "mdlive:sidebar";
-const VIEW_KEY = "mdlive:view";
-const SPLIT_KEY = "mdlive:split";
+const LAST_FILE_KEY = "commentloop:last";
+const SIDEBAR_KEY = "commentloop:sidebar";
+const VIEW_KEY = "commentloop:view";
+const SPLIT_KEY = "commentloop:split";
 
 const EMPTY_STATS: DocStats = { words: 0, chars: 0, lines: 1 };
 
@@ -989,7 +989,7 @@ export default function App() {
           applySavedDoc(incomingContent, incomingHtml);
           break;
         }
-        // origin === "remote": another mdlive window is typing.
+        // origin === "remote": another commentloop window is typing.
         if (previewOnly) {
           setHtml(incomingHtml);
           break;
@@ -1355,8 +1355,8 @@ export default function App() {
 
   useEffect(() => {
     document.title = currentPath
-      ? `${baseName(currentPath)} · mdlive`
-      : "mdlive · Markdown 实时预览";
+      ? `${baseName(currentPath)} · commentloop`
+      : "Commentloop · AI 协作审阅";
   }, [currentPath]);
 
   useEffect(() => {
@@ -1369,7 +1369,7 @@ export default function App() {
     return (
       <div className="boot-screen">
         <div className="boot-mark">M</div>
-        <div className="boot-title">mdlive</div>
+        <div className="boot-title">commentloop</div>
         <span className="spinner" />
       </div>
     );
@@ -1400,7 +1400,7 @@ export default function App() {
           </button>
           <div className="brand">
             <span className="brand-mark">M</span>
-            <span className="brand-name">mdlive</span>
+            <span className="brand-name">commentloop</span>
           </div>
           <span className="brand-tag">Markdown live preview</span>
           {debugMode ? (

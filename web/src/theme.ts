@@ -2,17 +2,17 @@ import githubLight from "github-markdown-css/github-markdown-light.css?url";
 import githubDark from "github-markdown-css/github-markdown-dark.css?url";
 import type { Theme } from "./types";
 
-const THEME_KEY = "mdlive:theme";
+const THEME_KEY = "commentloop:theme";
 
 export function currentTheme(): Theme {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 function githubLink(theme: Theme): HTMLLinkElement {
-  let link = document.getElementById("mdlive-github") as HTMLLinkElement | null;
+  let link = document.getElementById("commentloop-github") as HTMLLinkElement | null;
   if (!link) {
     link = document.createElement("link");
-    link.id = "mdlive-github";
+    link.id = "commentloop-github";
     link.rel = "stylesheet";
     document.head.appendChild(link);
   }
@@ -30,7 +30,7 @@ export function applyTheme(theme: Theme): void {
   }
   githubLink(theme);
   const highlight = document.getElementById(
-    "mdlive-highlight",
+    "commentloop-highlight",
   ) as HTMLLinkElement | null;
   if (highlight) {
     highlight.href = `/api/highlight.css?theme=${theme}`;

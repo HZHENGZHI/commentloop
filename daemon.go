@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"mdlive/internal/discovery"
+	"github.com/hzhengzhi/commentloop/internal/discovery"
 )
 
 const daemonStartTimeout = 10 * time.Second
@@ -39,7 +39,7 @@ func hasFlag(args []string, name string) bool {
 
 func startDaemon(args []string) error {
 	if info, err := discovery.Read(); err == nil {
-		return fmt.Errorf("mdlive 已在运行 (pid %d, %s)；先执行 mdlive stop", info.PID, info.URL)
+		return fmt.Errorf("commentloop 已在运行 (pid %d, %s)；先执行 commentloop stop", info.PID, info.URL)
 	}
 
 	logPath, err := discovery.LogPath()
@@ -64,7 +64,7 @@ func startDaemon(args []string) error {
 		childArgs = append(childArgs, "--no-open")
 	}
 	cmd := exec.Command(exe, childArgs...)
-	cmd.Env = append(os.Environ(), "MDLIVE_DAEMON_CHILD=1")
+	cmd.Env = append(os.Environ(), "COMMENTLOOP_DAEMON_CHILD=1")
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -79,13 +79,13 @@ func startDaemon(args []string) error {
 		info, findErr := discovery.Find(pid)
 		if findErr == nil && info.URL != "" {
 			if healthOK(info.URL) {
-				fmt.Printf("mdlive 已启动\n")
+				fmt.Printf("commentloop 已启动\n")
 				fmt.Printf("  PID    %d\n", info.PID)
 				fmt.Printf("  地址    %s\n", info.URL)
 				fmt.Printf("  版本    %s\n", info.Version)
 				fmt.Printf("  日志    %s\n", logPath)
-				fmt.Printf("  停止    mdlive stop\n")
-				fmt.Printf("  状态    mdlive status\n")
+				fmt.Printf("  停止    commentloop stop\n")
+				fmt.Printf("  状态    commentloop status\n")
 				if !hasFlag(args, "no-open") {
 					openBrowser(info.URL)
 				}
@@ -100,7 +100,7 @@ func startDaemon(args []string) error {
 func stopDaemon() error {
 	info, err := discovery.Read()
 	if err != nil {
-		return fmt.Errorf("没有运行中的 mdlive 实例")
+		return fmt.Errorf("没有运行中的 commentloop 实例")
 	}
 	process, err := os.FindProcess(info.PID)
 	if err != nil {
@@ -114,7 +114,7 @@ func stopDaemon() error {
 	for time.Now().Before(deadline) {
 		if !processAlive(info.PID) {
 			discovery.RemovePID(info.PID)
-			fmt.Printf("mdlive 已停止 (pid %d)\n", info.PID)
+			fmt.Printf("commentloop 已停止 (pid %d)\n", info.PID)
 			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -128,21 +128,21 @@ func stopDaemon() error {
 	if processAlive(info.PID) {
 		return fmt.Errorf("无法停止进程 %d", info.PID)
 	}
-	fmt.Printf("mdlive 已强制停止 (pid %d)\n", info.PID)
+	fmt.Printf("commentloop 已强制停止 (pid %d)\n", info.PID)
 	return nil
 }
 
 func statusDaemon() {
 	info, err := discovery.Read()
 	if err != nil {
-		fmt.Println("mdlive 未运行")
+		fmt.Println("commentloop 未运行")
 		return
 	}
 	uptime := time.Since(info.StartedAt)
 	if uptime < 0 {
 		uptime = 0
 	}
-	fmt.Printf("mdlive 运行中\n")
+	fmt.Printf("commentloop 运行中\n")
 	fmt.Printf("  PID    %d\n", info.PID)
 	fmt.Printf("  地址    %s\n", info.URL)
 	fmt.Printf("  版本    %s\n", info.Version)

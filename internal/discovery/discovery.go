@@ -1,4 +1,4 @@
-// Package discovery stores the address of running local mdlive servers so CLI
+// Package discovery stores the address of running local commentloop servers so CLI
 // and MCP clients can find them.
 package discovery
 
@@ -25,7 +25,7 @@ func dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "mdlive"), nil
+	return filepath.Join(base, "commentloop"), nil
 }
 
 func instancesDir() (string, error) {
@@ -64,13 +64,13 @@ func AgentURLPath() (string, error) {
 	return filepath.Join(d, "agent-url"), nil
 }
 
-// LogPath is where a background mdlive instance appends its stdout/stderr.
+// LogPath is where a background commentloop instance appends its stdout/stderr.
 func LogPath() (string, error) {
 	d, err := dir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(d, "mdlive.log"), nil
+	return filepath.Join(d, "commentloop.log"), nil
 }
 
 // Find returns the discovery record for a specific process.

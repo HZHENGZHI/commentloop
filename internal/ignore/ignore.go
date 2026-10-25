@@ -1,5 +1,5 @@
 // Package ignore centralizes the rules for which files and directories
-// mdlive watches, lists and renders.
+// commentloop watches, lists and renders.
 package ignore
 
 import (
@@ -27,7 +27,7 @@ var dirNames = map[string]struct{}{
 	".trash":       {},
 }
 
-// SkipDir reports whether a directory should be hidden from mdlive.
+// SkipDir reports whether a directory should be hidden from commentloop.
 func SkipDir(name string) bool {
 	if name == "" || strings.HasPrefix(name, ".") {
 		return true
