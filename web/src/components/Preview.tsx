@@ -27,6 +27,76 @@ interface PreviewProps {
   theme: Theme;
 }
 
+// Mermaid lets a diagram set its own fill via style/classDef while the label
+// inherits the theme text color. In dark mode that can produce light text on a
+// light custom fill (for example a yellow warning box). Pick a readable color
+// from the actual shape fill instead of applying one color to every label.
+function mermaidTextColor(fill: string, theme: Theme): string {
+  const fallback = theme === "dark" ? "#e6edf3" : "#1f2328";
+  const value = fill.trim().toLowerCase();
+  if (!value || value === "none" || value === "transparent") return fallback;
+  const match = value.match(
+    /rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/,
+  );
+  if (!match) return fallback;
+  const [, r, g, b] = match.map(Number);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.56 ? "#111827" : "#e6edf3";
+}
+
+function mermaidBackground(el: Element, container: HTMLElement): string {
+  let ancestor: Element | null = el.parentElement;
+  while (ancestor && ancestor !== container) {
+    const shape = ancestor.querySelector(
+      ":scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path",
+    );
+    if (shape) {
+      const rect = shape as SVGRectElement;
+      if (
+        shape.tagName.toLowerCase() === "rect" &&
+        (!rect.getAttribute("width") ||
+          !rect.getAttribute("height") ||
+          Number(rect.getAttribute("width")) <= 0 ||
+          Number(rect.getAttribute("height")) <= 0)
+      ) {
+        ancestor = ancestor.parentElement;
+        continue;
+      }
+      const candidate = getComputedStyle(shape).fill;
+      if (
+        candidate &&
+        candidate !== "none" &&
+        candidate !== "transparent" &&
+        !/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(candidate)
+      ) {
+        return candidate;
+      }
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return "";
+}
+
+function fixMermaidContrast(container: HTMLElement, theme: Theme) {
+  container.querySelectorAll<SVGTextElement>("text").forEach((text) => {
+    const color = mermaidTextColor(mermaidBackground(text, container), theme);
+    text.style.setProperty("fill", color, "important");
+    text.querySelectorAll("tspan").forEach((tspan) => {
+      (tspan as SVGElement).style.setProperty("fill", color, "important");
+    });
+  });
+  // Mermaid uses HTML labels (foreignObject) for some diagram types. Its
+  // generated CSS sets `color` on span elements, so the SVG text override
+  // above cannot reach them.
+  container.querySelectorAll<SVGForeignObjectElement>("foreignObject").forEach((foreign) => {
+    const color = mermaidTextColor(mermaidBackground(foreign, container), theme);
+    foreign.style.setProperty("color", color, "important");
+    foreign.querySelectorAll("*").forEach((child) => {
+      (child as HTMLElement).style.setProperty("color", color, "important");
+    });
+  });
+}
+
 export function Preview({
   html,
   currentPath,
@@ -261,6 +331,7 @@ export function Preview({
             );
             if (cancelled) return;
             diagram.innerHTML = svg;
+            fixMermaidContrast(diagram, theme);
             block.querySelector(".mermaid-error")?.remove();
           } catch (error) {
             if (cancelled) return;
