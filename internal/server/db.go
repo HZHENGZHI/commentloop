@@ -45,8 +45,70 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 		if err := migrateLegacyRoots(db, stateDir); err != nil {
 			log.Printf("commentloop: failed to migrate roots.json: %v", err)
 		}
+		if err := repairLegacyCodeRepoPaths(db, stateDir); err != nil {
+			log.Printf("commentloop: failed to repair legacy code repository paths: %v", err)
+		}
 	}
 	return db, nil
+}
+
+// repairLegacyCodeRepoPaths fixes paths captured before the mdlive -> commentloop
+// rename. It only rewrites a path when the old path is gone and the new path
+// exists, so a deliberate directory with the old name is never touched.
+func repairLegacyCodeRepoPaths(db *sql.DB, stateDir string) error {
+	oldState := filepath.Join(filepath.Dir(stateDir), "mdlive")
+	if oldState == stateDir {
+		return nil
+	}
+	rows, err := db.Query(`SELECT id, path FROM code_repos`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type repoPath struct{ id, path string }
+	var repos []repoPath
+	for rows.Next() {
+		var item repoPath
+		if err := rows.Scan(&item.id, &item.path); err != nil {
+			return err
+		}
+		repos = append(repos, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, repo := range repos {
+		next := rewriteLegacyRepoPath(repo.path, oldState, stateDir)
+		if next == repo.path {
+			continue
+		}
+		if _, err := db.Exec(`UPDATE code_repos SET path=? WHERE id=?`, next, repo.id); err != nil {
+			log.Printf("commentloop: failed to repair code repository %s: %v", repo.id, err)
+		}
+	}
+	return nil
+}
+
+func rewriteLegacyRepoPath(path, oldState, newState string) string {
+	clean := filepath.Clean(path)
+	if strings.HasPrefix(clean, oldState+string(filepath.Separator)) {
+		next := newState + clean[len(oldState):]
+		if pathExists(next) && !pathExists(clean) {
+			return next
+		}
+	}
+	if filepath.Base(clean) == "mdlive" {
+		next := filepath.Join(filepath.Dir(clean), "commentloop")
+		if pathExists(next) && !pathExists(clean) {
+			return next
+		}
+	}
+	return path
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func migrateSchema(db *sql.DB) error {
