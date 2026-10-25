@@ -248,6 +248,9 @@ export function setupMermaidAnimation(
   let playing = false;
   let step = 0;
   let timer: number | undefined;
+  let camera = false;
+  let savedScrollTop = 0;
+  let cameraOffset = 0;
   const running = new Set<Animation>();
 
   const currentNodes = new Set<SVGGElement>();
@@ -333,19 +336,48 @@ export function setupMermaidAnimation(
     animation.addEventListener("cancel", finish, { once: true });
   };
 
+  const releaseCamera = (keepPosition: boolean) => {
+    if (!camera) return;
+    const nextTop = keepPosition ? cameraOffset : savedScrollTop;
+    diagram.style.transition = "none";
+    diagram.style.transform = "";
+    viewport.classList.remove("is-camera");
+    viewport.scrollTop = Math.max(0, nextTop);
+    camera = false;
+    requestAnimationFrame(() => {
+      diagram.style.transition = "";
+    });
+  };
+
   const ensureVisible = (element: Element) => {
-    if (block.classList.contains("is-expanded")) return;
-    if (viewport.scrollHeight <= viewport.clientHeight + 2) return;
+    if (block.classList.contains("is-expanded")) {
+      releaseCamera(false);
+      return;
+    }
+    if (!camera) {
+      if (viewport.scrollHeight <= viewport.clientHeight + 2) return;
+      camera = true;
+      savedScrollTop = viewport.scrollTop;
+      viewport.classList.add("is-camera");
+      viewport.scrollTop = 0;
+    }
     const nodeRect = element.getBoundingClientRect();
     const viewRect = viewport.getBoundingClientRect();
+    // A small camera transform is much smoother than native scrolling for a
+    // tall SVG, especially while its edge paths are being animated.
     if (nodeRect.top >= viewRect.top + 8 && nodeRect.bottom <= viewRect.bottom - 8) {
       return;
     }
-    const target =
-      viewport.scrollTop +
-      (nodeRect.top - viewRect.top) -
-      Math.max(8, (viewport.clientHeight - nodeRect.height) / 2);
-    viewport.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    const diagramRect = diagram.getBoundingClientRect();
+    const contentTop = nodeRect.top - diagramRect.top;
+    const max = Math.max(0, diagram.clientHeight - viewport.clientHeight);
+    cameraOffset = Math.round(
+      Math.min(
+        max,
+        Math.max(0, contentTop + nodeRect.height / 2 - viewport.clientHeight / 2),
+      ),
+    );
+    diagram.style.transform = `translateY(${-cameraOffset}px)`;
   };
 
   const updateControls = () => {
@@ -373,6 +405,15 @@ export function setupMermaidAnimation(
     }
   };
 
+  const finishPlayback = () => {
+    playing = false;
+    // The final step is fully revealed; keeping its accent color makes the
+    // finished diagram look like it is still waiting on an action.
+    clearCurrent();
+    releaseCamera(true);
+    updateControls();
+  };
+
   const schedule = () => {
     stopTimer();
     if (!playing) return;
@@ -383,11 +424,7 @@ export function setupMermaidAnimation(
         revealUpTo(step, true);
         updateControls();
         if (step >= steps.length) {
-          playing = false;
-          // The final step is fully revealed; keeping its accent color makes
-          // the finished diagram look like it is still waiting on an action.
-          clearCurrent();
-          updateControls();
+          finishPlayback();
           return;
         }
         schedule();
@@ -408,6 +445,15 @@ export function setupMermaidAnimation(
     controls.hidden = false;
     animateButton.textContent = i18n.t("退出");
     animateButton.setAttribute("aria-pressed", "true");
+    if (
+      !block.classList.contains("is-expanded") &&
+      viewport.scrollHeight > viewport.clientHeight + 2
+    ) {
+      camera = true;
+      savedScrollTop = viewport.scrollTop;
+      viewport.classList.add("is-camera");
+      viewport.scrollTop = 0;
+    }
     for (const node of diagram.querySelectorAll<SVGGElement>("g.node")) {
       node.classList.add("mermaid-step-hidden");
     }
@@ -432,6 +478,7 @@ export function setupMermaidAnimation(
       element.classList.remove("mermaid-step-hidden");
     }
     block.classList.remove("is-animating");
+    releaseCamera(false);
     controls.hidden = true;
     animateButton.textContent = i18n.t("动画");
     animateButton.setAttribute("aria-pressed", "false");
@@ -456,7 +503,10 @@ export function setupMermaidAnimation(
     if (step < steps.length) {
       step += 1;
       revealUpTo(step, true);
-      if (step >= steps.length) clearCurrent();
+      if (step >= steps.length) {
+        finishPlayback();
+        return;
+      }
     }
     updateControls();
   };
@@ -523,6 +573,7 @@ export function setupMermaidAnimation(
       element.classList.remove("mermaid-step-hidden", "mermaid-step-current");
     }
     block.classList.remove("is-animating");
+    releaseCamera(false);
     animateButton.removeEventListener("click", onAnimate);
     toggle.removeEventListener("click", onToggle);
     prev.removeEventListener("click", onPrev);

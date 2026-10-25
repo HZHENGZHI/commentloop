@@ -5999,3 +5999,18 @@ body.mermaid-modal-open {
   border-top: 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* Tall diagrams use a composited camera move instead of native scrolling
+   during playback; native scroll + SVG repaint is visibly choppy. */
+.mermaid-diagram {
+  transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+
+.mermaid-viewport.is-camera {
+  overflow: hidden;
+}
+
+.mermaid-block.is-expanded .mermaid-diagram {
+  transform: none !important;
+}
