@@ -14,7 +14,7 @@ import (
 
 const promptOptimizeTimeout = 2 * time.Minute
 
-func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool) (string, error) {
+func (s *Server) optimizePromptTemplate(ctx context.Context, language, name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool) (string, error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	body = strings.TrimSpace(body)
@@ -43,6 +43,68 @@ func (s *Server) optimizePromptTemplate(ctx context.Context, name, description, 
 	if !allowCommentReply {
 		replyMode = "禁止回复评论"
 	}
+	if language == "en" {
+		prompt := fmt.Sprintf(`You are a prompt engineering expert. Optimize the task prompt below for a Commentloop background Code Agent.
+
+The agent reads the document, comments, discussion consensus, and code repositories through Commentloop MCP and acts on the user's review comments.
+Task name: %s
+Task description: %s
+Execution mode: %s
+Code access: %s
+Reply access: %s
+
+Current prompt (possibly a rough draft):
+---BEGIN---
+%s
+---END---
+
+Requirements:
+1. Preserve the original intent and task boundaries; do not expand the task.
+2. Preserve every {{variable}} exactly. Available variables: doc_path, comment_quote, comment_body, comment_thread, group_comment_ids, consensus, discussion_excerpts, code_repos.
+3. Make instructions concrete and executable with a clear output format, including context use, constraints, and handling of failure or uncertainty.
+4. If the mode is analysis-only, explicitly require that the document must not be modified; reply with analysis and a proposal instead.
+5. Do not include MCP tool safety rules or resolve rules; the system appends those separately.
+6. Do not ask the agent to interactively question the user. Do not output explanations, preambles, or code fences.
+7. Use English Markdown and keep it under 2000 words.
+
+Output only the optimized prompt body.`, name, description, mode, codeMode, replyMode, truncatePromptText(body, 8000))
+		runCtx, cancel := context.WithTimeout(ctx, promptOptimizeTimeout)
+		defer cancel()
+		args = append(args,
+			"--print", "--no-tools", "--no-session", "--no-context-files",
+			"--no-extensions", "--no-mcp", "--", prompt,
+		)
+		cmd := exec.CommandContext(runCtx, command, args...)
+		if s.primaryPath != "" {
+			cmd.Dir = s.primaryPath
+		}
+		cmd.Env = os.Environ()
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			if runCtx.Err() != nil {
+				return "", fmt.Errorf("AI optimization timed out")
+			}
+			detail := strings.TrimSpace(stderr.String())
+			if len(detail) > 1200 {
+				detail = detail[len(detail)-1200:]
+			}
+			if detail != "" {
+				return "", fmt.Errorf("AI optimization failed: %s", detail)
+			}
+			return "", fmt.Errorf("AI optimization failed: %w", err)
+		}
+		optimized := stripCodeFence(stdout.String())
+		if strings.TrimSpace(optimized) == "" {
+			return "", fmt.Errorf("AI returned no optimization result")
+		}
+		if len(optimized) > maxConsensusSize {
+			optimized = optimized[:maxConsensusSize]
+		}
+		return optimized, nil
+	}
+
 	prompt := fmt.Sprintf(`你是提示词工程专家。请优化下面这个 commentloop 后台 Code Agent 的任务提示词。
 
 这个 Agent 通过 commentloop MCP 读取文档、评论、讨论共识和代码仓库，并按用户评论工作。

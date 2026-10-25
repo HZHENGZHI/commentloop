@@ -112,7 +112,7 @@ func (s *Server) handleOptimizePromptTemplate(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
-	body, err := s.optimizePromptTemplate(r.Context(), req.Name, req.Description, req.Body,
+	body, err := s.optimizePromptTemplate(r.Context(), promptLanguage(r), req.Name, req.Description, req.Body,
 		req.AllowDocumentEdit, req.AllowCodeRead, req.AllowCommentReply)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
