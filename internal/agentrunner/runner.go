@@ -50,7 +50,7 @@ func Run(args []string) error {
 	fs.SetOutput(os.Stderr)
 	urlFlag := fs.String("url", "", "mdlive server URL（默认 discovery / MDLIVE_URL）")
 	runnerID := fs.String("id", "", "Runner ID（默认 hostname-pid）")
-	agentType := fs.String("agent-type", "pi", "要领取的 Agent 类型：pi / claude-code / codex / generic")
+	agentType := fs.String("agent-type", "pi", "要领取的 Agent 类型：pi / claude-code / codex / cursor / generic")
 	command := fs.String("command", "", "Agent 可执行文件（默认按 agent-type）")
 	promptMode := fs.String("prompt-mode", "arg", "prompt 传递方式：arg / stdin")
 	timeout := fs.Duration("timeout", 15*time.Minute, "单任务超时")
