@@ -465,11 +465,23 @@ export async function enhanceMermaidDiagrams(
     pre.replaceWith(block);
     blocks.add(block);
   });
+  const bindAnimation = (block: HTMLElement) => {
+    const diagram = block.querySelector<HTMLElement>(".mermaid-diagram");
+    if (!diagram?.querySelector("svg")) return;
+    animationDisposers.push(
+      setupMermaidAnimation(block, diagram, block.dataset.source ?? ""),
+    );
+  };
   article.querySelectorAll<HTMLElement>(".mermaid-block").forEach((block) => {
     updateToolbar(block);
     if (block.dataset.renderedTheme !== theme) blocks.add(block);
+    else bindAnimation(block);
   });
-  if (blocks.size === 0) return () => {};
+  if (blocks.size === 0) {
+    return () => {
+      for (const dispose of animationDisposers) dispose();
+    };
+  }
 
   try {
     const mermaid = await loadMermaid();
