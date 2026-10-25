@@ -696,6 +696,58 @@ func TestLocalCodeRepoBranchSwitch(t *testing.T) {
 	}
 }
 
+func TestAgentJobQueueTokenAndPathACL(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n")
+	mustWrite(t, filepath.Join(root, "other.md"), "# Other\n")
+	app, err := New(Options{Root: root, StateDir: t.TempDir(), WebFS: mapFS(), Version: "test", AllowRemote: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	docPath := canonical(app, "doc.md")
+	otherPath := canonical(app, "other.md")
+	job, err := app.agentJobs.create(AgentJob{
+		DocPath: docPath, CommentID: "c1", AgentType: "generic", Prompt: "test",
+		Capabilities: agentCapabilities{WriteDocs: true, ReadCode: false, ReplyComments: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := doJSON(t, app, http.MethodPost, "/api/agent/runner/claim", agentRunnerClaimRequest{
+		RunnerID: "runner-1", AgentType: "generic",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("claim status=%d body=%s", rec.Code, rec.Body)
+	}
+	claimed := decode[agentClaimResponse](t, rec)
+	if claimed.ID != job.ID || claimed.Token == "" {
+		t.Fatalf("claimed = %+v", claimed)
+	}
+	headers := map[string]string{"X-Mdlive-Agent-Token": claimed.Token, "X-Mdlive-Agent": "1"}
+	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: docPath, Content: "# changed"}, headers)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("current doc write status=%d body=%s", rec.Code, rec.Body)
+	}
+	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: otherPath, Content: "# other"}, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("other doc write status=%d body=%s", rec.Code, rec.Body)
+	}
+	rec = doJSONHeaders(t, app, http.MethodGet, "/api/code/repos", nil, headers)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code read status=%d body=%s", rec.Code, rec.Body)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/agent/runner/finish", agentRunnerFinishRequest{
+		RunnerID: "runner-1", ID: job.ID, Success: true,
+	})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("finish status=%d body=%s", rec.Code, rec.Body)
+	}
+	if _, ok := app.agentCaps.lookupToken(claimed.Token); ok {
+		t.Fatal("job capability token was not cleared")
+	}
+}
+
 func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "doc.md"), "# Doc\n")

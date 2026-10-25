@@ -22,6 +22,7 @@ type reviewAgentJob struct {
 	CommentID    string
 	Prompt       string
 	Capabilities agentCapabilities
+	RepoIDs      []string
 }
 
 type sessionAgentWorker struct {
@@ -138,7 +139,11 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		r.srv.broadcastAgent(job.Path, "error", fmt.Sprintf("%s 启动失败：%v", agent.Name, err))
 		return
 	}
-	r.srv.agentCaps.set(r.session.ID, job.Capabilities)
+	r.srv.agentCaps.setGrant(r.session.ID, agentGrant{
+		Capabilities: job.Capabilities,
+		DocPath:      job.Path,
+		RepoIDs:      job.RepoIDs,
+	})
 	defer r.srv.agentCaps.clear(r.session.ID)
 	r.srv.broadcastAgent(job.Path, "working", fmt.Sprintf("%s 正在处理评论…", agent.Name))
 	progress := func(message string) {
@@ -565,27 +570,42 @@ func (s *Server) enqueueAutoReview(path, commentID string, force bool) error {
 	if !force && !agent.AutoRun {
 		return nil
 	}
-	if !strings.EqualFold(agent.Type, "pi") {
-		return fmt.Errorf("当前 Agent 类型不支持自动运行")
-	}
-	if strings.TrimSpace(agent.Command) == "" {
-		return fmt.Errorf("Agent 启动命令为空")
+	comment, ok := s.comments.get(path, commentID)
+	if !ok {
+		return fmt.Errorf("评论不存在")
 	}
 	prompt, err := s.buildReviewAgentPrompt(path, commentID)
 	if err != nil {
 		return fmt.Errorf("无法生成 Agent 任务：%w", err)
 	}
+	repos, _ := s.codeRepos.linked(path)
+	if agent.Runner == "external" {
+		job, err := s.agentJobs.create(AgentJob{
+			DocPath: path, CommentID: commentID, AgentType: agent.Type,
+			Prompt: prompt, PromptTemplateID: comment.PromptTemplateID,
+			Capabilities: s.commentCapabilities(comment),
+			RepoIDs:      linkedRepoIDs(repos),
+		})
+		if err != nil {
+			return fmt.Errorf("创建 Agent 任务失败：%w", err)
+		}
+		s.broadcastAgent(path, "queued", fmt.Sprintf("已创建外部 Agent 任务 %s", job.ID))
+		return nil
+	}
+	if !strings.EqualFold(agent.Type, "pi") {
+		return fmt.Errorf("当前 Agent 类型不支持嵌入自动运行；可切换外部 Runner")
+	}
+	if strings.TrimSpace(agent.Command) == "" {
+		return fmt.Errorf("Agent 启动命令为空")
+	}
 	session, err := s.agentSessions.ensureDefault(path)
 	if err != nil {
 		return fmt.Errorf("无法创建 Agent 会话：%w", err)
 	}
-	comment, ok := s.comments.get(path, commentID)
-	if !ok {
-		return fmt.Errorf("评论不存在")
-	}
 	if s.agentRunner == nil || !s.agentRunner.enqueue(session, reviewAgentJob{
 		Path: path, CommentID: commentID, Prompt: prompt,
 		Capabilities: s.commentCapabilities(comment),
+		RepoIDs:      linkedRepoIDs(repos),
 	}) {
 		return fmt.Errorf("后台 Agent 未启动")
 	}
@@ -712,6 +732,14 @@ func (s *Server) buildReviewAgentPrompt(path, commentID string) (string, error) 
 		b.WriteString("6. If you cannot proceed, reply through reply_comment explaining the blocker. Do not ask the user interactively.\n")
 	}
 	return b.String(), nil
+}
+
+func linkedRepoIDs(repos []codeRepoRecord) []string {
+	out := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		out = append(out, repo.ID)
+	}
+	return out
 }
 
 func lastUserMessage(comment Comment) string {

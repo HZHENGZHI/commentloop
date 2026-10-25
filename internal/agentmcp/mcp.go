@@ -328,6 +328,8 @@ func tools() []toolDef {
 }
 
 func (s *server) callTool(params toolCallParams) toolResult {
+	s.client.SetTool(params.Name)
+	defer s.client.SetTool("")
 	// Re-read the discovery file so a restarted mdlive (possibly on another
 	// port) is picked up without restarting the MCP server.
 	s.client = agentclient.New(agentclient.DefaultURL(s.explicitURL))

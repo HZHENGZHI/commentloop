@@ -23,6 +23,7 @@ import (
 
 	"mdlive/internal/agentcli"
 	"mdlive/internal/agentmcp"
+	"mdlive/internal/agentrunner"
 	"mdlive/internal/discovery"
 	"mdlive/internal/ignore"
 	"mdlive/internal/server"
@@ -46,6 +47,12 @@ func main() {
 		case "mcp":
 			if err := agentmcp.Run(args[1:], version); err != nil {
 				fmt.Fprintln(os.Stderr, "mdlive mcp:", err)
+				os.Exit(1)
+			}
+			return
+		case "agent-runner":
+			if err := agentrunner.Run(args[1:]); err != nil {
+				fmt.Fprintln(os.Stderr, "mdlive agent-runner:", err)
 				os.Exit(1)
 			}
 			return
@@ -123,7 +130,9 @@ func runServer(args []string) {
 		fmt.Fprintf(flag.CommandLine.Output(), "  run                前台运行（调试 / 由进程管理器托管）\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  stop               停止最近启动的实例\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  status             查看运行状态\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       宿主机 Agent Runner，领取外部 Agent 任务\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  agent ...          给代码 Agent 的 CLI（list/read/write/search/changes）\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  agent-runner       宿主机 Agent Runner，领取评论任务\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  mcp                MCP stdio server（给支持 MCP 的 Agent）\n\n")
 		flag.PrintDefaults()
 	}

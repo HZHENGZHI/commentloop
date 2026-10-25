@@ -196,6 +196,9 @@ func (s *Server) handleGetDoc(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无法读取文件：" + err.Error()})
 		return
 	}
+	if s.rejectAgentDocPath(w, r, snap.path, "当前任务只能读取关联文档") {
+		return
+	}
 	writeJSON(w, http.StatusOK, docResponse{
 		Path: snap.path, Content: snap.content, HTML: snap.result.HTML,
 		Revision: snap.result.Revision, ModTime: snap.modTime, Size: snap.size,
@@ -207,6 +210,12 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	create := r.Method == http.MethodPost
+	if _, known := s.agentGrantForRequest(r); known && create {
+		message := "受管 Agent 任务不能新建文档"
+		s.recordAgentDenial(r, message)
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
+		return
+	}
 	// Review mode still allows managing the document list: creating a new
 	// document and importing files are frontend actions. Editing an existing
 	// document (PUT) remains Agent-only.
@@ -237,6 +246,9 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能修改关联文档") {
+		return
+	}
 
 	_, statErr := s.statRootFile(ro, rel)
 	existed := statErr == nil
@@ -296,6 +308,12 @@ func (s *Server) persistDocument(ro *root, rel, canonical, content, origin strin
 
 func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	if s.rejectAgentWrite(w, r) {
+		return
+	}
+	if _, known := s.agentGrantForRequest(r); known {
+		message := "受管 Agent 任务不能删除文档"
+		s.recordAgentDenial(r, message)
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
 		return
 	}
 	ro, rel, err := s.resolveDocRef(r.URL.Query().Get("path"))

@@ -69,6 +69,8 @@ type Client struct {
 	base         string
 	http         *http.Client
 	agentSession string
+	agentToken   string
+	agentTool    string
 }
 
 type Resolved struct {
@@ -107,10 +109,13 @@ func New(baseURL string) *Client {
 		base:         normalizeURL(baseURL),
 		http:         &http.Client{Timeout: 120 * time.Second},
 		agentSession: strings.TrimSpace(os.Getenv("MDLIVE_AGENT_SESSION")),
+		agentToken:   strings.TrimSpace(os.Getenv("MDLIVE_AGENT_TOKEN")),
 	}
 }
 
 func (c *Client) BaseURL() string { return c.base }
+
+func (c *Client) SetTool(name string) { c.agentTool = strings.TrimSpace(name) }
 
 func (c *Client) Config() (Config, error) {
 	var cfg Config
@@ -331,6 +336,12 @@ func (c *Client) sendJSON(method, path string, body, out any) error {
 	req.Header.Set("X-Mdlive-Agent", "1")
 	if c.agentSession != "" {
 		req.Header.Set("X-Mdlive-Agent-Session", c.agentSession)
+	}
+	if c.agentToken != "" {
+		req.Header.Set("X-Mdlive-Agent-Token", c.agentToken)
+	}
+	if c.agentTool != "" {
+		req.Header.Set("X-Mdlive-MCP-Tool", c.agentTool)
 	}
 	res, err := c.http.Do(req)
 	if err != nil {

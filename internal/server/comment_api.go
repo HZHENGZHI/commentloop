@@ -78,6 +78,12 @@ func (s *Server) commentDoc(path string) (canonical, content string, err error) 
 func (s *Server) handleGetComments(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
+		if _, known := s.agentGrantForRequest(r); known {
+			message := "受管 Agent 任务必须指定关联文档"
+			s.recordAgentDenial(r, message)
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
+			return
+		}
 		comments := s.comments.all()
 		if comments == nil {
 			comments = []Comment{}
@@ -96,6 +102,9 @@ func (s *Server) handleGetComments(w http.ResponseWriter, r *http.Request) {
 		}
 		canonical = ro.ID + "/" + rel
 		content = ""
+	}
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档的评论") {
+		return
 	}
 	comments := s.comments.list(canonical, content)
 	if comments == nil {
@@ -179,6 +188,9 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能回复关联文档的评论") {
+		return
+	}
 	author := req.Author
 	if author != "user" && author != "agent" {
 		author = "agent"

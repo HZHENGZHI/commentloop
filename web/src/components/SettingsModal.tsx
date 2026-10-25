@@ -334,7 +334,9 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                       name: preset.name,
                       command: preset.command,
                       autoRun:
-                        preset.type === "pi" ? settings.agent.autoRun : false,
+                        preset.type === "pi" || settings.agent.runner === "external"
+                          ? settings.agent.autoRun
+                          : false,
                     });
                   } else {
                     updateAgent({ type: event.target.value });
@@ -377,18 +379,42 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
                 placeholder="参数用空格分隔"
               />
             </label>
+            <label className="settings-field">
+              <span>自动运行方式</span>
+              <select
+                value={settings.agent.runner}
+                onChange={(event) =>
+                  updateAgent({
+                    runner: event.target.value as "embedded" | "external",
+                    autoRun:
+                      event.target.value === "external"
+                        ? settings.agent.autoRun
+                        : settings.agent.type === "pi"
+                          ? settings.agent.autoRun
+                          : false,
+                  })
+                }
+              >
+                <option value="embedded">嵌入 Pi RPC（当前进程启动）</option>
+                <option value="external">外部 Agent Runner</option>
+              </select>
+            </label>
             <label className="settings-auto-run">
               <input
                 type="checkbox"
                 checked={settings.agent.autoRun}
-                disabled={settings.agent.type !== "pi"}
+                disabled={settings.agent.type !== "pi" && settings.agent.runner !== "external"}
                 onChange={(event) =>
                   updateAgent({ autoRun: event.target.checked })
                 }
               />
               <span>
                 用户提交评论后自动运行 Agent
-                <em>目前仅支持 pi Agent；需要已配置 MCP 和模型</em>
+                <em>
+                  {settings.agent.runner === "external"
+                    ? "由外部 mdlive agent-runner 领取任务；需要先启动 runner"
+                    : "嵌入模式目前仅支持 pi Agent；需要已配置 MCP 和模型"}
+                </em>
               </span>
             </label>
             <div className="settings-agent-check">

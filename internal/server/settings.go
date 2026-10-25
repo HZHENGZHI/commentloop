@@ -15,6 +15,7 @@ type codeAgentSettings struct {
 	Name    string   `json:"name"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
+	Runner  string   `json:"runner"`
 	AutoRun bool     `json:"autoRun"`
 }
 
@@ -27,7 +28,8 @@ func defaultAppSettings() appSettings {
 	return appSettings{
 		LSPServers: lsp.DefaultServers(),
 		Agent: codeAgentSettings{
-			Type: "pi", Name: "Code Agent", Command: "pi", Args: []string{}, AutoRun: false,
+			Type: "pi", Name: "Code Agent", Command: "pi", Args: []string{},
+			Runner: "embedded", AutoRun: false,
 		},
 	}
 }
@@ -182,11 +184,13 @@ func validateSettings(settings appSettings) (appSettings, error) {
 		return settings, fmt.Errorf("Agent 参数过多")
 	}
 	if settings.Agent.AutoRun {
-		if !strings.EqualFold(settings.Agent.Type, "pi") {
-			return settings, fmt.Errorf("自动运行目前仅支持 pi Agent")
-		}
-		if settings.Agent.Command == "" {
-			return settings, fmt.Errorf("自动运行需要填写 Agent 启动命令")
+		if settings.Agent.Runner != "external" {
+			if !strings.EqualFold(settings.Agent.Type, "pi") {
+				return settings, fmt.Errorf("嵌入自动运行目前仅支持 pi Agent；外部 Runner 可使用其他 Agent")
+			}
+			if settings.Agent.Command == "" {
+				return settings, fmt.Errorf("自动运行需要填写 Agent 启动命令")
+			}
 		}
 	}
 	return settings, nil

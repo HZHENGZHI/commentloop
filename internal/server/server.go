@@ -77,6 +77,7 @@ type Server struct {
 	discussions    *discussionStore
 	discussionSync *discussionSyncService
 	agentCaps      *agentCapabilityStore
+	agentJobs      *agentJobStore
 	consensus      *consensusScheduler
 	codeRepos      *codeRepoStore
 	settingsStore  *settingsStore
@@ -131,6 +132,7 @@ func New(opts Options) (*Server, error) {
 		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
 		agentCaps:           newAgentCapabilityStore(),
+		agentJobs:           newAgentJobStore(db),
 		codeRepos:           newCodeRepoStore(db, opts.StateDir),
 		agentSessions:       newAgentSessionStore(db),
 		stateDir:            opts.StateDir,
@@ -247,17 +249,21 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/doc/code-repos", s.handleDocCodeRepos)
 	mux.HandleFunc("POST /api/doc/code-repos", s.requireSameOrigin(s.handleAddDocCodeRepo))
 	mux.HandleFunc("DELETE /api/doc/code-repos", s.requireSameOrigin(s.handleRemoveDocCodeRepo))
-	mux.HandleFunc("GET /api/code/info", s.handleCodeRepoInfo)
-	mux.HandleFunc("GET /api/code/files", s.handleCodeRepoFiles)
-	mux.HandleFunc("GET /api/code/file", s.handleCodeRepoFile)
-	mux.HandleFunc("GET /api/code/search", s.handleCodeRepoSearch)
-	mux.HandleFunc("GET /api/code/branches", s.handleCodeRepoBranches)
+	mux.HandleFunc("GET /api/code/info", s.guardAgentRepo(s.handleCodeRepoInfo))
+	mux.HandleFunc("GET /api/code/files", s.guardAgentRepo(s.handleCodeRepoFiles))
+	mux.HandleFunc("GET /api/code/file", s.guardAgentRepo(s.handleCodeRepoFile))
+	mux.HandleFunc("GET /api/code/search", s.guardAgentRepo(s.handleCodeRepoSearch))
+	mux.HandleFunc("GET /api/code/branches", s.guardAgentRepo(s.handleCodeRepoBranches))
 	mux.HandleFunc("POST /api/code/branch", s.requireSameOrigin(s.handleSwitchCodeRepoBranch))
 	mux.HandleFunc("POST /api/lsp/definition", s.requireSameOrigin(s.handleLSPDefinition))
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("GET /api/settings/defaults", s.handleGetDefaultSettings)
 	mux.HandleFunc("PUT /api/settings", s.requireSameOrigin(s.handleSaveSettings))
 	mux.HandleFunc("POST /api/settings/check-command", s.requireSameOrigin(s.handleCheckCommand))
+	mux.HandleFunc("POST /api/agent/runner/claim", s.handleAgentRunnerClaim)
+	mux.HandleFunc("POST /api/agent/runner/finish", s.handleAgentRunnerFinish)
+	mux.HandleFunc("POST /api/agent/runner/heartbeat", s.handleAgentRunnerHeartbeat)
+	mux.HandleFunc("GET /api/agent/jobs", s.handleListAgentJobs)
 	mux.HandleFunc("GET /api/prompt-templates", s.handleListPromptTemplates)
 	mux.HandleFunc("POST /api/prompt-templates", s.requireSameOrigin(s.handleCreatePromptTemplate))
 	mux.HandleFunc("PUT /api/prompt-templates", s.requireSameOrigin(s.handleUpdatePromptTemplate))
@@ -304,7 +310,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden host", http.StatusForbidden)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		aw := &auditResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		s.mux.ServeHTTP(aw, r)
+		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {
+			token := r.Header.Get("X-Mdlive-Agent-Token")
+			tool := r.Header.Get("X-Mdlive-MCP-Tool")
+			s.agentJobs.audit(grant.JobID, token, tool, r.Method, r.URL.Path, true, "")
+		}
+		return
+	}
 	s.mux.ServeHTTP(w, r)
+}
+
+type auditResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *auditResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
 }
 
 func (s *Server) hostAllowed(r *http.Request) bool {

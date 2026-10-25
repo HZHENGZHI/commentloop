@@ -186,6 +186,7 @@ export interface CodeAgentSetting {
   name: string;
   command: string;
   args: string[];
+  runner: "embedded" | "external";
   autoRun: boolean;
 }
 

@@ -62,6 +62,65 @@ make build
 cd ~/Documents/notes && ~/Desktop/coding/mdlive/bin/mdlive
 ```
 
+## 外部 Agent Runner（P0）
+
+嵌入模式会由 mdlive 进程直接启动 Pi。容器或云端前端部署时，改用外部 Runner：mdlive 只创建 `agent_jobs` 任务，宿主机上的 Runner 主动领取并启动 Agent。
+
+### 配置
+
+设置 → 后台 Code Agent：
+
+- 自动运行方式：选择 **外部 Agent Runner**
+- 选择 Agent 类型（目前预设：`pi` / `claude-code` / `codex` / `generic`）
+- 打开“用户提交评论后自动运行 Agent”
+
+### 启动 Runner
+
+```bash
+# Pi：使用 pi --print --no-builtin-tools
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type pi
+
+# Claude Code 预设：claude --print
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type claude-code
+
+# Codex 预设：codex exec
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type codex
+
+# 通用 CLI：自定义命令，prompt 通过参数传入
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent
+
+# prompt 通过 stdin
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type generic --command /path/to/agent --prompt-mode stdin
+
+# 只处理一个任务后退出
+./bin/mdlive agent-runner --url http://127.0.0.1:4571 --agent-type pi --once
+```
+
+Runner 会：
+
+1. 向 mdlive 领取任务
+2. 启动本机 Agent，注入 `MDLIVE_URL` 和一次性 `MDLIVE_AGENT_TOKEN`
+3. Agent 通过 MCP 读写；Go 后端按 token 校验能力、文档路径和代码仓库
+4. Agent 退出后上报 done / error，mdlive 清理 token
+
+Runner 不把模型凭据放进服务端镜像。Agent 需要已配置 `mdlive mcp`（或通过环境变量/临时 MCP 配置连接到 mdlive）。
+
+### 后端能力
+
+- `agent_jobs` 队列表、lease、runner 心跳、完成/失败
+- 一次性 capability token（不是可伪造的 session header）
+- 文档路径 ACL：编辑任务只允许当前文档
+- 代码仓库 ACL：只能访问该文档关联的代码仓库
+- `agent_audit`：记录 Agent 请求的工具、HTTP 方法、路径、允许/拒绝
+- `GET /api/agent/jobs` 查看最近任务
+- `POST /api/agent/runner/claim` / `finish` / `heartbeat`
+
+当前限制：
+
+- Runner 还不会自动为每个 Agent 写临时 MCP 配置；需要用户先配置好 MCP
+- Claude Code / Codex 预设尚未做完整端到端验证
+- Runner 崩溃后的租约过期重领、MCP `tools/list` 过滤、内置工具 OS 沙箱属于后续 P1
+
 ## 任务提示词模板
 
 评论和 Agent 任务可以使用不同的任务模板，而不是所有评论都套同一条改稿提示词。
@@ -663,6 +722,10 @@ mdlive/
 | POST | `/api/code/branch` | 切换本地 Git 或 GitHub 仓库分支 |
 | POST | `/api/lsp/definition` | 跳转定义（repo / path / line / character） |
 | GET / PUT | `/api/settings` | 读取 / 保存 LSP 与 Code Agent 设置 |
+| POST | `/api/agent/runner/claim` | Runner 领取任务 |
+| POST | `/api/agent/runner/finish` | Runner 上报完成 / 失败 |
+| POST | `/api/agent/runner/heartbeat` | Runner 续租 |
+| GET | `/api/agent/jobs` | 最近 Agent 任务 |
 | GET | `/api/prompt-templates` | 提示词模板列表 |
 | POST / PUT / DELETE | `/api/prompt-templates` | 新建 / 修改 / 删除提示词模板 |
 | POST | `/api/prompt-templates/reset` | 恢复内置模板默认内容 |

@@ -178,6 +178,36 @@ func migrateSchema(db *sql.DB) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS agent_jobs (
+			id TEXT PRIMARY KEY,
+			doc_path TEXT NOT NULL,
+			comment_id TEXT NOT NULL,
+			agent_type TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			prompt_template_id TEXT NOT NULL DEFAULT '',
+			capabilities TEXT NOT NULL DEFAULT '{}',
+			repo_ids TEXT NOT NULL DEFAULT '[]',
+			token TEXT NOT NULL,
+			status TEXT NOT NULL,
+			runner_id TEXT NOT NULL DEFAULT '',
+			lease_until TEXT NOT NULL DEFAULT '',
+			error TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			started_at TEXT NOT NULL DEFAULT '',
+			finished_at TEXT NOT NULL DEFAULT ''
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_jobs_queue ON agent_jobs(status, agent_type, created_at);`,
+		`CREATE TABLE IF NOT EXISTS agent_audit (
+			id TEXT PRIMARY KEY,
+			job_id TEXT NOT NULL DEFAULT '',
+			token TEXT NOT NULL DEFAULT '',
+			tool TEXT NOT NULL DEFAULT '',
+			method TEXT NOT NULL,
+			path TEXT NOT NULL,
+			allowed INTEGER NOT NULL DEFAULT 0,
+			reason TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS doc_consensus (
 			doc_path TEXT PRIMARY KEY,
 			content TEXT NOT NULL,
