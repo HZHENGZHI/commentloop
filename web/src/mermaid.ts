@@ -1,4 +1,5 @@
 import i18n from "./i18n";
+import { clearMermaidAnimationState, setupMermaidAnimation } from "./mermaidAnimation";
 import type { Theme } from "./types";
 
 type MermaidApi = typeof import("mermaid").default;
@@ -210,6 +211,12 @@ function createBlock(source: string): HTMLElement {
   open.className = "mermaid-action";
   open.dataset.mermaidOpen = "1";
   open.textContent = i18n.t("查看大图");
+  const animate = document.createElement("button");
+  animate.type = "button";
+  animate.className = "mermaid-action";
+  animate.dataset.mermaidAnimate = "1";
+  animate.textContent = i18n.t("动画");
+  animate.hidden = true;
   const expand = document.createElement("button");
   expand.type = "button";
   expand.className = "mermaid-action";
@@ -226,7 +233,7 @@ function createBlock(source: string): HTMLElement {
   sourceButton.className = "mermaid-action";
   sourceButton.dataset.mermaidSource = "1";
   sourceButton.textContent = i18n.t("源码");
-  actions.append(open, expand, sourceButton);
+  actions.append(animate, open, expand, sourceButton);
   toolbar.append(label, actions);
 
   const viewport = document.createElement("div");
@@ -323,6 +330,7 @@ function openMermaidModal(block: HTMLElement) {
   const content = document.createElement("div");
   content.className = "mermaid-modal-content";
   const clone = sourceSvg.cloneNode(true) as SVGSVGElement;
+  clearMermaidAnimationState(clone);
   const { width, height } = nativeSize(sourceSvg);
   clone.setAttribute("width", String(width));
   clone.setAttribute("height", String(height));
@@ -449,6 +457,7 @@ export async function enhanceMermaidDiagrams(
 ): Promise<() => void> {
   let cancelled = false;
   const blocks = new Set<HTMLElement>();
+  const animationDisposers: Array<() => void> = [];
   article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
     const code = pre.querySelector<HTMLElement>("code.language-mermaid");
     if (!code) return;
@@ -482,6 +491,7 @@ export async function enhanceMermaidDiagrams(
         diagram.innerHTML = svg;
         fixMermaidContrast(diagram, theme);
         stripEdgeLabelBackgrounds(diagram);
+        animationDisposers.push(setupMermaidAnimation(block, diagram, source));
         block.querySelector(".mermaid-error")?.remove();
         requestAnimationFrame(() => {
           const viewport = block.querySelector<HTMLElement>(".mermaid-viewport");
@@ -512,5 +522,6 @@ export async function enhanceMermaidDiagrams(
   return () => {
     cancelled = true;
     activeModalCleanup?.();
+    for (const dispose of animationDisposers) dispose();
   };
 }

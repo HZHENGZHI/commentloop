@@ -5658,6 +5658,11 @@ body.dragging-split * {
   color: var(--text-primary);
 }
 
+.mermaid-action[aria-pressed="true"] {
+  border-color: var(--accent-soft-border);
+  color: var(--accent);
+}
+
 .mermaid-viewport {
   position: relative;
   max-height: min(62vh, 620px);
@@ -5860,5 +5865,115 @@ body.mermaid-modal-open {
   .mermaid-viewport {
     max-height: 56vh;
     padding: 12px;
+  }
+}
+
+/* Mermaid step playback */
+.mermaid-action[hidden] {
+  display: none;
+}
+
+.mermaid-diagram g.node,
+.mermaid-diagram path[data-edge],
+.mermaid-diagram g.edgeLabel {
+  transition: opacity 220ms ease;
+}
+
+.mermaid-diagram .mermaid-step-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.mermaid-diagram g.node.mermaid-step-current [class*="label-container"] {
+  stroke: var(--accent) !important;
+  stroke-width: 2.4px !important;
+}
+
+.mermaid-diagram path.mermaid-step-current {
+  stroke: var(--accent) !important;
+  stroke-width: 2.4px !important;
+}
+
+.mermaid-animation-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.mermaid-animation-controls[hidden] {
+  display: none;
+}
+
+.mermaid-step-button,
+.mermaid-step-toggle {
+  height: 27px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mermaid-step-button {
+  width: 27px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.mermaid-step-toggle {
+  min-width: 52px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.mermaid-step-button:hover:not(:disabled),
+.mermaid-step-toggle:hover {
+  border-color: var(--accent-soft-border);
+  color: var(--text-primary);
+}
+
+.mermaid-step-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.mermaid-step-label {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mermaid-step-progress {
+  flex: 1;
+  min-width: 32px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.mermaid-step-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+@media (max-width: 720px) {
+  .mermaid-animation-controls {
+    gap: 6px;
+    padding: 7px 10px;
+  }
+
+  .mermaid-step-label {
+    font-size: 10px;
   }
 }
