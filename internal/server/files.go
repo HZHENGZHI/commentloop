@@ -67,6 +67,7 @@ func (s *Server) writeRootFile(ro *root, rel string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
+	defer s.localTrees.invalidate(ro)
 	return writeFileAtomic(abs, data)
 }
 
@@ -81,5 +82,6 @@ func (s *Server) removeRootFile(ro *root, rel string) error {
 	if err != nil {
 		return err
 	}
+	defer s.localTrees.invalidate(ro)
 	return os.Remove(abs)
 }

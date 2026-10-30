@@ -896,6 +896,25 @@ export default function App() {
     [currentFile, openDoc, primaryRoot, refreshTree, roots, toast],
   );
 
+  // Stable props let the memoized Sidebar/Preview skip unrelated re-renders.
+  const handleSidebarDelete = useCallback(
+    (path: string) => void handleDelete(path),
+    [handleDelete],
+  );
+  const handleSidebarImport = useCallback(
+    (files: FileList) => void handleImport(files),
+    [handleImport],
+  );
+  const handleSidebarRemoveRoot = useCallback(
+    (root: RootInfo) => void handleRemoveRoot(root),
+    [handleRemoveRoot],
+  );
+  const openAddRoot = useCallback(() => setAddRootOpen(true), []);
+  const handlePreviewOpenDoc = useCallback(
+    (path: string) => void openDoc(path),
+    [openDoc],
+  );
+
   const releaseScrollOwner = useCallback(() => {
     if (scrollReleaseTimer.current !== undefined) {
       window.clearTimeout(scrollReleaseTimer.current);
@@ -1547,11 +1566,11 @@ export default function App() {
           removingRootId={removingRoot?.id ?? null}
           removingRootName={removingRoot?.name ?? ""}
           onOpen={openFromSidebar}
-          onDelete={(path) => void handleDelete(path)}
+          onDelete={handleSidebarDelete}
           onNew={requestNewDoc}
-          onImport={(files) => void handleImport(files)}
-          onAddRoot={() => setAddRootOpen(true)}
-          onRemoveRoot={(root) => void handleRemoveRoot(root)}
+          onImport={handleSidebarImport}
+          onAddRoot={openAddRoot}
+          onRemoveRoot={handleSidebarRemoveRoot}
         />
 
         <main className="main">
@@ -1701,8 +1720,8 @@ export default function App() {
                   comments={comments}
                   containerRef={previewRef}
                   onScrollRatio={handlePreviewScroll}
-                  onOpenDoc={(path) => void openDoc(path)}
-                  onRequestComment={(quote) => setCommentQuote(quote)}
+                  onOpenDoc={handlePreviewOpenDoc}
+                  onRequestComment={setCommentQuote}
                   theme={theme}
                 />
                 {commentsOpen ? (

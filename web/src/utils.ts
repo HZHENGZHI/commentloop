@@ -101,39 +101,59 @@ function textNodes(root: HTMLElement): { node: Text; start: number; end: number 
   return out;
 }
 
-export function findQuoteRange(
-  root: HTMLElement | null,
-  quote: string,
-): Range | null {
-  if (!root || !quote) return null;
-  const nodes = textNodes(root);
-  let full = "";
+interface TextIndex {
+  full: string;
+  positions: { node: Text; offset: number }[];
+}
+
+function isSpace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+// Whitespace-collapsed text of `root` with a map back to DOM positions.
+function buildTextIndex(root: HTMLElement): TextIndex {
+  const parts: string[] = [];
   const positions: { node: Text; offset: number }[] = [];
-  for (const item of nodes) {
+  let inWhitespace = false;
+  for (const item of textNodes(root)) {
     const data = item.node.data;
-    let inWhitespace = false;
+    inWhitespace = false;
     for (let i = 0; i < data.length; i += 1) {
-      const char = data[i]!;
-      if (/\s/.test(char)) {
+      if (isSpace(data.charCodeAt(i))) {
         if (!inWhitespace) {
-          full += " ";
+          parts.push(" ");
           positions.push({ node: item.node, offset: i });
         }
         inWhitespace = true;
       } else {
-        full += char;
+        parts.push(data[i]!);
         positions.push({ node: item.node, offset: i });
         inWhitespace = false;
       }
     }
   }
+  return { full: parts.join(""), positions };
+}
+
+function rangeInIndex(index: TextIndex, quote: string): Range | null {
   const needle = quote.replace(/\s+/g, " ").trim();
   if (!needle) return null;
-  const index = full.indexOf(needle);
-  if (index < 0) return null;
-  const endIndex = index + needle.length - 1;
-  const startPos = positions[index];
-  const endPos = positions[endIndex];
+  const start = index.full.indexOf(needle);
+  if (start < 0) return null;
+  const startPos = index.positions[start];
+  const endPos = index.positions[start + needle.length - 1];
   if (!startPos || !endPos) return null;
   try {
     const range = document.createRange();
@@ -143,6 +163,24 @@ export function findQuoteRange(
   } catch {
     return null;
   }
+}
+
+export function findQuoteRange(
+  root: HTMLElement | null,
+  quote: string,
+): Range | null {
+  if (!root || !quote) return null;
+  return rangeInIndex(buildTextIndex(root), quote);
+}
+
+/** Resolves many quotes against one text index (one DOM walk in total). */
+export function findQuoteRanges(
+  root: HTMLElement | null,
+  quotes: string[],
+): (Range | null)[] {
+  if (!root || quotes.length === 0) return quotes.map(() => null);
+  const index = buildTextIndex(root);
+  return quotes.map((quote) => (quote ? rangeInIndex(index, quote) : null));
 }
 
 export function scrollToQuote(

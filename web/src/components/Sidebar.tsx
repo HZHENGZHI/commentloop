@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -78,11 +79,21 @@ function buildTree(files: FileEntry[], rootId: string): DirNode {
   return root;
 }
 
+function sortTree(node: DirNode, collator: Intl.Collator): DirNode {
+  const dirs = new Map(
+    [...node.dirs.entries()].sort(([, a], [, b]) => collator.compare(a.name, b.name)),
+  );
+  for (const child of dirs.values()) sortTree(child, collator);
+  node.dirs = dirs;
+  node.files = [...node.files].sort((a, b) => collator.compare(a.name, b.name));
+  return node;
+}
+
 function displayFile(file: FileEntry): string {
   return `${file.rootName}/${file.relPath}`;
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   open,
   tree,
   currentPath,
@@ -102,7 +113,15 @@ export function Sidebar({
   const searchRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
-  const roots = tree?.roots ?? [];
+  const roots = useMemo(() => tree?.roots ?? [], [tree]);
+  // Building and locale-sorting the tree is the expensive part of a render;
+  // only redo it when the tree or language changes.
+  const rootTrees = useMemo(() => {
+    const collator = new Intl.Collator(i18n.language);
+    return new Map(
+      roots.map((root) => [root.id, sortTree(buildTree(root.files, root.id), collator)]),
+    );
+  }, [roots, i18n.language]);
   const modKey = /Mac|iPhone|iPad/i.test(navigator.platform) ? "⌘K" : "Ctrl K";
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -182,12 +201,8 @@ export function Sidebar({
   };
 
   const renderDir = (node: DirNode, depth: number): ReactNode => {
-    const folders = [...node.dirs.values()].sort((a, b) =>
-      a.name.localeCompare(b.name, i18n.language),
-    );
-    const files = [...node.files].sort((a, b) =>
-      a.name.localeCompare(b.name, i18n.language),
-    );
+    const folders = [...node.dirs.values()];
+    const files = node.files;
     return (
       <>
         {folders.map((folder) => {
@@ -237,7 +252,7 @@ export function Sidebar({
     const key = `root:${root.id}`;
     const isCollapsed = collapsed.has(key);
     const removing = removingRootId === root.id;
-    const node = buildTree(root.files, root.id);
+    const node = rootTrees.get(root.id) ?? buildTree(root.files, root.id);
     return (
       <div
         className={`root-group${removing ? " removing" : ""}`}
@@ -507,4 +522,4 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});

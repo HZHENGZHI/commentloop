@@ -88,6 +88,8 @@ type Server struct {
 	stateDir       string
 	agentBaseURL   string
 
+	localTrees localTreeCache
+
 	remoteTreeMu        sync.Mutex
 	remoteTree          map[string][]fileEntry
 	remoteTreeTruncated map[string]bool
@@ -480,6 +482,7 @@ func (s *Server) onFSChange(ro *root, ev watcher.Event) {
 	if s.currentRoot(ro.ID) != ro {
 		return
 	}
+	s.localTrees.invalidate(ro)
 	if ev.IsDir {
 		s.hub.broadcast(outMessage{Type: "tree"})
 		return

@@ -2,14 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/discovery"
@@ -67,7 +65,7 @@ func startDaemon(args []string) error {
 	cmd.Env = append(os.Environ(), "COMMENTLOOP_DAEMON_CHILD=1")
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = daemonSysProcAttr()
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -107,7 +105,7 @@ func stopDaemon() error {
 		discovery.RemovePID(info.PID)
 		return fmt.Errorf("Process %d not found", info.PID)
 	}
-	if err := process.Signal(syscall.SIGTERM); err != nil && !isNoSuchProcess(err) {
+	if err := terminateProcess(process); err != nil {
 		return err
 	}
 	deadline := time.Now().Add(15 * time.Second)
@@ -120,7 +118,7 @@ func stopDaemon() error {
 		time.Sleep(150 * time.Millisecond)
 	}
 	// A background consensus/agent task may be ignoring graceful shutdown.
-	_ = process.Signal(syscall.SIGKILL)
+	_ = process.Kill()
 	for i := 0; i < 20 && processAlive(info.PID); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -192,23 +190,7 @@ func healthOK(rawURL string) bool {
 }
 
 func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil || isPermission(err)
-}
-
-func isNoSuchProcess(err error) bool {
-	return errors.Is(err, syscall.ESRCH)
-}
-
-func isPermission(err error) bool {
-	return errors.Is(err, syscall.EPERM)
+	return discovery.ProcessAlive(pid)
 }
 
 func formatDuration(d time.Duration) string {
