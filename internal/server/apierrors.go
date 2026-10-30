@@ -1,7 +1,9 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -9,17 +11,26 @@ import (
 // apiError is a client-facing API error. Code is a stable identifier that
 // clients branch on and must not change once shipped; ZH and EN are display
 // text. Detail errors are followed by a runtime detail, e.g. "保存设置失败：" + err.
+// Templates with %d/%s verbs (same order in ZH and EN) are matched as patterns.
 type apiError struct {
 	Code   string
 	ZH     string
 	EN     string
 	detail bool
+	zhRe   *regexp.Regexp
+	enRe   *regexp.Regexp
+}
+
+type apiErrorPrefix struct {
+	prefix string
+	entry  *apiError
 }
 
 var (
-	apiErrorsByCode = map[string]*apiError{}
-	apiErrorsByZH   = map[string]*apiError{}
-	apiDetailErrors []*apiError // longest ZH prefix first
+	apiErrorsByCode    = map[string]*apiError{}
+	apiErrorsByMessage = map[string]*apiError{} // exact ZH and EN text
+	apiDetailPrefixes  []apiErrorPrefix         // longest prefix first
+	apiPatternErrors   []*apiError
 )
 
 func defineError(code, zh, en string) *apiError {
@@ -35,25 +46,46 @@ func registerAPIError(e *apiError) *apiError {
 		panic("duplicate API error code " + e.Code)
 	}
 	apiErrorsByCode[e.Code] = e
-	if e.detail {
-		apiDetailErrors = append(apiDetailErrors, e)
-		sort.SliceStable(apiDetailErrors, func(i, j int) bool {
-			return len(apiDetailErrors[i].ZH) > len(apiDetailErrors[j].ZH)
+	switch {
+	case e.detail:
+		apiDetailPrefixes = append(apiDetailPrefixes, apiErrorPrefix{e.ZH, e}, apiErrorPrefix{e.EN, e})
+		sort.SliceStable(apiDetailPrefixes, func(i, j int) bool {
+			return len(apiDetailPrefixes[i].prefix) > len(apiDetailPrefixes[j].prefix)
 		})
-	} else {
-		apiErrorsByZH[e.ZH] = e
+	case strings.Contains(e.ZH, "%"):
+		e.zhRe = templatePattern(e.ZH)
+		e.enRe = templatePattern(e.EN)
+		apiPatternErrors = append(apiPatternErrors, e)
+	default:
+		apiErrorsByMessage[e.ZH] = e
+		apiErrorsByMessage[strings.TrimSuffix(e.EN, ".")] = e
 	}
 	return e
 }
 
-// lookupAPIError maps a plain message (e.g. an err.Error() from a lower layer)
-// back to its catalog entry.
+var templateVerb = regexp.MustCompile(`%[ds]`)
+
+func templatePattern(tmpl string) *regexp.Regexp {
+	parts := templateVerb.Split(tmpl, -1)
+	for i := range parts {
+		parts[i] = regexp.QuoteMeta(parts[i])
+	}
+	return regexp.MustCompile("^" + strings.Join(parts, "(.+?)") + "$")
+}
+
+// lookupAPIError maps a plain message (e.g. an err.Error() from a lower layer,
+// in either language) back to its catalog entry.
 func lookupAPIError(message string) *apiError {
-	if e, ok := apiErrorsByZH[message]; ok {
+	if e, ok := apiErrorsByMessage[strings.TrimSuffix(message, ".")]; ok {
 		return e
 	}
-	for _, e := range apiDetailErrors {
-		if strings.HasPrefix(message, e.ZH) {
+	for _, p := range apiDetailPrefixes {
+		if strings.HasPrefix(message, p.prefix) {
+			return p.entry
+		}
+	}
+	for _, e := range apiPatternErrors {
+		if e.zhRe.MatchString(message) || e.enRe.MatchString(message) {
 			return e
 		}
 	}
@@ -64,10 +96,33 @@ func (e *apiError) localize(message, lang string) string {
 	if lang != "en" {
 		return message
 	}
-	if e.detail {
+	switch {
+	case e.detail:
+		if strings.HasPrefix(message, e.EN) {
+			return message
+		}
 		return e.EN + strings.TrimPrefix(message, e.ZH)
+	case e.zhRe != nil:
+		m := e.zhRe.FindStringSubmatch(message)
+		if m == nil {
+			return message
+		}
+		args := make([]any, len(m)-1)
+		for i, v := range m[1:] {
+			args[i] = v
+		}
+		return fmt.Sprintf(templateVerb.ReplaceAllString(e.EN, "%s"), args...)
 	}
 	return e.EN
+}
+
+// writeLocalizedError is for responses written outside the s.api adapter.
+func writeLocalizedError(w http.ResponseWriter, r *http.Request, status int, e *apiError) {
+	message := e.ZH
+	if promptLanguage(r) == "en" {
+		message = e.EN
+	}
+	writeJSON(w, status, map[string]string{"code": e.Code, "error": message})
 }
 
 func writeError(w http.ResponseWriter, status int, e *apiError) {
@@ -130,7 +185,7 @@ var (
 	errDirectoryAlreadyWorkspace             = defineError("directory_already_workspace", "目录已在工作区中", "Directory is already in the workspace.")
 	errRemoteDirectoryAlreadyWorkspace       = defineError("remote_directory_already_workspace", "该远程目录已在工作区中", "That remote directory is already in the workspace.")
 	errDirectoryAddedConfigNotSaved          = defineError("directory_added_config_not_saved", "目录已添加，但写入本地配置失败", "Directory was added, but the local configuration could not be saved.")
-	errTooManyDirectories                    = defineError("too_many_directories", "最多只能添加 %d 个目录", "Too many directories.")
+	errTooManyDirectories                    = defineError("too_many_directories", "最多只能添加 %d 个目录", "You can add at most %d directories.")
 	errTemplateNameBodyRequired              = defineError("template_name_body_required", "模板名称和内容不能为空", "Template name and body are required.")
 	errTemplateContentTooLong                = defineError("template_content_too_long", "模板内容过长", "Template content is too long.")
 	errTemplateNotFound                      = defineError("template_not_found", "模板不存在", "Template not found.")
@@ -193,6 +248,9 @@ var (
 	errAgentTypeDoesNotSupport               = defineError("agent_type_does_not_support", "当前 Agent 类型不支持嵌入自动运行；可切换外部 Runner", "This agent type does not support embedded automatic runs; use an external runner.")
 	errEmbeddedAutomaticRunsCurrentlySupport = defineError("embedded_automatic_runs_currently_support", "嵌入自动运行目前仅支持 pi Agent；外部 Runner 可使用其他 Agent", "Embedded automatic runs currently support only the pi agent; use an external runner for other agents.")
 	errAIOptimizationRequiresConfiguredPi    = defineError("ai_optimization_requires_configured_pi", "AI 优化当前需要可用的 pi Agent，请先在设置中配置", "AI optimization requires a configured pi agent.")
+	errMethodNotAllowed                      = defineError("method_not_allowed", "不支持该请求方法", "Method not allowed.")
+	errForbiddenHost                         = defineError("forbidden_host", "不允许的 Host", "Forbidden host.")
+	errInternalServer                        = defineError("internal_server_error", "服务器内部错误", "Internal server error.")
 	errAIOptimizationTimedOut                = defineError("ai_optimization_timed_out", "AI 优化超时", "AI optimization timed out.")
 	errAIReturnedNoOptimizationResult        = defineError("ai_returned_no_optimization_result", "AI 没有返回优化结果", "AI returned no optimization result.")
 	errWriteRoughPromptFirst                 = defineError("write_rough_prompt_first", "请先写一个大概的提示词", "Write a rough prompt first.")
@@ -209,8 +267,8 @@ var (
 	errCouldNotResolveRemoteHome             = defineError("could_not_resolve_remote_home", "无法解析远程主目录", "Could not resolve the remote home directory.")
 	errNoPermissionAccessDirectory           = defineError("no_permission_access_directory", "没有权限访问该目录", "No permission to access this directory.")
 	errNoSSHAuthenticationMethodAvailable    = defineError("no_ssh_authentication_method_available", "没有可用的 SSH 认证方式：请启动 ssh-agent，或填写未加密私钥路径", "No SSH authentication method available. Start ssh-agent or provide an unencrypted private key.")
-	errKnownHostsNotFoundAccept              = defineError("known_hosts_not_found_accept", "未找到 known_hosts：请先在终端执行 ssh %s@%s 接受主机指纹", "known_hosts not found. Accept the host fingerprint with ssh first.")
-	errImportingSessionTypeNotSupported      = defineError("importing_session_type_not_supported", "暂不支持导入 %s 会话", "Importing this session type is not supported.")
+	errKnownHostsNotFoundAccept              = defineError("known_hosts_not_found_accept", "未找到 known_hosts：请先在终端执行 ssh %s@%s 接受主机指纹", "known_hosts not found. Run ssh %s@%s in a terminal to accept the host fingerprint first.")
+	errImportingSessionTypeNotSupported      = defineError("importing_session_type_not_supported", "暂不支持导入 %s 会话", "Importing %s sessions is not supported yet.")
 	errCouldNotReadRemoteDirectory           = defineError("could_not_read_remote_directory", "无法读取远程目录", "Could not read the remote directory.")
 	errCouldNotReadDocument                  = defineError("could_not_read_document", "无法读取文档", "Could not read the document.")
 	errCodeRepositoryPathRequired            = defineError("code_repository_path_required", "代码仓库路径不能为空", "Code repository path is required.")
