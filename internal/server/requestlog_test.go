@@ -34,9 +34,7 @@ func TestLogRequestRecordsStatus(t *testing.T) {
 	var buf bytes.Buffer
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
-	rec := &statusRecorder{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
-	http.Error(rec, "nope", http.StatusNotFound)
-	logRequest(httptest.NewRequest("GET", "/api/doc?path=a.md", nil), rec, time.Millisecond)
+	logRequest(httptest.NewRequest("GET", "/api/doc?path=a.md", nil), http.StatusNotFound, 5, time.Millisecond)
 
 	out := buf.String()
 	if !strings.Contains(out, "status=404") || !strings.Contains(out, "path=/api/doc") {
