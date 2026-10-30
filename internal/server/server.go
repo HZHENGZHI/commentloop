@@ -142,7 +142,7 @@ func New(opts Options) (*Server, error) {
 	}
 	s := &Server{
 		db:                  db,
-		comments:            newCommentStore(sqlDB),
+		comments:            newCommentStore(db),
 		prompts:             prompts,
 		discussions:         newDiscussionStore(sqlDB),
 		agentCaps:           newAgentCapabilityStore(),
