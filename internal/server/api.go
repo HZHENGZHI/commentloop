@@ -225,12 +225,9 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxDocSize+64*1024)
 	var req saveRequest
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&req); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
+	if err := readJSON(w, r, maxDocSize+64*1024, &req); err != nil {
+		if isBodyTooLarge(err) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "文档过大（上限 8 MiB）"})
 			return
 		}
@@ -344,10 +341,8 @@ func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxDocSize+64*1024)
 	var req saveRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, maxDocSize+64*1024, &req) {
 		return
 	}
 	if len(req.Content) > maxDocSize {

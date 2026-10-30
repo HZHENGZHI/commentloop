@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -93,10 +92,8 @@ func (st *remoteSessionStore) closeAll() {
 }
 
 func (s *Server) handleCreateRemoteSession(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req remoteSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	cfg := remoteConfig{

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -30,8 +29,7 @@ type agentRunnerHeartbeatRequest struct {
 
 func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) {
 	var req agentRunnerClaimRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	req.RunnerID = strings.TrimSpace(req.RunnerID)
@@ -61,8 +59,7 @@ func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleAgentRunnerFinish(w http.ResponseWriter, r *http.Request) {
 	var req agentRunnerFinishRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	job, known := s.agentJobs.get(req.ID)
@@ -95,8 +92,7 @@ func (s *Server) handleAgentRunnerFinish(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleAgentRunnerHeartbeat(w http.ResponseWriter, r *http.Request) {
 	var req agentRunnerHeartbeatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	if err := s.agentJobs.heartbeat(req.ID, req.RunnerID, s.cfg.Agent.JobLease); err != nil {

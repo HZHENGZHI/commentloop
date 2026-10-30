@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -293,8 +292,7 @@ func remoteKey(cfg remoteConfig) string {
 
 func (s *Server) handleAddRoot(w http.ResponseWriter, r *http.Request) {
 	var req addRootRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	if strings.TrimSpace(req.Path) == "" {
@@ -327,10 +325,8 @@ func (s *Server) handleAddRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAddRemoteRoot(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req addRemoteRootRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	cfg := remoteConfig{

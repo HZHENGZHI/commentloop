@@ -32,6 +32,7 @@ import type {
 const API_ERROR_EN: Record<string, string> = {
   "路径无效或不是 Markdown 文件": "Invalid path or not a Markdown file.",
   "请求格式错误": "Invalid request.",
+  "请求内容过大": "Request body is too large.",
   "评论不存在": "Comment not found.",
   "文档不存在": "Document not found.",
   "缺少文档路径": "Missing document path.",

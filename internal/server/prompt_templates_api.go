@@ -2,7 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -48,10 +47,8 @@ func (s *Server) handleListPromptTemplates(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleCreatePromptTemplate(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req promptTemplateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	item, err := s.prompts.create(req.Name, req.Description, req.Body,
@@ -64,10 +61,8 @@ func (s *Server) handleCreatePromptTemplate(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req promptTemplateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	req.ID = strings.TrimSpace(req.ID)
@@ -106,10 +101,8 @@ func (s *Server) handleDeletePromptTemplate(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleOptimizePromptTemplate(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req optimizePromptRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	body, err := s.optimizePromptTemplate(r.Context(), promptLanguage(r), req.Name, req.Description, req.Body,
@@ -126,8 +119,7 @@ func (s *Server) handleResetPromptTemplate(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		ID string `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	item, err := s.prompts.reset(strings.TrimSpace(req.ID))

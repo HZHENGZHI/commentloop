@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -17,10 +16,8 @@ func (s *Server) handleGetDefaultSettings(w http.ResponseWriter, _ *http.Request
 }
 
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	var input appSettings
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 256*1024, &input) {
 		return
 	}
 	settings, err := validateSettings(input)
@@ -42,10 +39,8 @@ type checkCommandRequest struct {
 }
 
 func (s *Server) handleCheckCommand(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req checkCommandRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
 	command := strings.TrimSpace(req.Command)

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -19,10 +18,8 @@ type lspDefinitionRequest struct {
 }
 
 func (s *Server) handleLSPDefinition(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req lspDefinitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	item, ok := s.codeRepos.get(req.Repo)
