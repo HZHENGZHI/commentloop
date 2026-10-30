@@ -30,6 +30,7 @@ import {
   resolveComment,
   triggerCommentAgent,
   saveDoc,
+  ApiError,
 } from "./api";
 import { Editor, type EditorDocument, type EditorHandle } from "./components/Editor";
 import { Preview } from "./components/Preview";
@@ -872,10 +873,10 @@ export default function App() {
             imported += 1;
             break;
           } catch (error) {
-            const message = errorMessage(error);
             if (
-              (message.includes("已存在") ||
-                message.toLowerCase().includes("already exists")) &&
+              error instanceof ApiError &&
+              (error.code === "file_name_already_exists" ||
+                error.code === "file_already_exists") &&
               attempt < 50
             ) {
               attempt += 1;

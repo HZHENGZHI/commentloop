@@ -179,7 +179,7 @@ func (s *Server) guardAgentRepo(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) rejectAgentRepo(w http.ResponseWriter, r *http.Request, repoID string) bool {
 	if s.agentTokenInvalid(r) {
 		s.recordAgentDenial(r, "Agent 任务令牌无效或已过期")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Agent 任务令牌无效或已过期"})
+		writeError(w, http.StatusForbidden, errAgentJobTokenInvalidExpired)
 		return true
 	}
 	grant, known := s.agentGrantForRequest(r)

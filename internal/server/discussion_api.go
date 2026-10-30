@@ -43,7 +43,7 @@ func (s *Server) canonicalDoc(path string) (string, error) {
 func (s *Server) handleDocDiscussions(w http.ResponseWriter, r *http.Request) {
 	canonical, err := s.canonicalDoc(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	items, err := s.discussions.list(canonical)
@@ -61,7 +61,7 @@ func (s *Server) handleDocDiscussions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAvailableDiscussionSessions(w http.ResponseWriter, r *http.Request) {
 	canonical, err := s.canonicalDoc(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	sessions, agents, err := s.availableAgentSessions(canonical)
@@ -79,7 +79,7 @@ func (s *Server) handleImportDiscussion(w http.ResponseWriter, r *http.Request) 
 	}
 	canonical, err := s.canonicalDoc(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	s.broadcastConsensus(canonical, "queued", "正在导入会话…")
@@ -92,13 +92,13 @@ func (s *Server) handleImportDiscussion(w http.ResponseWriter, r *http.Request) 
 	parsed, err := parseAgentSession(location.Agent, location.Path)
 	if err != nil {
 		s.broadcastConsensus(canonical, "error", "读取会话失败："+err.Error())
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "读取会话失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusBadRequest, errFailedReadSessions, err.Error())
 		return
 	}
 	item, err := s.discussions.importSession(canonical, parsed, location.Path, location.SourceKind, location.Agent)
 	if err != nil {
 		s.broadcastConsensus(canonical, "error", "导入会话失败："+err.Error())
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "导入会话失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusBadRequest, errFailedImportSession, err.Error())
 		return
 	}
 	consensus, genErr := s.generateConsensus(r.Context(), canonical, "import", true)
@@ -114,13 +114,13 @@ func (s *Server) handleImportDiscussion(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleDeleteDiscussion(w http.ResponseWriter, r *http.Request) {
 	canonical, err := s.canonicalDoc(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if err := s.discussions.delete(canonical, id); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "讨论会话不存在"})
+			writeError(w, http.StatusNotFound, errDiscussionSessionNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -158,7 +158,7 @@ func (s *Server) handleRefreshConsensus(w http.ResponseWriter, r *http.Request) 
 	}
 	canonical, err := s.canonicalDoc(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	consensus, err := s.generateConsensus(r.Context(), canonical, "manual", true)

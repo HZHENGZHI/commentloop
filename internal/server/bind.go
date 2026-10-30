@@ -24,9 +24,9 @@ func bindJSON(w http.ResponseWriter, r *http.Request, limit int64, dst any) bool
 		return true
 	}
 	if isBodyTooLarge(err) {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "请求内容过大"})
+		writeError(w, http.StatusRequestEntityTooLarge, errRequestBodyTooLarge)
 	} else {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+		writeError(w, http.StatusBadRequest, errInvalidRequest)
 	}
 	return false
 }

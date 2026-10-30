@@ -26,7 +26,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.settingsStore.save(settings); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存设置失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusInternalServerError, errFailedSaveSettings, err.Error())
 		return
 	}
 	s.settings.set(settings)

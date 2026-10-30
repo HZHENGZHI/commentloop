@@ -224,12 +224,12 @@ func (s *Server) handleDocCodeRepos(w http.ResponseWriter, r *http.Request) {
 	}
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少文档路径"})
+		writeError(w, http.StatusBadRequest, errMissingDocumentPath)
 		return
 	}
 	ro, rel, err := s.resolveDocRef(path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
@@ -254,7 +254,7 @@ func (s *Server) handleAddDocCodeRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(req.DocPath)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
@@ -262,7 +262,7 @@ func (s *Server) handleAddDocCodeRepo(w http.ResponseWriter, r *http.Request) {
 	if req.RepoID != "" {
 		item, _ = s.codeRepos.get(req.RepoID)
 		if item.ID == "" {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+			writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 			return
 		}
 	} else if strings.TrimSpace(req.RemoteURL) != "" {
@@ -281,7 +281,7 @@ func (s *Server) handleAddDocCodeRepo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.codeRepos.link(canonical, item.ID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "关联代码仓库失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusInternalServerError, errFailedLinkCodeRepository, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, s.codeRepos.enriched(item, true))
@@ -292,13 +292,13 @@ func (s *Server) handleRemoveDocCodeRepo(w http.ResponseWriter, r *http.Request)
 	id := r.URL.Query().Get("id")
 	ro, rel, err := s.resolveDocRef(path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	if err := s.codeRepos.unlink(canonical, id); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "关联不存在"})
+			writeError(w, http.StatusNotFound, errLinkNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -311,7 +311,7 @@ func (s *Server) handleDeleteCodeRepo(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if err := s.codeRepos.delete(id); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+			writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -326,7 +326,7 @@ func (s *Server) handleCodeRepoInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	info := coderepo.GitInfo(item.Path)
@@ -342,7 +342,7 @@ func (s *Server) handleCodeRepoFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -360,7 +360,7 @@ func (s *Server) handleCodeRepoFile(w http.ResponseWriter, r *http.Request) {
 	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
@@ -379,7 +379,7 @@ func (s *Server) handleCodeRepoSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	item, ok := s.codeRepoForID(r.URL.Query().Get("repo"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -533,7 +533,7 @@ func (s *Server) handleCodeRepoBranches(w http.ResponseWriter, r *http.Request) 
 	}
 	item, ok := s.codeRepos.get(r.URL.Query().Get("id"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -555,7 +555,7 @@ func (s *Server) handleSwitchCodeRepoBranch(w http.ResponseWriter, r *http.Reque
 	defer cancel()
 	if _, err := s.codeRepos.switchBranch(ctx, req.ID, req.Branch); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+			writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})

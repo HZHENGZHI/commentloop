@@ -274,7 +274,7 @@ func isLoopbackHost(hostport string) bool {
 func (s *Server) requireSameOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.checkOrigin(r) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "跨站请求已被拒绝"})
+			writeError(w, http.StatusForbidden, errCrossSiteRequestRejected)
 			return
 		}
 		next(w, r)

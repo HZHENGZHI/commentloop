@@ -35,7 +35,7 @@ func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) 
 	req.RunnerID = strings.TrimSpace(req.RunnerID)
 	req.AgentType = strings.TrimSpace(req.AgentType)
 	if req.RunnerID == "" || req.AgentType == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "runnerId 和 agentType 不能为空"})
+		writeError(w, http.StatusBadRequest, errRunnerIDAgentTypeRequired)
 		return
 	}
 	job, ok, err := s.agentJobs.claim(req.AgentType, req.RunnerID, s.cfg.Agent.JobLease)
@@ -64,7 +64,7 @@ func (s *Server) handleAgentRunnerFinish(w http.ResponseWriter, r *http.Request)
 	}
 	job, known := s.agentJobs.get(req.ID)
 	if !known {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "任务不存在"})
+		writeError(w, http.StatusNotFound, errJobNotFound)
 		return
 	}
 	if err := s.agentJobs.finish(req.ID, req.RunnerID, req.Success, req.Error); err != nil {

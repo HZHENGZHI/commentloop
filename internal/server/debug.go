@@ -162,6 +162,6 @@ func (s *Server) rejectReadOnly(w http.ResponseWriter, r *http.Request) bool {
 	if r != nil && r.Header.Get("X-Commentloop-Agent") == "1" {
 		return false
 	}
-	writeJSON(w, http.StatusForbidden, map[string]string{"error": "审阅模式下前台不能修改文件；后台 Agent 使用 MCP/CLI 写入"})
+	writeError(w, http.StatusForbidden, errReviewUiReadOnly)
 	return true
 }

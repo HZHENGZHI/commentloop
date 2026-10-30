@@ -192,10 +192,10 @@ func (s *Server) handleGetDoc(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.snapshot(r.URL.Query().Get("path"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "文件不存在"})
+			writeError(w, http.StatusNotFound, errFileNotFound)
 			return
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无法读取文件：" + err.Error()})
+		writeErrorDetail(w, http.StatusBadRequest, errCouldNotReadFileDetail, err.Error())
 		return
 	}
 	if s.rejectAgentDocPath(w, r, snap.path, "当前任务只能读取关联文档") {
@@ -228,20 +228,20 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 	var req saveRequest
 	if err := readJSON(w, r, maxDocSize+64*1024, &req); err != nil {
 		if isBodyTooLarge(err) {
-			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "文档过大（上限 8 MiB）"})
+			writeError(w, http.StatusRequestEntityTooLarge, errDocumentTooLarge)
 			return
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+		writeError(w, http.StatusBadRequest, errInvalidRequest)
 		return
 	}
 	if len(req.Content) > maxDocSize {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "文档过大（上限 8 MiB）"})
+		writeError(w, http.StatusRequestEntityTooLarge, errDocumentTooLarge)
 		return
 	}
 
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
@@ -252,16 +252,16 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 	_, statErr := s.statRootFile(ro, rel)
 	existed := statErr == nil
 	if create && existed {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "同名文件已存在"})
+		writeError(w, http.StatusConflict, errFileNameAlreadyExists)
 		return
 	}
 	if statErr != nil && ro.Kind == rootKindLocal && !os.IsNotExist(statErr) {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "无法访问文件"})
+		writeError(w, http.StatusInternalServerError, errCouldNotAccessFile)
 		return
 	}
 	doc, err := s.persistDocument(ro, rel, canonical, req.Content, "save", existed)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "写入文件失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusInternalServerError, errFailedWriteFile, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, doc)
@@ -317,16 +317,16 @@ func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	if err := s.removeRootFile(ro, rel); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "文件不存在"})
+			writeError(w, http.StatusNotFound, errFileNotFound)
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "删除失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusInternalServerError, errDeleteFailed, err.Error())
 		return
 	}
 	s.mu.Lock()
@@ -346,12 +346,12 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.Content) > maxDocSize {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "文档过大（上限 8 MiB）"})
+		writeError(w, http.StatusRequestEntityTooLarge, errDocumentTooLarge)
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	res := s.renderer.Render([]byte(req.Content), ro.ID+"/"+rel)

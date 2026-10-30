@@ -29,32 +29,22 @@ import type {
   TreeResponse,
 } from "./types";
 
-const API_ERROR_EN: Record<string, string> = {
-  "路径无效或不是 Markdown 文件": "Invalid path or not a Markdown file.",
-  "请求格式错误": "Invalid request.",
-  "请求内容过大": "Request body is too large.",
-  "评论不存在": "Comment not found.",
-  "文档不存在": "Document not found.",
-  "缺少文档路径": "Missing document path.",
-  "文件已存在": "File already exists.",
-  "模板名称和内容不能为空": "Template name and body are required.",
-  "模板内容过长": "Template content is too long.",
-  "内置模板不能删除，只能恢复默认": "Built-in templates cannot be deleted; restore the default instead.",
-  "模板不存在": "Template not found.",
-  "缺少模板 ID": "Missing template ID.",
-  "无法读取文档": "Could not read the document.",
-  "当前任务模板不允许回复评论": "This task template does not allow comment replies.",
-  "当前任务不允许修改文档": "This task does not allow document edits.",
-  "当前任务不能访问这个代码仓库": "This task cannot access this code repository.",
-  "不支持的文件类型": "Unsupported file type.",
-};
+/** Error thrown for non-2xx API responses; `code` is the stable server error code. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
+// The server localizes `error` from Accept-Language; this only guards against
+// mixed-language messages leaking into the English UI.
 function localizeAPIError(message: string, status: number): string {
   if (i18n.language !== "en") return message;
-  const exact = API_ERROR_EN[message];
-  if (exact) return exact;
-  // Do not leak mixed-language error messages in the English UI. Unknown
-  // backend details can be added as error codes in a later pass.
   return /[\u4e00-\u9fff]/.test(message) ? `Request failed (${status})` : message;
 }
 
@@ -69,13 +59,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let code = "";
     try {
-      const body = (await res.json()) as { error?: string };
+      const body = (await res.json()) as { error?: string; code?: string };
       if (body.error) message = body.error;
+      if (body.code) code = body.code;
     } catch {
       // Keep the status message.
     }
-    throw new Error(localizeAPIError(message, res.status));
+    throw new ApiError(localizeAPIError(message, res.status), res.status, code);
   }
   if (res.status === 204) {
     return undefined as T;

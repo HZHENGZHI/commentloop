@@ -24,12 +24,12 @@ func (s *Server) handleLSPDefinition(w http.ResponseWriter, r *http.Request) {
 	}
 	item, ok := s.codeRepos.get(req.Repo)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "代码仓库不存在"})
+		writeError(w, http.StatusNotFound, errCodeRepositoryNotFound)
 		return
 	}
 	rel := strings.TrimSpace(req.Path)
 	if rel == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少代码文件路径"})
+		writeError(w, http.StatusBadRequest, errMissingCodeFilePath)
 		return
 	}
 	content, err := coderepo.ReadFull(item.Path, rel)
@@ -38,7 +38,7 @@ func (s *Server) handleLSPDefinition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Line < 1 || req.Character < 1 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "行号和列号必须从 1 开始"})
+		writeError(w, http.StatusBadRequest, errLineColumnMustStartAt)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
