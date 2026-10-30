@@ -55,7 +55,7 @@ func Run(args []string, version string) error {
 		explicitURL: *urlFlag,
 	}
 	fmt.Fprintf(os.Stderr, "commentloop mcp: connecting to %s\n", s.client.BaseURL())
-	return s.mcpServer(version).Run(context.Background(), &mcp.StdioTransport{})
+	return s.mcpServer(version).Run(context.Background(), &mcp.StdioTransport{MaxLineLength: maxFrameBytes})
 }
 
 func (s *server) mcpServer(version string) *mcp.Server {
@@ -88,6 +88,10 @@ func (s *server) call(params toolCallParams) toolResult {
 	defer s.mu.Unlock()
 	return s.callTool(params)
 }
+
+// maxFrameBytes bounds one JSON-RPC line; write_file carries whole documents,
+// and JSON escaping can roughly double their size.
+const maxFrameBytes = 20 * 1024 * 1024
 
 const serverInstructions = "commentloop exposes the Markdown workspace currently open in the commentloop app, " +
 	"including local and SSH/SFTP remote roots. Use list_files to discover canonical paths, " +
