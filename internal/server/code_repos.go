@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/coderepo"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type codeRepoRecord struct {
@@ -31,11 +32,11 @@ type codeRepoRecord struct {
 }
 
 type codeRepoStore struct {
-	db        *sql.DB
+	db        *gorm.DB
 	cacheRoot string
 }
 
-func newCodeRepoStore(db *sql.DB, stateDir string) *codeRepoStore {
+func newCodeRepoStore(db *gorm.DB, stateDir string) *codeRepoStore {
 	cacheRoot := ""
 	if strings.TrimSpace(stateDir) != "" {
 		cacheRoot = filepath.Join(stateDir, "code-repos")
@@ -45,37 +46,41 @@ func newCodeRepoStore(db *sql.DB, stateDir string) *codeRepoStore {
 	return &codeRepoStore{db: db, cacheRoot: cacheRoot}
 }
 
-func (s *codeRepoStore) list() ([]codeRepoRecord, error) {
-	rows, err := s.db.Query(`SELECT id,name,path,kind,remote_url,remote_branch,created_at
-		FROM code_repos ORDER BY name,path`)
-	if err != nil {
-		return nil, err
+func (r codeRepoRow) record() codeRepoRecord {
+	return codeRepoRecord{
+		ID: r.ID, Name: r.Name, Path: r.Path, Kind: r.Kind,
+		RemoteURL: r.RemoteURL, RemoteBranch: r.RemoteBranch, CreatedAt: parseTime(r.CreatedAt),
 	}
-	defer rows.Close()
-	out := make([]codeRepoRecord, 0)
-	for rows.Next() {
-		var item codeRepoRecord
-		var createdAt string
-		if err := rows.Scan(&item.ID, &item.Name, &item.Path, &item.Kind, &item.RemoteURL, &item.RemoteBranch, &createdAt); err != nil {
-			return nil, err
-		}
-		item.CreatedAt = parseTime(createdAt)
+}
+
+func codeReposFromRows(rows []codeRepoRow, linked bool) []codeRepoRecord {
+	out := make([]codeRepoRecord, 0, len(rows))
+	for _, row := range rows {
+		item := row.record()
+		item.Linked = linked
 		out = append(out, item)
 	}
-	return out, rows.Err()
+	return out
+}
+
+func (s *codeRepoStore) list() ([]codeRepoRecord, error) {
+	var rows []codeRepoRow
+	if err := s.db.Order("name, path").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return codeReposFromRows(rows, false), nil
+}
+
+func (s *codeRepoStore) find(query string, args ...any) (codeRepoRecord, bool) {
+	var row codeRepoRow
+	if err := s.db.Where(query, args...).Take(&row).Error; err != nil {
+		return codeRepoRecord{}, false
+	}
+	return row.record(), true
 }
 
 func (s *codeRepoStore) get(id string) (codeRepoRecord, bool) {
-	var item codeRepoRecord
-	var createdAt string
-	err := s.db.QueryRow(`SELECT id,name,path,kind,remote_url,remote_branch,created_at
-		FROM code_repos WHERE id=?`, id).
-		Scan(&item.ID, &item.Name, &item.Path, &item.Kind, &item.RemoteURL, &item.RemoteBranch, &createdAt)
-	if err != nil {
-		return codeRepoRecord{}, false
-	}
-	item.CreatedAt = parseTime(createdAt)
-	return item, true
+	return s.find("id = ?", id)
 }
 
 func (s *codeRepoStore) ensure(path string) (codeRepoRecord, error) {
@@ -88,9 +93,9 @@ func (s *codeRepoStore) ensure(path string) (codeRepoRecord, error) {
 	}
 	id := "repo_" + commentID()
 	now := time.Now()
-	if _, err := s.db.Exec(`INSERT INTO code_repos
-		(id,name,path,kind,remote_url,remote_branch,created_at) VALUES (?,?,?,?,?,?,?)`,
-		id, name, normalized, "local", "", "", formatTime(now)); err != nil {
+	if err := s.db.Create(&codeRepoRow{
+		ID: id, Name: name, Path: normalized, Kind: "local", CreatedAt: formatTime(now),
+	}).Error; err != nil {
 		// A concurrent add may have won the unique path race.
 		if existing, ok := s.byPath(normalized); ok {
 			return existing, nil
@@ -101,68 +106,45 @@ func (s *codeRepoStore) ensure(path string) (codeRepoRecord, error) {
 }
 
 func (s *codeRepoStore) byPath(path string) (codeRepoRecord, bool) {
-	var item codeRepoRecord
-	var createdAt string
-	err := s.db.QueryRow(`SELECT id,name,path,kind,remote_url,remote_branch,created_at
-		FROM code_repos WHERE path=?`, path).
-		Scan(&item.ID, &item.Name, &item.Path, &item.Kind, &item.RemoteURL, &item.RemoteBranch, &createdAt)
-	if err != nil {
-		return codeRepoRecord{}, false
-	}
-	item.CreatedAt = parseTime(createdAt)
-	return item, true
+	return s.find("path = ?", path)
 }
 
 func (s *codeRepoStore) link(docPath, repoID string) error {
 	if _, ok := s.get(repoID); !ok {
 		return os.ErrNotExist
 	}
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO doc_code_repos (doc_path,repo_id,created_at)
-		VALUES (?,?,?)`, docPath, repoID, formatTime(time.Now()))
-	return err
+	return s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&docCodeRepoRow{
+		DocPath: docPath, RepoID: repoID, CreatedAt: formatTime(time.Now()),
+	}).Error
 }
 
 func (s *codeRepoStore) unlink(docPath, repoID string) error {
-	result, err := s.db.Exec(`DELETE FROM doc_code_repos WHERE doc_path=? AND repo_id=?`, docPath, repoID)
-	if err != nil {
-		return err
+	result := s.db.Where("doc_path = ? AND repo_id = ?", docPath, repoID).Delete(&docCodeRepoRow{})
+	if result.Error != nil {
+		return result.Error
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	if result.RowsAffected == 0 {
 		return os.ErrNotExist
 	}
 	return nil
 }
 
 func (s *codeRepoStore) linked(docPath string) ([]codeRepoRecord, error) {
-	rows, err := s.db.Query(`SELECT r.id,r.name,r.path,r.kind,r.remote_url,r.remote_branch,r.created_at
-		FROM code_repos r JOIN doc_code_repos d ON d.repo_id=r.id
-		WHERE d.doc_path=? ORDER BY r.name,r.path`, docPath)
-	if err != nil {
+	var rows []codeRepoRow
+	if err := s.db.Joins("JOIN doc_code_repos d ON d.repo_id = code_repos.id").
+		Where("d.doc_path = ?", docPath).
+		Order("code_repos.name, code_repos.path").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := make([]codeRepoRecord, 0)
-	for rows.Next() {
-		var item codeRepoRecord
-		var createdAt string
-		if err := rows.Scan(&item.ID, &item.Name, &item.Path, &item.Kind, &item.RemoteURL, &item.RemoteBranch, &createdAt); err != nil {
-			return nil, err
-		}
-		item.CreatedAt = parseTime(createdAt)
-		item.Linked = true
-		out = append(out, item)
-	}
-	return out, rows.Err()
+	return codeReposFromRows(rows, true), nil
 }
 
 func (s *codeRepoStore) delete(id string) error {
-	result, err := s.db.Exec(`DELETE FROM code_repos WHERE id=?`, id)
-	if err != nil {
-		return err
+	result := s.db.Where("id = ?", id).Delete(&codeRepoRow{})
+	if result.Error != nil {
+		return result.Error
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	if result.RowsAffected == 0 {
 		return os.ErrNotExist
 	}
 	return nil
@@ -392,16 +374,7 @@ func (s *Server) handleCodeRepoSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *codeRepoStore) byRemote(remoteURL, branch string) (codeRepoRecord, bool) {
-	var item codeRepoRecord
-	var createdAt string
-	err := s.db.QueryRow(`SELECT id,name,path,kind,remote_url,remote_branch,created_at
-		FROM code_repos WHERE remote_url=? AND remote_branch=? LIMIT 1`, remoteURL, branch).
-		Scan(&item.ID, &item.Name, &item.Path, &item.Kind, &item.RemoteURL, &item.RemoteBranch, &createdAt)
-	if err != nil {
-		return codeRepoRecord{}, false
-	}
-	item.CreatedAt = parseTime(createdAt)
-	return item, true
+	return s.find("remote_url = ? AND remote_branch = ?", remoteURL, branch)
 }
 
 func (s *codeRepoStore) ensureGitHub(ctx context.Context, remoteURL, branch string) (codeRepoRecord, error) {
@@ -431,10 +404,10 @@ func (s *codeRepoStore) ensureGitHub(ctx context.Context, remoteURL, branch stri
 		ID: id, Name: source.Name, Path: dest, Kind: "github",
 		RemoteURL: source.CloneURL, RemoteBranch: branch, CreatedAt: now,
 	}
-	if _, err := s.db.Exec(`INSERT INTO code_repos
-		(id,name,path,kind,remote_url,remote_branch,created_at) VALUES (?,?,?,?,?,?,?)`,
-		item.ID, item.Name, item.Path, item.Kind, item.RemoteURL, item.RemoteBranch,
-		formatTime(now)); err != nil {
+	if err := s.db.Create(&codeRepoRow{
+		ID: item.ID, Name: item.Name, Path: item.Path, Kind: item.Kind,
+		RemoteURL: item.RemoteURL, RemoteBranch: item.RemoteBranch, CreatedAt: formatTime(now),
+	}).Error; err != nil {
 		_ = os.RemoveAll(dest)
 		return codeRepoRecord{}, err
 	}
@@ -475,7 +448,7 @@ func (s *codeRepoStore) switchGitHubBranch(ctx context.Context, id, branch strin
 	if err := coderepo.UpdateGitHubBranch(ctx, source, item.Path, branch, githubToken()); err != nil {
 		return codeRepoRecord{}, err
 	}
-	if _, err := s.db.Exec(`UPDATE code_repos SET remote_branch=? WHERE id=?`, branch, id); err != nil {
+	if err := s.db.Model(&codeRepoRow{}).Where("id = ?", id).Update("remote_branch", branch).Error; err != nil {
 		return codeRepoRecord{}, err
 	}
 	item.RemoteBranch = branch

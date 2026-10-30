@@ -147,7 +147,7 @@ func New(opts Options) (*Server, error) {
 		discussions:         newDiscussionStore(db),
 		agentCaps:           newAgentCapabilityStore(),
 		agentJobs:           newAgentJobStore(sqlDB),
-		codeRepos:           newCodeRepoStore(sqlDB, opts.StateDir),
+		codeRepos:           newCodeRepoStore(db, opts.StateDir),
 		agentSessions:       newAgentSessionStore(sqlDB),
 		stateDir:            opts.StateDir,
 		settingsStore:       settingsStore,
