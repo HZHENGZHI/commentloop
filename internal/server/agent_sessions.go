@@ -2,12 +2,15 @@ package server
 
 import (
 	"crypto/rand"
-	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type agentSession struct {
@@ -21,10 +24,10 @@ type agentSession struct {
 }
 
 type agentSessionStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newAgentSessionStore(db *sql.DB) *agentSessionStore {
+func newAgentSessionStore(db *gorm.DB) *agentSessionStore {
 	return &agentSessionStore{db: db}
 }
 
@@ -37,26 +40,27 @@ func newPiSessionID() string {
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
+func (r agentSessionRow) session() agentSession {
+	return agentSession{
+		ID: r.ID, DocPath: r.DocPath, PiSessionID: r.PiSessionID, Title: r.Title,
+		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
+	}
+}
+
 func (s *agentSessionStore) getByID(id string) (agentSession, bool) {
-	var item agentSession
-	var createdAt, updatedAt string
-	err := s.db.QueryRow(`SELECT id,doc_path,pi_session_id,title,created_at,updated_at
-		FROM agent_sessions WHERE id=?`, id).
-		Scan(&item.ID, &item.DocPath, &item.PiSessionID, &item.Title, &createdAt, &updatedAt)
-	if err != nil {
+	var row agentSessionRow
+	if err := s.db.Take(&row, "id = ?", id).Error; err != nil {
 		return agentSession{}, false
 	}
-	item.CreatedAt = parseTime(createdAt)
-	item.UpdatedAt = parseTime(updatedAt)
-	return item, true
+	return row.session(), true
 }
 
 func (s *agentSessionStore) activeID(docPath string) string {
-	var id string
-	if err := s.db.QueryRow(`SELECT session_id FROM doc_agent_active WHERE doc_path=?`, docPath).Scan(&id); err != nil {
+	var row docAgentActiveRow
+	if err := s.db.Take(&row, "doc_path = ?", docPath).Error; err != nil {
 		return ""
 	}
-	return id
+	return row.SessionID
 }
 
 func (s *agentSessionStore) ensureDefault(docPath string) (agentSession, error) {
@@ -65,19 +69,19 @@ func (s *agentSessionStore) ensureDefault(docPath string) (agentSession, error) 
 			return item, nil
 		}
 	}
-	var id string
-	err := s.db.QueryRow(`SELECT id FROM agent_sessions WHERE doc_path=? ORDER BY created_at LIMIT 1`, docPath).Scan(&id)
-	if err == sql.ErrNoRows {
+	var first agentSessionRow
+	err := s.db.Select("id").Where("doc_path = ?", docPath).Order("created_at").Take(&first).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		item, createErr := s.create(docPath, "默认会话", true)
 		return item, createErr
 	}
 	if err != nil {
 		return agentSession{}, err
 	}
-	if err := s.setActive(docPath, id); err != nil {
+	if err := s.setActive(docPath, first.ID); err != nil {
 		return agentSession{}, err
 	}
-	item, ok := s.getByID(id)
+	item, ok := s.getByID(first.ID)
 	if !ok {
 		return agentSession{}, os.ErrNotExist
 	}
@@ -86,8 +90,8 @@ func (s *agentSessionStore) ensureDefault(docPath string) (agentSession, error) 
 
 func (s *agentSessionStore) create(docPath, title string, makeActive bool) (agentSession, error) {
 	if title == "" {
-		var count int
-		_ = s.db.QueryRow(`SELECT COUNT(*) FROM agent_sessions WHERE doc_path=?`, docPath).Scan(&count)
+		var count int64
+		_ = s.db.Model(&agentSessionRow{}).Where("doc_path = ?", docPath).Count(&count).Error
 		if count == 0 {
 			title = "默认会话"
 		} else {
@@ -99,9 +103,10 @@ func (s *agentSessionStore) create(docPath, title string, makeActive bool) (agen
 		ID: "as_" + commentID(), DocPath: docPath, PiSessionID: newPiSessionID(),
 		Title: title, CreatedAt: now, UpdatedAt: now,
 	}
-	_, err := s.db.Exec(`INSERT INTO agent_sessions
-		(id,doc_path,pi_session_id,title,created_at,updated_at) VALUES (?,?,?,?,?,?)`,
-		item.ID, item.DocPath, item.PiSessionID, item.Title, formatTime(now), formatTime(now))
+	err := s.db.Create(&agentSessionRow{
+		ID: item.ID, DocPath: item.DocPath, PiSessionID: item.PiSessionID, Title: item.Title,
+		CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
+	}).Error
 	if err != nil {
 		return agentSession{}, err
 	}
@@ -120,11 +125,10 @@ func (s *agentSessionStore) setActive(docPath, id string) error {
 		return os.ErrNotExist
 	}
 	now := formatTime(time.Now())
-	_, err := s.db.Exec(`INSERT INTO doc_agent_active (doc_path,session_id,updated_at)
-		VALUES (?,?,?)
-		ON CONFLICT(doc_path) DO UPDATE SET session_id=excluded.session_id, updated_at=excluded.updated_at`,
-		docPath, id, now)
-	return err
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "doc_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"session_id", "updated_at"}),
+	}).Create(&docAgentActiveRow{DocPath: docPath, SessionID: id, UpdatedAt: now}).Error
 }
 
 func (s *agentSessionStore) list(docPath string) ([]agentSession, string, error) {
@@ -132,25 +136,17 @@ func (s *agentSessionStore) list(docPath string) ([]agentSession, string, error)
 		return nil, "", err
 	}
 	active := s.activeID(docPath)
-	rows, err := s.db.Query(`SELECT id,doc_path,pi_session_id,title,created_at,updated_at
-		FROM agent_sessions WHERE doc_path=? ORDER BY created_at`, docPath)
-	if err != nil {
+	var rows []agentSessionRow
+	if err := s.db.Where("doc_path = ?", docPath).Order("created_at").Find(&rows).Error; err != nil {
 		return nil, "", err
 	}
-	defer rows.Close()
-	out := make([]agentSession, 0)
-	for rows.Next() {
-		var item agentSession
-		var createdAt, updatedAt string
-		if err := rows.Scan(&item.ID, &item.DocPath, &item.PiSessionID, &item.Title, &createdAt, &updatedAt); err != nil {
-			return nil, "", err
-		}
-		item.CreatedAt = parseTime(createdAt)
-		item.UpdatedAt = parseTime(updatedAt)
+	out := make([]agentSession, 0, len(rows))
+	for _, row := range rows {
+		item := row.session()
 		item.Active = item.ID == active
 		out = append(out, item)
 	}
-	return out, active, rows.Err()
+	return out, active, nil
 }
 
 func (s *agentSessionStore) rename(id, title string) error {
@@ -158,13 +154,13 @@ func (s *agentSessionStore) rename(id, title string) error {
 	if title == "" {
 		return fmt.Errorf("会话名称不能为空")
 	}
-	result, err := s.db.Exec(`UPDATE agent_sessions SET title=?, updated_at=? WHERE id=?`,
-		title, formatTime(time.Now()), id)
-	if err != nil {
-		return err
+	result := s.db.Model(&agentSessionRow{}).Where("id = ?", id).Updates(map[string]any{
+		"title": title, "updated_at": formatTime(time.Now()),
+	})
+	if result.Error != nil {
+		return result.Error
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	if result.RowsAffected == 0 {
 		return os.ErrNotExist
 	}
 	return nil

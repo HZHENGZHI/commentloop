@@ -120,10 +120,6 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
 	persistedRoots, err := loadRootsDB(db)
 	if err != nil {
 		_ = closeStateDB(db)
@@ -146,9 +142,9 @@ func New(opts Options) (*Server, error) {
 		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
 		agentCaps:           newAgentCapabilityStore(),
-		agentJobs:           newAgentJobStore(sqlDB),
+		agentJobs:           newAgentJobStore(db),
 		codeRepos:           newCodeRepoStore(db, opts.StateDir),
-		agentSessions:       newAgentSessionStore(sqlDB),
+		agentSessions:       newAgentSessionStore(db),
 		stateDir:            opts.StateDir,
 		settingsStore:       settingsStore,
 		settings:            newSettingsSnapshot(loadedSettings),

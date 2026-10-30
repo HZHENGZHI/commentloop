@@ -1,9 +1,9 @@
 package server
 
-// GORM models describing the state database schema. They are used by
-// openStateDB (AutoMigrate); queries still go through database/sql.
+// GORM models describing the state database schema. openStateDB uses them to
+// add missing tables/columns/indexes, and every store queries through them.
 // Column types and defaults mirror the historical hand-written DDL so that
-// AutoMigrate leaves existing databases untouched.
+// existing databases are left untouched.
 
 type rootRow struct {
 	Position int    `gorm:"type:integer;not null"`
