@@ -122,7 +122,9 @@ func (s *Server) initRoots(primary string, extras []string) error {
 		switch def.Kind {
 		case rootKindRemote:
 			cfg := remoteConfigFromState(def)
-			if _, _, err := s.registerRemoteRoot(cfg, false); err != nil {
+			if _, _, err := s.registerRemoteRoot(cfg, false); errors.Is(err, errTooManyRoots) {
+				s.keepOverflowRoot(def, err)
+			} else if err != nil {
 				slog.Warn("failed to restore remote directory; kept as offline", "host", cfg.Host, "path", cfg.Path, "err", err)
 				s.addOfflineRemoteRoot(cfg, err)
 			}
@@ -130,7 +132,9 @@ func (s *Server) initRoots(primary string, extras []string) error {
 			if def.Path == "" {
 				continue
 			}
-			if _, _, err := s.registerLocalRoot(def.Path, false); err != nil {
+			if _, _, err := s.registerLocalRoot(def.Path, false); errors.Is(err, errTooManyRoots) {
+				s.keepOverflowRoot(def, err)
+			} else if err != nil {
 				slog.Warn("skipping saved but unavailable directory", "path", def.Path, "err", err)
 			}
 		}
@@ -529,6 +533,15 @@ func remoteConfigFromState(def stateRoot) remoteConfig {
 	}
 }
 
+// keepOverflowRoot remembers a saved root that exceeds limits.roots so that
+// saveWorkspace keeps persisting it; raising the limit restores it.
+func (s *Server) keepOverflowRoot(def stateRoot, err error) {
+	slog.Warn("root limit reached; saved directory not loaded", "path", def.Path, "host", def.Host, "err", err)
+	s.rootMu.Lock()
+	s.overflowRoots = append(s.overflowRoots, def)
+	s.rootMu.Unlock()
+}
+
 func (s *Server) saveWorkspace() error {
 	if s.db == nil {
 		return nil
@@ -546,6 +559,7 @@ func (s *Server) saveWorkspace() error {
 		}
 		defs = append(defs, stateRoot{Kind: rootKindLocal, Path: ro.Path})
 	}
+	defs = append(defs, s.overflowRoots...)
 	s.rootMu.RUnlock()
 	return saveRootsDB(s.db, defs)
 }

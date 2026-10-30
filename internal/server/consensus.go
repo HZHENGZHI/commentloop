@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -63,7 +64,7 @@ func (c *consensusScheduler) run(docPath string, includeExisting bool) {
 		if err != nil {
 			// Keep the old consensus. The next review retries.
 			// The error is intentionally not surfaced as an agent failure.
-			fmt.Fprintf(os.Stderr, "commentloop: consensus refresh: %v\n", err)
+			slog.Warn("consensus refresh failed", "err", err)
 		}
 		c.mu.Lock()
 		if c.pending[docPath] && c.ctx.Err() == nil {

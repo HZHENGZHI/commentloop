@@ -1,6 +1,8 @@
 package server
 
 import (
+	"github.com/hzhengzhi/commentloop/internal/config"
+
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -2469,5 +2471,30 @@ func TestOfflineRemoteRootIsRetained(t *testing.T) {
 	}
 	if !foundRemote {
 		t.Fatalf("offline root was not retained in sqlite: %+v", defs)
+	}
+}
+
+func TestRootLimitKeepsSavedRoots(t *testing.T) {
+	root, extraA, extraB, stateDir := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	open := func(limit int, extras ...string) int {
+		t.Helper()
+		app, err := New(Options{
+			Root: root, ExtraRoots: extras, StateDir: stateDir, WebFS: mapFS(),
+			Config: config.Config{Limits: config.Limits{Roots: limit}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer app.Close()
+		return app.RootCount()
+	}
+	if got := open(0, extraA, extraB); got != 3 {
+		t.Fatalf("initial roots = %d, want 3", got)
+	}
+	if got := open(2); got != 2 {
+		t.Fatalf("limited roots = %d, want 2", got)
+	}
+	if got := open(0); got != 3 {
+		t.Fatalf("roots after raising limit = %d, want 3 (saved root lost)", got)
 	}
 }

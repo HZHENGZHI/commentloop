@@ -91,8 +91,10 @@ type Server struct {
 	stateDir       string
 	agentBaseURL   string
 
-	cfg        config.Config
-	localTrees localTreeCache
+	cfg config.Config
+	// overflowRoots are persisted roots skipped because of limits.roots.
+	overflowRoots []stateRoot
+	localTrees    localTreeCache
 
 	remoteTreeMu        sync.Mutex
 	remoteTree          map[string][]fileEntry
