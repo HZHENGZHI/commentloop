@@ -1,8 +1,8 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,12 +12,13 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	gormlogger "gorm.io/gorm/logger"
 )
 
 const dbFileName = "commentloop.db"
 
-func openStateDB(stateDir string) (*sql.DB, error) {
+func openStateDB(stateDir string) (*gorm.DB, error) {
 	dsn := ":memory:"
 	if stateDir != "" {
 		if err := os.MkdirAll(stateDir, 0o700); err != nil {
@@ -54,15 +55,42 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("sqlite schema: %w", err)
 	}
+	if err := useExplicitColumnValues(gdb); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if stateDir != "" {
-		if err := migrateLegacyRoots(db, stateDir); err != nil {
+		if err := migrateLegacyRoots(gdb, stateDir); err != nil {
 			slog.Error("failed to migrate roots.json", "err", err)
 		}
-		if err := repairLegacyCodeRepoPaths(db, stateDir); err != nil {
+		if err := repairLegacyCodeRepoPaths(gdb, stateDir); err != nil {
 			slog.Error("failed to repair legacy code repository paths", "err", err)
 		}
 	}
-	return db, nil
+	return gdb, nil
+}
+
+// closeStateDB closes the connection pool behind gdb.
+func closeStateDB(gdb *gorm.DB) error {
+	db, err := gdb.DB()
+	if err != nil {
+		return err
+	}
+	return db.Close()
+}
+
+// metaValue reads a meta key; found is false when the key is absent.
+func metaValue(db *gorm.DB, key string) (value string, found bool, err error) {
+	var row metaRow
+	err = db.Take(&row, "key = ?", key).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	return row.Value, err == nil, err
+}
+
+func setMeta(db *gorm.DB, key, value string) error {
+	return db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&metaRow{Key: key, Value: value}).Error
 }
 
 // migrateStateSchema creates missing tables, columns and indexes from
@@ -101,35 +129,43 @@ func migrateStateSchema(gdb *gorm.DB) error {
 	return nil
 }
 
-func repairLegacyCodeRepoPaths(db *sql.DB, stateDir string) error {
+// useExplicitColumnValues drops the parsed `default:` tags from the cached
+// model schemas once migration is done. The defaults are only needed for DDL;
+// left in place, GORM would write e.g. 1 instead of a false (0) capability
+// flag on Create. Afterwards every column is written with the Go value, like
+// the hand-written INSERTs did.
+func useExplicitColumnValues(gdb *gorm.DB) error {
+	for _, model := range stateModels {
+		stmt := &gorm.Statement{DB: gdb}
+		if err := stmt.Parse(model); err != nil {
+			return err
+		}
+		for _, field := range stmt.Schema.Fields {
+			field.HasDefaultValue = false
+			field.DefaultValue = ""
+			field.DefaultValueInterface = nil
+		}
+		stmt.Schema.FieldsWithDefaultDBValue = nil
+	}
+	return nil
+}
+
+func repairLegacyCodeRepoPaths(db *gorm.DB, stateDir string) error {
 	oldState := filepath.Join(filepath.Dir(stateDir), "mdlive")
 	if oldState == stateDir {
 		return nil
 	}
-	rows, err := db.Query(`SELECT id, path FROM code_repos`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	type repoPath struct{ id, path string }
-	var repos []repoPath
-	for rows.Next() {
-		var item repoPath
-		if err := rows.Scan(&item.id, &item.path); err != nil {
-			return err
-		}
-		repos = append(repos, item)
-	}
-	if err := rows.Err(); err != nil {
+	var repos []codeRepoRow
+	if err := db.Select("id", "path").Find(&repos).Error; err != nil {
 		return err
 	}
 	for _, repo := range repos {
-		next := rewriteLegacyRepoPath(repo.path, oldState, stateDir)
-		if next == repo.path {
+		next := rewriteLegacyRepoPath(repo.Path, oldState, stateDir)
+		if next == repo.Path {
 			continue
 		}
-		if _, err := db.Exec(`UPDATE code_repos SET path=? WHERE id=?`, next, repo.id); err != nil {
-			slog.Error("failed to repair code repository", "repo", repo.id, "err", err)
+		if err := db.Model(&codeRepoRow{}).Where("id = ?", repo.ID).Update("path", next).Error; err != nil {
+			slog.Error("failed to repair code repository", "repo", repo.ID, "err", err)
 		}
 	}
 	return nil
@@ -157,69 +193,57 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
-func saveRootsDB(db *sql.DB, defs []stateRoot) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM roots`); err != nil {
-		return err
-	}
-	stmt, err := tx.Prepare(`INSERT INTO roots
-		(position, kind, path, name, host, port, username, key_path)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	for i, def := range defs {
-		if _, err := stmt.Exec(i, def.Kind, def.Path, def.Name, def.Host, def.Port, def.User, def.KeyPath); err != nil {
+func saveRootsDB(db *gorm.DB, defs []stateRoot) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("1 = 1").Delete(&rootRow{}).Error; err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		if len(defs) == 0 {
+			return nil
+		}
+		rows := make([]rootRow, len(defs))
+		for i, def := range defs {
+			rows[i] = rootRow{
+				Position: i, Kind: def.Kind, Path: def.Path, Name: def.Name,
+				Host: def.Host, Port: def.Port, Username: def.User, KeyPath: def.KeyPath,
+			}
+		}
+		return tx.Create(&rows).Error
+	})
 }
 
-func loadRootsDB(db *sql.DB) ([]stateRoot, error) {
-	rows, err := db.Query(`SELECT kind, path, name, host, port, username, key_path
-		FROM roots ORDER BY position`)
-	if err != nil {
+func loadRootsDB(db *gorm.DB) ([]stateRoot, error) {
+	var rows []rootRow
+	if err := db.Order("position").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []stateRoot
-	for rows.Next() {
-		var def stateRoot
-		if err := rows.Scan(&def.Kind, &def.Path, &def.Name, &def.Host, &def.Port, &def.User, &def.KeyPath); err != nil {
-			return nil, err
-		}
-		out = append(out, def)
+	for _, row := range rows {
+		out = append(out, stateRoot{
+			Kind: row.Kind, Path: row.Path, Name: row.Name, Host: row.Host,
+			Port: row.Port, User: row.Username, KeyPath: row.KeyPath,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // migrateLegacyRoots imports the old JSON root list once. The JSON file is
 // intentionally kept as a backup and is not modified afterwards.
-func migrateLegacyRoots(db *sql.DB, stateDir string) error {
-	var migrated string
-	_ = db.QueryRow(`SELECT value FROM meta WHERE key = 'roots_json_migrated'`).Scan(&migrated)
-	if migrated == "1" {
+func migrateLegacyRoots(db *gorm.DB, stateDir string) error {
+	if migrated, _, _ := metaValue(db, "roots_json_migrated"); migrated == "1" {
 		return nil
 	}
-	count := 0
-	if err := db.QueryRow(`SELECT COUNT(*) FROM roots`).Scan(&count); err != nil {
+	var count int64
+	if err := db.Model(&rootRow{}).Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {
-		_, err := db.Exec(`INSERT OR REPLACE INTO meta(key, value) VALUES ('roots_json_migrated', '1')`)
-		return err
+		return setMeta(db, "roots_json_migrated", "1")
 	}
 	data, err := os.ReadFile(filepath.Join(stateDir, "roots.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			_, markErr := db.Exec(`INSERT OR REPLACE INTO meta(key, value) VALUES ('roots_json_migrated', '1')`)
-			return markErr
+			return setMeta(db, "roots_json_migrated", "1")
 		}
 		return err
 	}
@@ -248,8 +272,7 @@ func migrateLegacyRoots(db *sql.DB, stateDir string) error {
 		if err := saveRootsDB(db, out); err != nil {
 			return err
 		}
-		_, err := db.Exec(`INSERT OR REPLACE INTO meta(key, value) VALUES ('roots_json_migrated', '1')`)
-		return err
+		return setMeta(db, "roots_json_migrated", "1")
 	}
 	var paths []string
 	if err := json.Unmarshal(envelope.Roots, &paths); err != nil {
@@ -264,6 +287,5 @@ func migrateLegacyRoots(db *sql.DB, stateDir string) error {
 	if err := saveRootsDB(db, out); err != nil {
 		return err
 	}
-	_, err = db.Exec(`INSERT OR REPLACE INTO meta(key, value) VALUES ('roots_json_migrated', '1')`)
-	return err
+	return setMeta(db, "roots_json_migrated", "1")
 }

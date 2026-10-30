@@ -1,13 +1,15 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type codeAgentSettings struct {
@@ -35,22 +37,30 @@ func defaultAppSettings() appSettings {
 }
 
 type settingsStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newSettingsStore(db *sql.DB) *settingsStore {
+func newSettingsStore(db *gorm.DB) *settingsStore {
 	return &settingsStore{db: db}
+}
+
+func (s *settingsStore) value(key string) (string, error) {
+	var row settingRow
+	err := s.db.Take(&row, "key = ?", key).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return row.Value, err
 }
 
 func (s *settingsStore) load() (appSettings, error) {
 	out := defaultAppSettings()
-	var lspJSON, agentJSON string
-	err := s.db.QueryRow(`SELECT value FROM settings WHERE key='lsp_servers'`).Scan(&lspJSON)
-	if err != nil && err != sql.ErrNoRows {
+	lspJSON, err := s.value("lsp_servers")
+	if err != nil {
 		return out, err
 	}
-	err = s.db.QueryRow(`SELECT value FROM settings WHERE key='code_agent'`).Scan(&agentJSON)
-	if err != nil && err != sql.ErrNoRows {
+	agentJSON, err := s.value("code_agent")
+	if err != nil {
 		return out, err
 	}
 	if lspJSON != "" {
@@ -151,21 +161,14 @@ func (s *settingsStore) save(settings appSettings) error {
 	if err != nil {
 		return err
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
+	rows := []settingRow{
+		{Key: "lsp_servers", Value: string(lspJSON)},
+		{Key: "code_agent", Value: string(agentJSON)},
 	}
-	defer tx.Rollback()
-	for key, value := range map[string]string{
-		"lsp_servers": string(lspJSON),
-		"code_agent":  string(agentJSON),
-	} {
-		if _, err := tx.Exec(`INSERT INTO settings (key,value) VALUES (?,?)
-			ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(&rows).Error
 }
 
 func validateSettings(settings appSettings) (appSettings, error) {

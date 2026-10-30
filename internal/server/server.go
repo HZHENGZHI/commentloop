@@ -3,7 +3,6 @@
 package server
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -25,6 +24,7 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 	"github.com/hzhengzhi/commentloop/internal/render"
 	"github.com/hzhengzhi/commentloop/internal/watcher"
+	"gorm.io/gorm"
 )
 
 // Options configures a Server.
@@ -74,7 +74,7 @@ type Server struct {
 	assetWG     sync.WaitGroup
 
 	remoteSessions *remoteSessionStore
-	db             *sql.DB
+	db             *gorm.DB
 	persistedRoots []stateRoot
 	comments       *commentStore
 	prompts        *promptTemplateStore
@@ -120,9 +120,13 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
 	persistedRoots, err := loadRootsDB(db)
 	if err != nil {
-		_ = db.Close()
+		_ = closeStateDB(db)
 		return nil, err
 	}
 	settingsStore := newSettingsStore(db)
@@ -133,18 +137,18 @@ func New(opts Options) (*Server, error) {
 
 	prompts := newPromptTemplateStore(db)
 	if err := prompts.ensureDefaults(); err != nil {
-		_ = db.Close()
+		_ = closeStateDB(db)
 		return nil, fmt.Errorf("初始化提示词模板失败: %w", err)
 	}
 	s := &Server{
 		db:                  db,
-		comments:            newCommentStore(db),
+		comments:            newCommentStore(sqlDB),
 		prompts:             prompts,
-		discussions:         newDiscussionStore(db),
+		discussions:         newDiscussionStore(sqlDB),
 		agentCaps:           newAgentCapabilityStore(),
-		agentJobs:           newAgentJobStore(db),
-		codeRepos:           newCodeRepoStore(db, opts.StateDir),
-		agentSessions:       newAgentSessionStore(db),
+		agentJobs:           newAgentJobStore(sqlDB),
+		codeRepos:           newCodeRepoStore(sqlDB, opts.StateDir),
+		agentSessions:       newAgentSessionStore(sqlDB),
 		stateDir:            opts.StateDir,
 		settingsStore:       settingsStore,
 		settings:            newSettingsSnapshot(loadedSettings),
@@ -169,7 +173,7 @@ func New(opts Options) (*Server, error) {
 	}
 	if err := s.initRoots(opts.Root, opts.ExtraRoots); err != nil {
 		s.closeRoots()
-		_ = db.Close()
+		_ = closeStateDB(db)
 		return nil, err
 	}
 	if opts.Debug && strings.TrimSpace(opts.WebDir) != "" {
@@ -216,7 +220,7 @@ func (s *Server) Close() error {
 			s.consensus.close()
 		}
 		if s.db != nil {
-			_ = s.db.Close()
+			_ = closeStateDB(s.db)
 		}
 		s.remoteTreeMu.Lock()
 		s.remoteTree = make(map[string][]fileEntry)
