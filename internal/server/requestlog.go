@@ -1,56 +1,23 @@
 package server
 
 import (
-	"bufio"
-	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-// statusRecorder captures the response status and size for request logging
-// while still supporting WebSocket upgrades and streaming.
-type statusRecorder struct {
-	http.ResponseWriter
-	status      int
-	bytes       int64
-	wroteHeader bool
-}
-
-func (r *statusRecorder) WriteHeader(status int) {
-	if !r.wroteHeader {
-		r.status = status
-		r.wroteHeader = true
+func requestLogger(c *gin.Context) {
+	start := time.Now()
+	c.Next()
+	status := c.Writer.Status()
+	if status == http.StatusOK && c.IsWebsocket() {
+		status = http.StatusSwitchingProtocols
 	}
-	r.ResponseWriter.WriteHeader(status)
+	logRequest(c.Request, status, int64(max(c.Writer.Size(), 0)), time.Since(start))
 }
-
-func (r *statusRecorder) Write(p []byte) (int, error) {
-	r.wroteHeader = true
-	n, err := r.ResponseWriter.Write(p)
-	r.bytes += int64(n)
-	return n, err
-}
-
-func (r *statusRecorder) Flush() {
-	if f, ok := r.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := r.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("hijack not supported")
-	}
-	r.status = http.StatusSwitchingProtocols
-	r.wroteHeader = true
-	return h.Hijack()
-}
-
-func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 // requestLogLevel keeps routine reads at debug so the default info level only
 // shows mutations, client errors and server errors.
@@ -67,8 +34,8 @@ func requestLogLevel(method, path string, status int) slog.Level {
 	}
 }
 
-func logRequest(r *http.Request, rec *statusRecorder, elapsed time.Duration) {
-	level := requestLogLevel(r.Method, r.URL.Path, rec.status)
+func logRequest(r *http.Request, status int, bytes int64, elapsed time.Duration) {
+	level := requestLogLevel(r.Method, r.URL.Path, status)
 	ctx := r.Context()
 	if !slog.Default().Enabled(ctx, level) {
 		return
@@ -76,8 +43,8 @@ func logRequest(r *http.Request, rec *statusRecorder, elapsed time.Duration) {
 	slog.Default().LogAttrs(ctx, level, "http request",
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
-		slog.Int("status", rec.status),
-		slog.Int64("bytes", rec.bytes),
+		slog.Int("status", status),
+		slog.Int64("bytes", bytes),
 		slog.Duration("duration", elapsed),
 	)
 }

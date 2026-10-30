@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
 	"github.com/hzhengzhi/commentloop/internal/config"
@@ -65,7 +66,7 @@ type Server struct {
 	renderer    *render.Renderer
 	hub         *Hub
 	upgrader    websocket.Upgrader
-	mux         *http.ServeMux
+	engine      *gin.Engine
 	mu          sync.Mutex
 	diskHash    map[string]string
 	closeOnce   sync.Once
@@ -180,7 +181,7 @@ func New(opts Options) (*Server, error) {
 		WriteBufferSize: 16 * 1024,
 		CheckOrigin:     s.checkOrigin,
 	}
-	s.mux = s.routes()
+	s.engine = s.routes()
 	s.agentRunner = newAgentRunner(s)
 	s.consensus = newConsensusScheduler(s)
 	s.discussionSync = newDiscussionSyncService(s)
@@ -231,134 +232,6 @@ func (s *Server) Root() string { return s.primaryPath }
 
 // RootCount returns how many directories are currently in the workspace.
 func (s *Server) RootCount() int { return s.rootCount() }
-
-func (s *Server) routes() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", s.handleHealth)
-	mux.HandleFunc("GET /api/config", s.handleConfig)
-	mux.HandleFunc("GET /api/tree", s.handleTree)
-	mux.HandleFunc("GET /api/doc", s.handleGetDoc)
-	mux.HandleFunc("PUT /api/doc", s.requireSameOrigin(s.handleSaveDoc))
-	mux.HandleFunc("POST /api/doc", s.requireSameOrigin(s.handleSaveDoc))
-	mux.HandleFunc("DELETE /api/doc", s.requireSameOrigin(s.handleDeleteDoc))
-	mux.HandleFunc("GET /api/highlight.css", s.handleHighlightCSS)
-	mux.HandleFunc("GET /api/browse", s.requireSameOrigin(s.handleBrowse))
-	mux.HandleFunc("POST /api/render", s.requireSameOrigin(s.handleRender))
-	mux.HandleFunc("POST /api/roots", s.requireSameOrigin(s.handleAddRoot))
-	mux.HandleFunc("POST /api/roots/remote", s.requireSameOrigin(s.handleAddRemoteRoot))
-	mux.HandleFunc("POST /api/agent/refresh", s.requireSameOrigin(s.handleAgentRefresh))
-	mux.HandleFunc("GET /api/comments", s.handleGetComments)
-	mux.HandleFunc("POST /api/comments", s.requireSameOrigin(s.handleCreateComment))
-	mux.HandleFunc("POST /api/comments/reply", s.requireSameOrigin(s.handleReplyComment))
-	mux.HandleFunc("POST /api/comments/resolve", s.requireSameOrigin(s.handleResolveComment))
-	mux.HandleFunc("POST /api/comments/group", s.requireSameOrigin(s.handleGroupComment))
-	mux.HandleFunc("POST /api/comments/rollback", s.requireSameOrigin(s.handleRollbackComment))
-	mux.HandleFunc("POST /api/comments/trigger", s.requireSameOrigin(s.handleTriggerCommentAgent))
-	mux.HandleFunc("GET /api/code/repos", s.handleListCodeRepos)
-	mux.HandleFunc("DELETE /api/code/repos", s.requireSameOrigin(s.handleDeleteCodeRepo))
-	mux.HandleFunc("GET /api/doc/code-repos", s.handleDocCodeRepos)
-	mux.HandleFunc("POST /api/doc/code-repos", s.requireSameOrigin(s.handleAddDocCodeRepo))
-	mux.HandleFunc("DELETE /api/doc/code-repos", s.requireSameOrigin(s.handleRemoveDocCodeRepo))
-	mux.HandleFunc("GET /api/code/info", s.guardAgentRepo(s.handleCodeRepoInfo))
-	mux.HandleFunc("GET /api/code/files", s.guardAgentRepo(s.handleCodeRepoFiles))
-	mux.HandleFunc("GET /api/code/file", s.guardAgentRepo(s.handleCodeRepoFile))
-	mux.HandleFunc("GET /api/code/search", s.guardAgentRepo(s.handleCodeRepoSearch))
-	mux.HandleFunc("GET /api/code/branches", s.guardAgentRepo(s.handleCodeRepoBranches))
-	mux.HandleFunc("POST /api/code/branch", s.requireSameOrigin(s.handleSwitchCodeRepoBranch))
-	mux.HandleFunc("POST /api/lsp/definition", s.requireSameOrigin(s.handleLSPDefinition))
-	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
-	mux.HandleFunc("GET /api/settings/defaults", s.handleGetDefaultSettings)
-	mux.HandleFunc("PUT /api/settings", s.requireSameOrigin(s.handleSaveSettings))
-	mux.HandleFunc("POST /api/settings/check-command", s.requireSameOrigin(s.handleCheckCommand))
-	mux.HandleFunc("POST /api/agent/runner/claim", s.handleAgentRunnerClaim)
-	mux.HandleFunc("POST /api/agent/runner/finish", s.handleAgentRunnerFinish)
-	mux.HandleFunc("POST /api/agent/runner/heartbeat", s.handleAgentRunnerHeartbeat)
-	mux.HandleFunc("GET /api/agent/jobs", s.handleListAgentJobs)
-	mux.HandleFunc("GET /api/prompt-templates", s.handleListPromptTemplates)
-	mux.HandleFunc("POST /api/prompt-templates", s.requireSameOrigin(s.handleCreatePromptTemplate))
-	mux.HandleFunc("PUT /api/prompt-templates", s.requireSameOrigin(s.handleUpdatePromptTemplate))
-	mux.HandleFunc("DELETE /api/prompt-templates", s.requireSameOrigin(s.handleDeletePromptTemplate))
-	mux.HandleFunc("POST /api/prompt-templates/reset", s.requireSameOrigin(s.handleResetPromptTemplate))
-	mux.HandleFunc("POST /api/prompt-templates/optimize", s.requireSameOrigin(s.handleOptimizePromptTemplate))
-	mux.HandleFunc("GET /api/doc/discussions", s.handleDocDiscussions)
-	mux.HandleFunc("GET /api/doc/discussions/available", s.handleAvailableDiscussionSessions)
-	mux.HandleFunc("POST /api/doc/discussions", s.requireSameOrigin(s.handleImportDiscussion))
-	mux.HandleFunc("DELETE /api/doc/discussions", s.requireSameOrigin(s.handleDeleteDiscussion))
-	mux.HandleFunc("POST /api/doc/consensus/refresh", s.requireSameOrigin(s.handleRefreshConsensus))
-	mux.HandleFunc("GET /api/doc/agent-sessions", s.handleGetAgentSessions)
-	mux.HandleFunc("POST /api/doc/agent-sessions", s.requireSameOrigin(s.handleCreateAgentSession))
-	mux.HandleFunc("POST /api/doc/agent-sessions/active", s.requireSameOrigin(s.handleSetActiveAgentSession))
-	mux.HandleFunc("PATCH /api/doc/agent-sessions", s.requireSameOrigin(s.handleRenameAgentSession))
-	mux.HandleFunc("DELETE /api/comments", s.requireSameOrigin(s.handleDeleteComment))
-	mux.HandleFunc("POST /api/remote/session", s.requireSameOrigin(s.handleCreateRemoteSession))
-	mux.HandleFunc("GET /api/remote/browse", s.requireSameOrigin(s.handleBrowseRemote))
-	mux.HandleFunc("DELETE /api/remote/session", s.requireSameOrigin(s.handleCloseRemoteSession))
-	mux.HandleFunc("DELETE /api/roots", s.requireSameOrigin(s.handleRemoveRoot))
-	mux.HandleFunc("/ws", s.handleWS)
-	mux.HandleFunc("/raw/", s.handleRaw)
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "接口不存在"})
-	})
-	mux.HandleFunc("/", s.handleStatic)
-	return mux
-}
-
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-	start := time.Now()
-	defer func() { logRequest(r, rec, time.Since(start)) }()
-	s.serveHTTP(rec, r)
-}
-
-func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	h := w.Header()
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Referrer-Policy", "no-referrer")
-	h.Set("X-Frame-Options", "DENY")
-	h.Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
-			"img-src 'self' data: blob: https: http:; font-src 'self' data:; "+
-			"connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; "+
-			"form-action 'none'; frame-ancestors 'none'")
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		h.Set("Cache-Control", "no-store")
-	}
-	if !s.hostAllowed(r) {
-		http.Error(w, "forbidden host", http.StatusForbidden)
-		return
-	}
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		if s.agentTokenInvalid(r) && !strings.HasPrefix(r.URL.Path, "/api/agent/runner/") {
-			message := "Agent job token is invalid or expired."
-			if promptLanguage(r) != "en" {
-				message = "Agent 任务令牌无效或已过期"
-			}
-			s.recordAgentDenial(r, message)
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": message})
-			return
-		}
-		aw := &apiErrorWriter{
-			ResponseWriter: w,
-			status:         http.StatusOK,
-			lang:           promptLanguage(r),
-		}
-		s.mux.ServeHTTP(aw, r)
-		aw.finish()
-		if grant, known := s.agentGrantForRequest(r); known && aw.status < 400 {
-			token := r.Header.Get("X-Commentloop-Agent-Token")
-			tool := r.Header.Get("X-Commentloop-MCP-Tool")
-			if tool == "" {
-				tool = inferAgentTool(r.Method, r.URL.Path)
-			}
-			s.agentJobs.audit(grant.JobID, token, tool, r.Method, r.URL.Path, true, "")
-			if tool != "" && grant.DocPath != "" {
-				s.broadcastAgent(grant.DocPath, "working", agentToolProgress(tool))
-			}
-		}
-		return
-	}
-	s.mux.ServeHTTP(w, r)
-}
 
 func (s *Server) hostAllowed(r *http.Request) bool {
 	if s.allowAny {

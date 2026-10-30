@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO ?= go
 BIN_DIR := bin
 LDFLAGS := -s -w -X main.version=$(VERSION)
-BUILD_FLAGS := -trimpath -ldflags="$(LDFLAGS)"
+BUILD_FLAGS := -trimpath -tags nomsgpack -ldflags="$(LDFLAGS)"
 
 .PHONY: all build run start stop status dev-backend dev-web test vet tidy cross clean
 
