@@ -1,7 +1,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -70,7 +70,7 @@ func (s *discussionSyncService) syncAll() {
 		if err := s.srv.discussions.updateSessionMessages(
 			item.ID, item.DocPath, parsed, item.SourcePath, item.SourceKind, item.Agent, mtime, size,
 		); err != nil {
-			log.Printf("commentloop: sync discussion %s: %v", item.ID, err)
+			slog.Warn("sync discussion failed", "discussion", item.ID, "err", err)
 			continue
 		}
 		changedDocs[item.DocPath] = true

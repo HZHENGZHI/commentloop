@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -111,7 +111,7 @@ func (s *Server) initRoots(primary string, extras []string) error {
 			continue
 		}
 		if _, _, err := s.registerLocalRoot(extra, false); err != nil {
-			log.Printf("commentloop: failed to add directory %q: %v", extra, err)
+			slog.Warn("failed to add directory", "path", extra, "err", err)
 		}
 	}
 
@@ -122,7 +122,7 @@ func (s *Server) initRoots(primary string, extras []string) error {
 		case rootKindRemote:
 			cfg := remoteConfigFromState(def)
 			if _, _, err := s.registerRemoteRoot(cfg, false); err != nil {
-				log.Printf("commentloop: failed to restore remote directory %s:%s: %v (kept as offline)", cfg.Host, cfg.Path, err)
+				slog.Warn("failed to restore remote directory; kept as offline", "host", cfg.Host, "path", cfg.Path, "err", err)
 				s.addOfflineRemoteRoot(cfg, err)
 			}
 		default:
@@ -130,14 +130,14 @@ func (s *Server) initRoots(primary string, extras []string) error {
 				continue
 			}
 			if _, _, err := s.registerLocalRoot(def.Path, false); err != nil {
-				log.Printf("commentloop: skipping saved but unavailable directory %q: %v", def.Path, err)
+				slog.Warn("skipping saved but unavailable directory", "path", def.Path, "err", err)
 			}
 		}
 	}
 
 	// Persist the merged workspace (canonical paths, deduplicated).
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 	}
 	return nil
 }
@@ -225,7 +225,7 @@ func (s *Server) registerRemoteRoot(cfg remoteConfig, primary bool) (*root, bool
 
 	lister, lerr := newRemoteFS(cfg)
 	if lerr != nil {
-		log.Printf("commentloop: remote directory %s: poll connection failed, using the IO connection: %v", cfg.Host, lerr)
+		slog.Warn("remote poll connection failed; using the IO connection", "host", cfg.Host, "err", lerr)
 	}
 
 	s.rootMu.Lock()
@@ -362,7 +362,7 @@ func (s *Server) handleAddRemoteRoot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) finishAddRoot(w http.ResponseWriter, ro *root, warning string) {
 	s.hub.broadcast(outMessage{Type: "tree"})
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 		if warning == "" {
 			warning = "目录已添加，但写入本地配置失败"
 		} else {
@@ -415,7 +415,7 @@ func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -753,7 +753,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 		s.storeRemoteTree(ro, files)
 		s.hub.broadcast(outMessage{Type: "tree"})
 	} else {
-		log.Printf("commentloop: remote directory %s: initial scan failed: %v", ro.Name, err)
+		slog.Warn("remote initial scan failed", "root", ro.Name, "err", err)
 	}
 
 	ticker := time.NewTicker(s.remotePollInterval)
@@ -770,7 +770,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 			files, err := pollFS.list()
 			if err != nil {
 				if err.Error() != lastErr {
-					log.Printf("commentloop: remote directory %s: poll failed: %v", ro.Name, err)
+					slog.Warn("remote poll failed", "root", ro.Name, "err", err)
 					lastErr = err.Error()
 				}
 				if rerr := pollFS.reconnect(); rerr == nil {

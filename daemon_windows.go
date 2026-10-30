@@ -5,7 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"syscall"
 
@@ -59,7 +59,7 @@ func notifyStopRequests(stop chan<- os.Signal) {
 	}
 	h, err := windows.CreateEvent(nil, 1, 0, name)
 	if err != nil {
-		log.Printf("commentloop: stop event: %v", err)
+		slog.Warn("stop event unavailable", "err", err)
 		return
 	}
 	go func() {

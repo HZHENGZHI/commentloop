@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -152,7 +152,7 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 	if err := proc.runPrompt(job.Prompt, 15*time.Minute, progress); err != nil {
 		r.dropProcess(proc)
 		r.srv.broadcastAgent(job.Path, "error", fmt.Sprintf("%s 处理失败：%v", agent.Name, err))
-		log.Printf("commentloop: pi agent: %v", err)
+		slog.Error("pi agent failed", "err", err)
 		return
 	}
 	r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))

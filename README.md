@@ -159,6 +159,8 @@ Common flags:
 --state-dir DIR         # custom state directory
 --no-open               # do not open a browser
 --no-state              # do not read or write state
+--log-level LEVEL       # debug | info (default) | warn | error; env COMMENTLOOP_LOG_LEVEL
+--log-format FORMAT     # text (default) | json; env COMMENTLOOP_LOG_FORMAT
 --add-dir DIR           # add another workspace directory
 ```
 

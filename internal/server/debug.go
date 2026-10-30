@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -22,16 +22,16 @@ const assetPollInterval = 400 * time.Millisecond
 func (s *Server) configureDiskAssets(dir string) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		log.Printf("commentloop: debug: invalid web dir %q: %v", dir, err)
+		slog.Warn("debug: invalid web dir", "dir", dir, "err", err)
 		return
 	}
 	index := filepath.Join(abs, "index.html")
 	if info, err := os.Stat(index); err != nil || info.IsDir() {
-		log.Printf("commentloop: debug: %s does not exist; falling back to the embedded frontend (hot reload unavailable)", index)
+		slog.Warn("debug: frontend index missing; falling back to the embedded frontend (hot reload unavailable)", "path", index)
 		return
 	}
 	s.webDir = abs
-	log.Printf("commentloop: debug: loading frontend from disk %s", abs)
+	slog.Info("debug: loading frontend from disk", "dir", abs)
 }
 
 // startAssetPoll compares index.html between ticks. Vite writes index.html
@@ -60,7 +60,7 @@ func (s *Server) startAssetPoll() {
 					continue
 				}
 				if last != "" && sig != last {
-					log.Printf("commentloop: debug: frontend assets changed; notifying the browser to reload")
+					slog.Info("debug: frontend assets changed; notifying the browser to reload")
 					s.hub.broadcast(outMessage{Type: "reload", Message: "frontend assets changed"})
 				}
 				last = sig

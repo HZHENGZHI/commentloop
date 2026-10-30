@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,6 +26,7 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/agentrunner"
 	"github.com/hzhengzhi/commentloop/internal/discovery"
 	"github.com/hzhengzhi/commentloop/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/logging"
 	"github.com/hzhengzhi/commentloop/internal/server"
 )
 
@@ -121,6 +122,8 @@ func runServer(args []string) {
 		noState   = flag.Bool("no-state", false, "Do not read or save workspace roots")
 		stateDir  = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
 		showVer   = flag.Bool("version", false, "Print version and exit")
+		logLevel  = flag.String("log-level", envOr("COMMENTLOOP_LOG_LEVEL", "info"), "Log level: debug, info, warn or error (env COMMENTLOOP_LOG_LEVEL)")
+		logFormat = flag.String("log-format", envOr("COMMENTLOOP_LOG_FORMAT", "text"), "Log format: text or json (env COMMENTLOOP_LOG_FORMAT)")
 	)
 	flag.BoolVar(showVer, "v", false, "Print version and exit")
 	flag.Usage = func() {
@@ -142,6 +145,9 @@ func runServer(args []string) {
 	if *showVer {
 		fmt.Println(version)
 		return
+	}
+	if _, err := logging.Setup(os.Stderr, *logLevel, *logFormat); err != nil {
+		fatal("%v", err)
 	}
 
 	rootArg := *dirFlag
@@ -182,7 +188,7 @@ func runServer(args []string) {
 		if !*devMode && !*debugMode {
 			fatal("Frontend is not built. Run make build, or use make dev-backend + make dev-web for development.")
 		}
-		log.Println("commentloop: embedded frontend is not built; using the disk frontend or Vite dev server")
+		slog.Warn("embedded frontend is not built; using the disk frontend or Vite dev server")
 	}
 
 	ln, actualAddr, err := listenWithFallback(*addrFlag)
@@ -235,13 +241,14 @@ func runServer(args []string) {
 	}
 	discoveryPath, discoveryErr := discovery.Write(baseURL, version)
 	if discoveryErr != nil {
-		log.Printf("commentloop: failed to write agent discovery file: %v", discoveryErr)
+		slog.Error("failed to write agent discovery file", "err", discoveryErr)
 	} else {
 		defer discovery.RemoveOwner(discoveryPath, os.Getpid())
 	}
 
 	httpSrv := &http.Server{
 		Handler:           app,
+		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -268,7 +275,7 @@ func runServer(args []string) {
 	notifyStopRequests(stop)
 	go func() {
 		<-stop
-		log.Println("commentloop: shutting down…")
+		slog.Info("shutting down")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
@@ -320,6 +327,13 @@ func isBoolFlag(f *flag.Flag) bool {
 	}
 	b, ok := f.Value.(boolFlag)
 	return ok && b.IsBoolFlag()
+}
+
+func envOr(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func fatal(format string, args ...any) {
@@ -400,7 +414,7 @@ func openBrowser(u string) {
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		log.Printf("commentloop: could not open the browser: %v", err)
+		slog.Warn("could not open the browser", "err", err)
 		return
 	}
 	go func() { _ = cmd.Wait() }()
@@ -421,7 +435,7 @@ func migrateLegacyState() {
 	}
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		if err := os.Rename(oldDir, newDir); err != nil {
-			log.Printf("commentloop: failed to migrate legacy state directory: %v", err)
+			slog.Warn("failed to migrate legacy state directory", "err", err)
 			return
 		}
 	} else {
@@ -451,7 +465,7 @@ func moveLegacyEntries(oldDir, newDir string) {
 			continue
 		}
 		if err := os.Rename(src, dst); err != nil {
-			log.Printf("commentloop: failed to migrate legacy state %s: %v", entry.Name(), err)
+			slog.Warn("failed to migrate legacy state", "entry", entry.Name(), "err", err)
 		}
 	}
 }
@@ -466,7 +480,7 @@ func renameLegacyFile(dir, oldName, newName string) {
 		return
 	}
 	if err := os.Rename(oldPath, newPath); err != nil {
-		log.Printf("commentloop: failed to migrate legacy state file %s: %v", oldName, err)
+		slog.Warn("failed to migrate legacy state file", "file", oldName, "err", err)
 	}
 }
 
