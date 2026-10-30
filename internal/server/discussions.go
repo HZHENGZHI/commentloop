@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -82,60 +84,52 @@ type parsedSession struct {
 }
 
 type discussionStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newDiscussionStore(db *sql.DB) *discussionStore {
+func newDiscussionStore(db *gorm.DB) *discussionStore {
 	return &discussionStore{db: db}
 }
 
+func (r docDiscussionRow) discussion() Discussion {
+	return Discussion{
+		ID: r.ID, DocPath: r.DocPath, Title: r.Title, SourcePath: r.SourcePath, SourceKind: r.SourceKind,
+		Agent: r.Agent, AgentName: sessionAgentName(r.Agent), Cwd: r.Cwd, SessionID: r.SessionID,
+		MessageCount: r.MessageCount, SourceMTime: r.SourceMtime, SourceSize: r.SourceSize,
+		CreatedAt: parseTime(r.CreatedAt), ImportedAt: parseTime(r.ImportedAt),
+	}
+}
+
+func discussionsFromRows(rows []docDiscussionRow) []Discussion {
+	out := make([]Discussion, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.discussion())
+	}
+	return out
+}
+
 func (s *discussionStore) list(docPath string) ([]Discussion, error) {
-	rows, err := s.db.Query(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at
-		FROM doc_discussions WHERE doc_path=? ORDER BY imported_at,id`, docPath)
-	if err != nil {
+	var rows []docDiscussionRow
+	if err := s.db.Where("doc_path = ?", docPath).Order("imported_at, id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []Discussion{}
-	for rows.Next() {
-		var item Discussion
-		var createdAt, importedAt string
-		if err := rows.Scan(&item.ID, &item.DocPath, &item.Title, &item.SourcePath, &item.SourceKind,
-			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount,
-			&item.SourceMTime, &item.SourceSize, &createdAt, &importedAt); err != nil {
-			return nil, err
-		}
-		item.AgentName = sessionAgentName(item.Agent)
-		item.CreatedAt = parseTime(createdAt)
-		item.ImportedAt = parseTime(importedAt)
-		out = append(out, item)
-	}
-	return out, rows.Err()
+	return discussionsFromRows(rows), nil
 }
 
 func (s *discussionStore) get(docPath, id string) (Discussion, bool) {
-	var item Discussion
-	var createdAt, importedAt string
-	err := s.db.QueryRow(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at
-		FROM doc_discussions WHERE id=? AND doc_path=?`, id, docPath).
-		Scan(&item.ID, &item.DocPath, &item.Title, &item.SourcePath, &item.SourceKind,
-			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount,
-			&item.SourceMTime, &item.SourceSize, &createdAt, &importedAt)
-	if err != nil {
+	var row docDiscussionRow
+	if err := s.db.Take(&row, "id = ? AND doc_path = ?", id, docPath).Error; err != nil {
 		return Discussion{}, false
 	}
-	item.AgentName = sessionAgentName(item.Agent)
-	item.CreatedAt = parseTime(createdAt)
-	item.ImportedAt = parseTime(importedAt)
-	return item, true
+	return row.discussion(), true
 }
 
 func (s *discussionStore) bySource(docPath, sourcePath string) (Discussion, bool) {
-	var id string
-	if err := s.db.QueryRow(`SELECT id FROM doc_discussions WHERE doc_path=? AND source_path=?`, docPath, sourcePath).Scan(&id); err != nil {
+	var row docDiscussionRow
+	if err := s.db.Take(&row, "doc_path = ? AND source_path = ?", docPath, sourcePath).Error; err != nil {
 		return Discussion{}, false
 	}
-	return s.get(docPath, id)
+	return row.discussion(), true
 }
 
 func discussionID(sourcePath string) string {
@@ -170,31 +164,40 @@ func (s *discussionStore) importSession(docPath string, parsed parsedSession, so
 		item.Title = filepath.Base(sourcePath)
 	}
 	item.AgentName = sessionAgentName(agent)
-	tx, err := s.db.Begin()
+	row := docDiscussionRow{
+		ID: item.ID, DocPath: item.DocPath, Title: item.Title, SourcePath: item.SourcePath,
+		SourceKind: item.SourceKind, Agent: item.Agent, Cwd: item.Cwd, SessionID: item.SessionID,
+		MessageCount: item.MessageCount, SourceMtime: item.SourceMTime, SourceSize: item.SourceSize,
+		CreatedAt: formatTime(item.CreatedAt), ImportedAt: formatTime(item.ImportedAt),
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		return createDiscussionMessages(tx, item.ID, parsed.Messages)
+	})
 	if err != nil {
 		return Discussion{}, err
 	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`INSERT INTO doc_discussions
-		(id,doc_path,title,source_path,source_kind,agent,cwd,session_id,message_count,source_mtime,source_size,created_at,imported_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		item.ID, item.DocPath, item.Title, item.SourcePath, item.SourceKind, item.Agent, item.Cwd,
-		item.SessionID, item.MessageCount, item.SourceMTime, item.SourceSize,
-		formatTime(item.CreatedAt), formatTime(item.ImportedAt)); err != nil {
-		return Discussion{}, err
+	return item, nil
+}
+
+// discussionMessageBatch keeps multi-row INSERTs well below SQLite's
+// bound-parameter limit for long sessions.
+const discussionMessageBatch = 500
+
+func createDiscussionMessages(tx *gorm.DB, id string, messages []sessionMessage) error {
+	if len(messages) == 0 {
+		return nil
 	}
-	for i, message := range parsed.Messages {
-		if _, err := tx.Exec(`INSERT INTO discussion_messages
-			(id,discussion_id,seq,role,body,created_at) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("%s_%d", item.ID, i), item.ID, i, message.Role, message.Body,
-			formatTime(message.CreatedAt)); err != nil {
-			return Discussion{}, err
+	rows := make([]discussionMessageRow, len(messages))
+	for i, message := range messages {
+		rows[i] = discussionMessageRow{
+			ID: fmt.Sprintf("%s_%d", id, i), DiscussionID: id, Seq: i,
+			Role: message.Role, Body: message.Body, CreatedAt: formatTime(message.CreatedAt),
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return Discussion{}, err
-	}
-	return item, nil
+	return tx.CreateInBatches(&rows, discussionMessageBatch).Error
 }
 
 func sessionFileStamp(path string) (int64, int64) {
@@ -216,73 +219,54 @@ func (s *discussionStore) updateSessionMessages(id, docPath string, parsed parse
 	if item.Title == "" {
 		item.Title = filepath.Base(sourcePath)
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`UPDATE doc_discussions SET title=?,source_path=?,source_kind=?,agent=?,cwd=?,session_id=?,
-		message_count=?,source_mtime=?,source_size=? WHERE id=? AND doc_path=?`,
-		item.Title, item.SourcePath, item.SourceKind, item.Agent, item.Cwd, item.SessionID,
-		item.MessageCount, item.SourceMTime, item.SourceSize, id, docPath); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM discussion_messages WHERE discussion_id=?`, id); err != nil {
-		return err
-	}
-	for i, message := range parsed.Messages {
-		if _, err := tx.Exec(`INSERT INTO discussion_messages
-			(id,discussion_id,seq,role,body,created_at) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("%s_%d", id, i), id, i, message.Role, message.Body,
-			formatTime(message.CreatedAt)); err != nil {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&docDiscussionRow{}).Where("id = ? AND doc_path = ?", id, docPath).
+			Updates(map[string]any{
+				"title": item.Title, "source_path": item.SourcePath, "source_kind": item.SourceKind,
+				"agent": item.Agent, "cwd": item.Cwd, "session_id": item.SessionID,
+				"message_count": item.MessageCount, "source_mtime": item.SourceMTime, "source_size": item.SourceSize,
+			}).Error; err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		if err := tx.Where("discussion_id = ?", id).Delete(&discussionMessageRow{}).Error; err != nil {
+			return err
+		}
+		return createDiscussionMessages(tx, id, parsed.Messages)
+	})
 }
 
 func (s *discussionStore) delete(docPath, id string) error {
-	result, err := s.db.Exec(`DELETE FROM doc_discussions WHERE id=? AND doc_path=?`, id, docPath)
-	if err != nil {
-		return err
+	result := s.db.Where("id = ? AND doc_path = ?", id, docPath).Delete(&docDiscussionRow{})
+	if result.Error != nil {
+		return result.Error
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	if result.RowsAffected == 0 {
 		return os.ErrNotExist
 	}
 	return nil
 }
 
 func (s *discussionStore) messages(discussionID string) ([]DiscussionMessage, error) {
-	rows, err := s.db.Query(`SELECT seq,role,body,created_at FROM discussion_messages
-		WHERE discussion_id=? ORDER BY seq`, discussionID)
-	if err != nil {
+	var rows []discussionMessageRow
+	if err := s.db.Select("seq", "role", "body", "created_at").
+		Where("discussion_id = ?", discussionID).Order("seq").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []DiscussionMessage{}
-	for rows.Next() {
-		var message DiscussionMessage
-		var createdAt string
-		if err := rows.Scan(&message.Seq, &message.Role, &message.Body, &createdAt); err != nil {
-			return nil, err
-		}
-		message.CreatedAt = parseTime(createdAt)
-		out = append(out, message)
+	out := make([]DiscussionMessage, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, DiscussionMessage{
+			Seq: row.Seq, Role: row.Role, Body: row.Body, CreatedAt: parseTime(row.CreatedAt),
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *discussionStore) consensus(docPath string) (Consensus, bool) {
-	var item Consensus
-	var updatedAt string
-	err := s.db.QueryRow(`SELECT content,source,version,updated_at FROM doc_consensus WHERE doc_path=?`, docPath).
-		Scan(&item.Content, &item.Source, &item.Version, &updatedAt)
-	if err != nil {
+	var row docConsensusRow
+	if err := s.db.Take(&row, "doc_path = ?", docPath).Error; err != nil {
 		return Consensus{}, false
 	}
-	item.UpdatedAt = parseTime(updatedAt)
-	return item, true
+	return Consensus{Content: row.Content, Source: row.Source, Version: row.Version, UpdatedAt: parseTime(row.UpdatedAt)}, true
 }
 
 func (s *discussionStore) saveConsensus(docPath, content, source string) (Consensus, error) {
@@ -299,11 +283,12 @@ func (s *discussionStore) saveConsensus(docPath, content, source string) (Consen
 		version = existing.Version + 1
 	}
 	now := time.Now()
-	_, err := s.db.Exec(`INSERT INTO doc_consensus (doc_path,content,source,version,updated_at)
-		VALUES (?,?,?,?,?)
-		ON CONFLICT(doc_path) DO UPDATE SET content=excluded.content,source=excluded.source,
-		version=excluded.version,updated_at=excluded.updated_at`,
-		docPath, content, source, version, formatTime(now))
+	err := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "doc_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"content", "source", "version", "updated_at"}),
+	}).Create(&docConsensusRow{
+		DocPath: docPath, Content: content, Source: source, Version: version, UpdatedAt: formatTime(now),
+	}).Error
 	if err != nil {
 		return Consensus{}, err
 	}
@@ -311,33 +296,29 @@ func (s *discussionStore) saveConsensus(docPath, content, source string) (Consen
 }
 
 func (s *discussionStore) clearConsensus(docPath string) error {
-	_, err := s.db.Exec(`DELETE FROM doc_consensus WHERE doc_path=?`, docPath)
-	return err
+	return s.db.Where("doc_path = ?", docPath).Delete(&docConsensusRow{}).Error
 }
 
 func (s *discussionStore) hasContext(docPath string) bool {
 	if _, ok := s.consensus(docPath); ok {
 		return true
 	}
-	var count int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM doc_discussions WHERE doc_path=?`, docPath).Scan(&count)
+	var count int64
+	_ = s.db.Model(&docDiscussionRow{}).Where("doc_path = ?", docPath).Count(&count).Error
 	return count > 0
 }
 
 func (s *discussionStore) importedSources(docPath string) (map[string]bool, error) {
-	rows, err := s.db.Query(`SELECT source_path FROM doc_discussions WHERE doc_path=?`, docPath)
-	if err != nil {
+	var sources []string
+	if err := s.db.Model(&docDiscussionRow{}).Where("doc_path = ?", docPath).
+		Pluck("source_path", &sources).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[string]bool{}
-	for rows.Next() {
-		var source string
-		if err := rows.Scan(&source); err == nil {
-			out[source] = true
-		}
+	out := make(map[string]bool, len(sources))
+	for _, source := range sources {
+		out[source] = true
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *discussionStore) excerpts(docPath string, ids []string, quote, body string) string {

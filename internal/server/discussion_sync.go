@@ -99,26 +99,9 @@ func (s *discussionSyncService) syncAll() {
 }
 
 func (s *discussionStore) all() ([]Discussion, error) {
-	rows, err := s.db.Query(`SELECT id,doc_path,title,source_path,source_kind,agent,cwd,session_id,
-		message_count,source_mtime,source_size,created_at,imported_at
-		FROM doc_discussions ORDER BY imported_at,id`)
-	if err != nil {
+	var rows []docDiscussionRow
+	if err := s.db.Order("imported_at, id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []Discussion{}
-	for rows.Next() {
-		var item Discussion
-		var createdAt, importedAt string
-		if err := rows.Scan(&item.ID, &item.DocPath, &item.Title, &item.SourcePath, &item.SourceKind,
-			&item.Agent, &item.Cwd, &item.SessionID, &item.MessageCount,
-			&item.SourceMTime, &item.SourceSize, &createdAt, &importedAt); err != nil {
-			return nil, err
-		}
-		item.AgentName = sessionAgentName(item.Agent)
-		item.CreatedAt = parseTime(createdAt)
-		item.ImportedAt = parseTime(importedAt)
-		out = append(out, item)
-	}
-	return out, rows.Err()
+	return discussionsFromRows(rows), nil
 }
