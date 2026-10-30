@@ -542,11 +542,18 @@ func (s *Server) keepOverflowRoot(def stateRoot, err error) {
 	s.rootMu.Unlock()
 }
 
+func stateRootKey(def stateRoot) stateRoot {
+	if def.Kind == rootKindRemote {
+		return stateRoot{Kind: rootKindRemote, Host: def.Host, Port: def.Port, User: def.User, Path: def.Path}
+	}
+	return stateRoot{Kind: rootKindLocal, Path: def.Path}
+}
+
 func (s *Server) saveWorkspace() error {
 	if s.db == nil {
 		return nil
 	}
-	s.rootMu.RLock()
+	s.rootMu.Lock()
 	defs := make([]stateRoot, 0, len(s.rootList))
 	for _, ro := range s.rootList {
 		if ro.Kind == rootKindRemote && ro.Remote != nil {
@@ -559,8 +566,20 @@ func (s *Server) saveWorkspace() error {
 		}
 		defs = append(defs, stateRoot{Kind: rootKindLocal, Path: ro.Path})
 	}
-	defs = append(defs, s.overflowRoots...)
-	s.rootMu.RUnlock()
+	// Overflow roots that have since been loaded are no longer overflow.
+	active := make(map[stateRoot]bool, len(defs))
+	for _, def := range defs {
+		active[stateRootKey(def)] = true
+	}
+	overflow := s.overflowRoots[:0]
+	for _, def := range s.overflowRoots {
+		if !active[stateRootKey(def)] {
+			overflow = append(overflow, def)
+			defs = append(defs, def)
+		}
+	}
+	s.overflowRoots = overflow
+	s.rootMu.Unlock()
 	return saveRootsDB(s.db, defs)
 }
 

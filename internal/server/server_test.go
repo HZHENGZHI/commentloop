@@ -2498,3 +2498,23 @@ func TestRootLimitKeepsSavedRoots(t *testing.T) {
 		t.Fatalf("roots after raising limit = %d, want 3 (saved root lost)", got)
 	}
 }
+
+func TestSaveWorkspaceDropsLoadedOverflowRoots(t *testing.T) {
+	root := t.TempDir()
+	app, err := New(Options{Root: root, StateDir: t.TempDir(), WebFS: mapFS()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+	resolved, err := resolveDirectory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.overflowRoots = []stateRoot{{Kind: rootKindLocal, Path: resolved}}
+	if err := app.saveWorkspace(); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.overflowRoots) != 0 {
+		t.Fatalf("overflow root that is now loaded must be dropped, got %+v", app.overflowRoots)
+	}
+}
