@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -24,8 +24,10 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/agentcli"
 	"github.com/hzhengzhi/commentloop/internal/agentmcp"
 	"github.com/hzhengzhi/commentloop/internal/agentrunner"
+	"github.com/hzhengzhi/commentloop/internal/config"
 	"github.com/hzhengzhi/commentloop/internal/discovery"
 	"github.com/hzhengzhi/commentloop/internal/ignore"
+	"github.com/hzhengzhi/commentloop/internal/logging"
 	"github.com/hzhengzhi/commentloop/internal/server"
 )
 
@@ -112,15 +114,18 @@ func runServer(args []string) {
 
 	var (
 		dirFlag   = flag.String("dir", "", "Directory to open (defaults to the current directory; a Markdown file is also accepted)")
-		addrFlag  = flag.String("addr", "127.0.0.1:4571", "Listen address")
+		_         = flag.String("addr", "127.0.0.1:4571", "Listen address")
 		noOpen    = flag.Bool("no-open", false, "Do not open a browser")
 		devMode   = flag.Bool("dev", false, "Development mode: start even when the frontend is not built (for Vite)")
 		debugMode = flag.Bool("debug", false, "Debug mode: review mode (read-only UI, agent writes) + hot reload of frontend assets")
 		preview   = flag.Bool("preview", false, "Compatibility flag: Commentloop is review-only by default; the UI is read-only and agents write through MCP/CLI")
 		webDir    = flag.String("web-dir", "web/dist", "Frontend directory loaded from disk in debug mode")
 		noState   = flag.Bool("no-state", false, "Do not read or save workspace roots")
-		stateDir  = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
+		_         = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
 		showVer   = flag.Bool("version", false, "Print version and exit")
+		configArg = flag.String("config", "", "Config file (YAML; default: user config dir/commentloop/config.yaml if present; env COMMENTLOOP_CONFIG)")
+		_         = flag.String("log-level", "info", "Log level: debug, info, warn or error (env COMMENTLOOP_LOG_LEVEL)")
+		_         = flag.String("log-format", "text", "Log format: text or json (env COMMENTLOOP_LOG_FORMAT)")
 	)
 	flag.BoolVar(showVer, "v", false, "Print version and exit")
 	flag.Usage = func() {
@@ -142,6 +147,16 @@ func runServer(args []string) {
 	if *showVer {
 		fmt.Println(version)
 		return
+	}
+	cfg, cfgFile, err := loadConfig(*configArg)
+	if err != nil {
+		fatal("%v", err)
+	}
+	if _, err := logging.Setup(os.Stderr, cfg.Log.Level, cfg.Log.Format); err != nil {
+		fatal("%v", err)
+	}
+	if cfgFile != "" {
+		slog.Info("loaded config", "file", cfgFile)
 	}
 
 	rootArg := *dirFlag
@@ -182,17 +197,17 @@ func runServer(args []string) {
 		if !*devMode && !*debugMode {
 			fatal("Frontend is not built. Run make build, or use make dev-backend + make dev-web for development.")
 		}
-		log.Println("commentloop: embedded frontend is not built; using the disk frontend or Vite dev server")
+		slog.Warn("embedded frontend is not built; using the disk frontend or Vite dev server")
 	}
 
-	ln, actualAddr, err := listenWithFallback(*addrFlag)
+	ln, actualAddr, err := listenWithFallback(cfg.Server.Addr)
 	if err != nil {
-		fatal("Could not listen on %s: %v", *addrFlag, err)
+		fatal("Could not listen on %s: %v", cfg.Server.Addr, err)
 	}
 
 	stateDirPath := ""
 	if !*noState {
-		dir := *stateDir
+		dir := cfg.Server.StateDir
 		if dir == "" {
 			if userDir, err := os.UserConfigDir(); err == nil {
 				dir = filepath.Join(userDir, "commentloop")
@@ -221,6 +236,7 @@ func runServer(args []string) {
 		PreviewOnly: readOnly,
 		Debug:       *debugMode,
 		WebDir:      *webDir,
+		Config:      cfg,
 	})
 	if err != nil {
 		fatal("Startup failed: %v", err)
@@ -235,29 +251,36 @@ func runServer(args []string) {
 	}
 	discoveryPath, discoveryErr := discovery.Write(baseURL, version)
 	if discoveryErr != nil {
-		log.Printf("commentloop: failed to write agent discovery file: %v", discoveryErr)
+		slog.Error("failed to write agent discovery file", "err", discoveryErr)
 	} else {
 		defer discovery.RemoveOwner(discoveryPath, os.Getpid())
 	}
 
 	httpSrv := &http.Server{
 		Handler:           app,
+		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
-	fmt.Printf("commentloop %s\n", version)
-	fmt.Printf("  Root      %s\n", app.Root())
-	fmt.Printf("  Roots     %d\n", app.RootCount())
+	mode := "edit + preview"
 	if *debugMode {
-		fmt.Printf("  Mode      debug · review mode · frontend hot reload\n")
+		mode = "debug · review mode · frontend hot reload"
 	} else if readOnly {
-		fmt.Printf("  Mode      review mode (UI read-only, agent writes)\n")
-	} else {
-		fmt.Printf("  Mode      edit + preview\n")
+		mode = "review mode (UI read-only, agent writes)"
 	}
-	fmt.Printf("  URL       %s\n", browseURL)
-	fmt.Printf("  Stop      Ctrl+C\n")
+	if strings.EqualFold(cfg.Log.Format, "json") {
+		// Keep the (daemon) log file valid JSON lines.
+		slog.Info("commentloop started", "version", version, "root", app.Root(),
+			"roots", app.RootCount(), "mode", mode, "url", browseURL)
+	} else {
+		fmt.Printf("commentloop %s\n", version)
+		fmt.Printf("  Root      %s\n", app.Root())
+		fmt.Printf("  Roots     %d\n", app.RootCount())
+		fmt.Printf("  Mode      %s\n", mode)
+		fmt.Printf("  URL       %s\n", browseURL)
+		fmt.Printf("  Stop      Ctrl+C\n")
+	}
 
 	if !*noOpen {
 		openBrowser(browseURL)
@@ -268,7 +291,7 @@ func runServer(args []string) {
 	notifyStopRequests(stop)
 	go func() {
 		<-stop
-		log.Println("commentloop: shutting down…")
+		slog.Info("shutting down")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(ctx)
@@ -320,6 +343,32 @@ func isBoolFlag(f *flag.Flag) bool {
 	}
 	b, ok := f.Value.(boolFlag)
 	return ok && b.IsBoolFlag()
+}
+
+// configFlagKeys maps CLI flags to config keys; only flags set explicitly
+// override the config file and environment.
+var configFlagKeys = map[string]string{
+	"addr":       "server.addr",
+	"state-dir":  "server.state_dir",
+	"log-level":  "log.level",
+	"log-format": "log.format",
+}
+
+func loadConfig(path string) (config.Config, string, error) {
+	overrides := map[string]any{}
+	flag.Visit(func(f *flag.Flag) {
+		if key, ok := configFlagKeys[f.Name]; ok {
+			overrides[key] = f.Value.String()
+		}
+	})
+	if path == "" {
+		path = strings.TrimSpace(os.Getenv("COMMENTLOOP_CONFIG"))
+	}
+	defaultFile := ""
+	if userDir, err := os.UserConfigDir(); err == nil {
+		defaultFile = filepath.Join(userDir, "commentloop", "config.yaml")
+	}
+	return config.Load(config.LoadOptions{File: path, DefaultFile: defaultFile, Overrides: overrides})
 }
 
 func fatal(format string, args ...any) {
@@ -400,7 +449,7 @@ func openBrowser(u string) {
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		log.Printf("commentloop: could not open the browser: %v", err)
+		slog.Warn("could not open the browser", "err", err)
 		return
 	}
 	go func() { _ = cmd.Wait() }()
@@ -421,7 +470,7 @@ func migrateLegacyState() {
 	}
 	if _, err := os.Stat(newDir); os.IsNotExist(err) {
 		if err := os.Rename(oldDir, newDir); err != nil {
-			log.Printf("commentloop: failed to migrate legacy state directory: %v", err)
+			slog.Warn("failed to migrate legacy state directory", "err", err)
 			return
 		}
 	} else {
@@ -451,7 +500,7 @@ func moveLegacyEntries(oldDir, newDir string) {
 			continue
 		}
 		if err := os.Rename(src, dst); err != nil {
-			log.Printf("commentloop: failed to migrate legacy state %s: %v", entry.Name(), err)
+			slog.Warn("failed to migrate legacy state", "entry", entry.Name(), "err", err)
 		}
 	}
 }
@@ -466,7 +515,7 @@ func renameLegacyFile(dir, oldName, newName string) {
 		return
 	}
 	if err := os.Rename(oldPath, newPath); err != nil {
-		log.Printf("commentloop: failed to migrate legacy state file %s: %v", oldName, err)
+		slog.Warn("failed to migrate legacy state file", "file", oldName, "err", err)
 	}
 }
 

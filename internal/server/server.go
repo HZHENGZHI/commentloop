@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/hzhengzhi/commentloop/internal/config"
 	"github.com/hzhengzhi/commentloop/internal/ignore"
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 	"github.com/hzhengzhi/commentloop/internal/render"
@@ -46,6 +47,8 @@ type Options struct {
 	PreviewOnly bool
 	// Debug enables asset hot reload (used together with WebDir).
 	Debug bool
+	// Config carries tunables; zero values fall back to config.Default.
+	Config config.Config
 	// WebDir is a frontend dist directory served instead of the embedded build.
 	WebDir string
 }
@@ -88,7 +91,10 @@ type Server struct {
 	stateDir       string
 	agentBaseURL   string
 
-	localTrees localTreeCache
+	cfg config.Config
+	// overflowRoots are persisted roots skipped because of limits.roots.
+	overflowRoots []stateRoot
+	localTrees    localTreeCache
 
 	remoteTreeMu        sync.Mutex
 	remoteTree          map[string][]fileEntry
@@ -107,6 +113,7 @@ func New(opts Options) (*Server, error) {
 	if opts.WebFS == nil {
 		return nil, errors.New("server: WebFS is required")
 	}
+	cfg := opts.Config.WithDefaults()
 
 	db, err := openStateDB(opts.StateDir)
 	if err != nil {
@@ -156,7 +163,8 @@ func New(opts Options) (*Server, error) {
 		remoteTree:          make(map[string][]fileEntry),
 		remoteTreeTruncated: make(map[string]bool),
 		remoteTreeLoaded:    make(map[string]bool),
-		remotePollInterval:  defaultRemotePollInterval,
+		remotePollInterval:  cfg.Remote.PollInterval,
+		cfg:                 cfg,
 	}
 	if err := s.initRoots(opts.Root, opts.ExtraRoots); err != nil {
 		s.closeRoots()
@@ -296,6 +304,13 @@ func (s *Server) routes() *http.ServeMux {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	start := time.Now()
+	defer func() { logRequest(r, rec, time.Since(start)) }()
+	s.serveHTTP(rec, r)
+}
+
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")

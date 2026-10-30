@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
@@ -16,7 +16,6 @@ import (
 const (
 	maxTranscriptChars = 40000
 	maxCommentChars    = 10000
-	consensusTimeout   = 2 * time.Minute
 )
 
 type consensusScheduler struct {
@@ -65,7 +64,7 @@ func (c *consensusScheduler) run(docPath string, includeExisting bool) {
 		if err != nil {
 			// Keep the old consensus. The next review retries.
 			// The error is intentionally not surfaced as an agent failure.
-			fmt.Fprintf(os.Stderr, "commentloop: consensus refresh: %v\n", err)
+			slog.Warn("consensus refresh failed", "err", err)
 		}
 		c.mu.Lock()
 		if c.pending[docPath] && c.ctx.Err() == nil {
@@ -105,7 +104,7 @@ func (s *Server) generateConsensus(ctx context.Context, docPath, source string, 
 		"--no-extensions", "--no-mcp", "--", prompt,
 	)
 	s.broadcastConsensus(docPath, "summarizing", "Agent 正在提炼共识…")
-	runCtx, cancel := context.WithTimeout(ctx, consensusTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, s.cfg.Agent.ConsensusTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, command, args...)
 	if s.primaryPath != "" {

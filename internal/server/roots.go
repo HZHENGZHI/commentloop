@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -19,11 +19,12 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/watcher"
 )
 
-const maxRoots = 32
-
-const defaultRemotePollInterval = 15 * time.Second
-
 var errTooManyRoots = errors.New("too many roots")
+
+type tooManyRootsError struct{ limit int }
+
+func (e tooManyRootsError) Error() string        { return errTooManyRoots.Error() }
+func (e tooManyRootsError) Is(target error) bool { return target == errTooManyRoots }
 
 const (
 	rootKindLocal  = "local"
@@ -111,7 +112,7 @@ func (s *Server) initRoots(primary string, extras []string) error {
 			continue
 		}
 		if _, _, err := s.registerLocalRoot(extra, false); err != nil {
-			log.Printf("commentloop: failed to add directory %q: %v", extra, err)
+			slog.Warn("failed to add directory", "path", extra, "err", err)
 		}
 	}
 
@@ -121,23 +122,27 @@ func (s *Server) initRoots(primary string, extras []string) error {
 		switch def.Kind {
 		case rootKindRemote:
 			cfg := remoteConfigFromState(def)
-			if _, _, err := s.registerRemoteRoot(cfg, false); err != nil {
-				log.Printf("commentloop: failed to restore remote directory %s:%s: %v (kept as offline)", cfg.Host, cfg.Path, err)
+			if _, _, err := s.registerRemoteRoot(cfg, false); errors.Is(err, errTooManyRoots) {
+				s.keepOverflowRoot(def, err)
+			} else if err != nil {
+				slog.Warn("failed to restore remote directory; kept as offline", "host", cfg.Host, "path", cfg.Path, "err", err)
 				s.addOfflineRemoteRoot(cfg, err)
 			}
 		default:
 			if def.Path == "" {
 				continue
 			}
-			if _, _, err := s.registerLocalRoot(def.Path, false); err != nil {
-				log.Printf("commentloop: skipping saved but unavailable directory %q: %v", def.Path, err)
+			if _, _, err := s.registerLocalRoot(def.Path, false); errors.Is(err, errTooManyRoots) {
+				s.keepOverflowRoot(def, err)
+			} else if err != nil {
+				slog.Warn("skipping saved but unavailable directory", "path", def.Path, "err", err)
 			}
 		}
 	}
 
 	// Persist the merged workspace (canonical paths, deduplicated).
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 	}
 	return nil
 }
@@ -153,9 +158,9 @@ func (s *Server) registerLocalRoot(path string, primary bool) (*root, bool, erro
 		s.rootMu.Unlock()
 		return existing, false, nil
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
-		return nil, false, errTooManyRoots
+		return nil, false, tooManyRootsError{limit: s.cfg.Limits.Roots}
 	}
 
 	id := uniqueRootID(resolved, s.roots)
@@ -191,7 +196,7 @@ func (s *Server) addOfflineRemoteRoot(cfg remoteConfig, cause error) *root {
 		s.rootMu.Unlock()
 		return existing
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
 		return nil
 	}
@@ -225,7 +230,7 @@ func (s *Server) registerRemoteRoot(cfg remoteConfig, primary bool) (*root, bool
 
 	lister, lerr := newRemoteFS(cfg)
 	if lerr != nil {
-		log.Printf("commentloop: remote directory %s: poll connection failed, using the IO connection: %v", cfg.Host, lerr)
+		slog.Warn("remote poll connection failed; using the IO connection", "host", cfg.Host, "err", lerr)
 	}
 
 	s.rootMu.Lock()
@@ -247,13 +252,13 @@ func (s *Server) registerRemoteRoot(cfg remoteConfig, primary bool) (*root, bool
 		}
 		return existing, false, nil
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
 		_ = fs.Close()
 		if lister != nil {
 			_ = lister.Close()
 		}
-		return nil, false, errTooManyRoots
+		return nil, false, tooManyRootsError{limit: s.cfg.Limits.Roots}
 	}
 	id := uniqueRootID(key, s.roots)
 	name := strings.TrimSpace(cfg.Name)
@@ -362,7 +367,7 @@ func (s *Server) handleAddRemoteRoot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) finishAddRoot(w http.ResponseWriter, ro *root, warning string) {
 	s.hub.broadcast(outMessage{Type: "tree"})
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 		if warning == "" {
 			warning = "目录已添加，但写入本地配置失败"
 		} else {
@@ -415,7 +420,7 @@ func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if err := s.saveWorkspace(); err != nil {
-		log.Printf("commentloop: failed to save directory list: %v", err)
+		slog.Error("failed to save directory list", "err", err)
 	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -528,11 +533,27 @@ func remoteConfigFromState(def stateRoot) remoteConfig {
 	}
 }
 
+// keepOverflowRoot remembers a saved root that exceeds limits.roots so that
+// saveWorkspace keeps persisting it; raising the limit restores it.
+func (s *Server) keepOverflowRoot(def stateRoot, err error) {
+	slog.Warn("root limit reached; saved directory not loaded", "path", def.Path, "host", def.Host, "err", err)
+	s.rootMu.Lock()
+	s.overflowRoots = append(s.overflowRoots, def)
+	s.rootMu.Unlock()
+}
+
+func stateRootKey(def stateRoot) stateRoot {
+	if def.Kind == rootKindRemote {
+		return stateRoot{Kind: rootKindRemote, Host: def.Host, Port: def.Port, User: def.User, Path: def.Path}
+	}
+	return stateRoot{Kind: rootKindLocal, Path: def.Path}
+}
+
 func (s *Server) saveWorkspace() error {
 	if s.db == nil {
 		return nil
 	}
-	s.rootMu.RLock()
+	s.rootMu.Lock()
 	defs := make([]stateRoot, 0, len(s.rootList))
 	for _, ro := range s.rootList {
 		if ro.Kind == rootKindRemote && ro.Remote != nil {
@@ -545,7 +566,20 @@ func (s *Server) saveWorkspace() error {
 		}
 		defs = append(defs, stateRoot{Kind: rootKindLocal, Path: ro.Path})
 	}
-	s.rootMu.RUnlock()
+	// Overflow roots that have since been loaded are no longer overflow.
+	active := make(map[stateRoot]bool, len(defs))
+	for _, def := range defs {
+		active[stateRootKey(def)] = true
+	}
+	overflow := s.overflowRoots[:0]
+	for _, def := range s.overflowRoots {
+		if !active[stateRootKey(def)] {
+			overflow = append(overflow, def)
+			defs = append(defs, def)
+		}
+	}
+	s.overflowRoots = overflow
+	s.rootMu.Unlock()
 	return saveRootsDB(s.db, defs)
 }
 
@@ -595,8 +629,10 @@ func rootError(err error) string {
 		return "目录不存在"
 	case errors.Is(err, os.ErrPermission):
 		return "没有权限访问该目录"
-	case errors.Is(err, errTooManyRoots):
-		return fmt.Sprintf("最多只能添加 %d 个目录", maxRoots)
+	case errors.As(err, new(tooManyRootsError)):
+		var tooMany tooManyRootsError
+		errors.As(err, &tooMany)
+		return fmt.Sprintf("最多只能添加 %d 个目录", tooMany.limit)
 	default:
 		if err != nil && err.Error() == "路径不是目录" {
 			return "路径不是目录"
@@ -753,7 +789,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 		s.storeRemoteTree(ro, files)
 		s.hub.broadcast(outMessage{Type: "tree"})
 	} else {
-		log.Printf("commentloop: remote directory %s: initial scan failed: %v", ro.Name, err)
+		slog.Warn("remote initial scan failed", "root", ro.Name, "err", err)
 	}
 
 	ticker := time.NewTicker(s.remotePollInterval)
@@ -770,7 +806,7 @@ func (s *Server) pollRemoteRoot(ro *root) {
 			files, err := pollFS.list()
 			if err != nil {
 				if err.Error() != lastErr {
-					log.Printf("commentloop: remote directory %s: poll failed: %v", ro.Name, err)
+					slog.Warn("remote poll failed", "root", ro.Name, "err", err)
 					lastErr = err.Error()
 				}
 				if rerr := pollFS.reconnect(); rerr == nil {

@@ -1,0 +1,19 @@
+# commentloop configuration. Default location: <user config dir>/commentloop/config.yaml
+# (Linux ~/.config, macOS ~/Library/Application Support, Windows %AppData%),
+# or pass --config / COMMENTLOOP_CONFIG. Precedence: flags > COMMENTLOOP_* env > this file > defaults.
+# Env names are COMMENTLOOP_<SECTION>_<KEY>, e.g. COMMENTLOOP_REMOTE_POLL_INTERVAL=30s.
+server:
+  addr: 127.0.0.1:4571     # --addr
+  state_dir: ""            # --state-dir; empty = <user config dir>/commentloop
+log:
+  level: info              # --log-level: debug | info | warn | error
+  format: text             # --log-format: text | json
+limits:
+  tree_files: 5000         # max Markdown files listed per local directory
+  roots: 32                # max workspace directories
+remote:
+  poll_interval: 15s       # how often SSH directories are rescanned
+agent:
+  job_lease: 20m           # agent job lease before it can be reclaimed
+  consensus_timeout: 2m
+  prompt_optimize_timeout: 2m

@@ -2,7 +2,7 @@
 package watcher
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,7 +81,7 @@ func (w *Watcher) addRecursive(root string) error {
 			return filepath.SkipDir
 		}
 		if e := w.fsw.Add(p); e != nil {
-			log.Printf("commentloop: watch %s: %v", p, e)
+			slog.Warn("watch directory failed", "path", p, "err", e)
 		}
 		w.dirs[filepath.Clean(p)] = struct{}{}
 		return nil
@@ -172,7 +172,7 @@ func (w *Watcher) translate(ev fsnotify.Event) (Event, bool) {
 		case ev.Op&fsnotify.Create != 0:
 			// Watch the new directory and everything below it.
 			if err := w.addRecursive(ev.Name); err != nil {
-				log.Printf("commentloop: add watch %s: %v", ev.Name, err)
+				slog.Warn("add watch failed", "path", ev.Name, "err", err)
 			}
 			return Event{Rel: rel, IsDir: true}, true
 		case ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0:

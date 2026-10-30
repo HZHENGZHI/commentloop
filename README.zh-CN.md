@@ -159,6 +159,9 @@ server.json        当前实例的 URL / PID
 --state-dir DIR         # 自定义状态目录
 --no-open               # 不自动打开浏览器
 --no-state              # 不读写状态
+--log-level LEVEL       # 日志级别 debug | info（默认）| warn | error；环境变量 COMMENTLOOP_LOG_LEVEL
+--log-format FORMAT     # 日志格式 text（默认）| json；环境变量 COMMENTLOOP_LOG_FORMAT
+--config FILE           # YAML 配置文件（见 config.example.yaml），默认 <用户配置目录>/commentloop/config.yaml
 --add-dir DIR           # 追加工作区目录
 ```
 

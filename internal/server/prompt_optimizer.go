@@ -7,12 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
-
-const promptOptimizeTimeout = 2 * time.Minute
 
 func (s *Server) optimizePromptTemplate(ctx context.Context, language, name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool) (string, error) {
 	name = strings.TrimSpace(name)
@@ -68,7 +65,7 @@ Requirements:
 7. Use English Markdown and keep it under 2000 words.
 
 Output only the optimized prompt body.`, name, description, mode, codeMode, replyMode, truncatePromptText(body, 8000))
-		runCtx, cancel := context.WithTimeout(ctx, promptOptimizeTimeout)
+		runCtx, cancel := context.WithTimeout(ctx, s.cfg.Agent.PromptOptimizeTimeout)
 		defer cancel()
 		args = append(args,
 			"--print", "--no-tools", "--no-session", "--no-context-files",
@@ -129,7 +126,7 @@ Output only the optimized prompt body.`, name, description, mode, codeMode, repl
 7. 使用中文 Markdown，控制在 2000 字以内。
 
 只输出优化后的提示词正文。`, name, description, mode, codeMode, replyMode, truncatePromptText(body, 8000))
-	runCtx, cancel := context.WithTimeout(ctx, promptOptimizeTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, s.cfg.Agent.PromptOptimizeTimeout)
 	defer cancel()
 	args = append(args,
 		"--print", "--no-tools", "--no-session", "--no-context-files",

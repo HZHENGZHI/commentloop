@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,10 +43,10 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 	}
 	if stateDir != "" {
 		if err := migrateLegacyRoots(db, stateDir); err != nil {
-			log.Printf("commentloop: failed to migrate roots.json: %v", err)
+			slog.Error("failed to migrate roots.json", "err", err)
 		}
 		if err := repairLegacyCodeRepoPaths(db, stateDir); err != nil {
-			log.Printf("commentloop: failed to repair legacy code repository paths: %v", err)
+			slog.Error("failed to repair legacy code repository paths", "err", err)
 		}
 	}
 	return db, nil
@@ -83,7 +83,7 @@ func repairLegacyCodeRepoPaths(db *sql.DB, stateDir string) error {
 			continue
 		}
 		if _, err := db.Exec(`UPDATE code_repos SET path=? WHERE id=?`, next, repo.id); err != nil {
-			log.Printf("commentloop: failed to repair code repository %s: %v", repo.id, err)
+			slog.Error("failed to repair code repository", "repo", repo.id, "err", err)
 		}
 	}
 	return nil
