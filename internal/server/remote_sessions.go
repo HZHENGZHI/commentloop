@@ -114,7 +114,7 @@ func (s *Server) handleBrowseRemote(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("session")
 	session, ok := s.remoteSessions.get(id)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "远程浏览会话已过期，请重新连接"})
+		writeError(w, http.StatusNotFound, errRemoteBrowsingSessionExpired)
 		return
 	}
 	showHidden := r.URL.Query().Get("hidden") == "1"

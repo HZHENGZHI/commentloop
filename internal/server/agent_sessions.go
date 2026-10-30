@@ -187,7 +187,7 @@ func (s *Server) resolveDocCanonical(path string) (string, error) {
 func (s *Server) handleGetAgentSessions(w http.ResponseWriter, r *http.Request) {
 	canonical, err := s.resolveDocCanonical(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	sessions, active, err := s.agentSessions.list(canonical)
@@ -207,7 +207,7 @@ func (s *Server) handleCreateAgentSession(w http.ResponseWriter, r *http.Request
 	}
 	canonical, err := s.resolveDocCanonical(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	item, err := s.agentSessions.create(canonical, req.Title, true)
@@ -226,12 +226,12 @@ func (s *Server) handleSetActiveAgentSession(w http.ResponseWriter, r *http.Requ
 	}
 	canonical, err := s.resolveDocCanonical(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	if err := s.agentSessions.setActive(canonical, req.ID); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "会话不存在"})
+			writeError(w, http.StatusNotFound, errSessionNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -247,7 +247,7 @@ func (s *Server) handleRenameAgentSession(w http.ResponseWriter, r *http.Request
 	}
 	if err := s.agentSessions.rename(req.ID, req.Title); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "会话不存在"})
+			writeError(w, http.StatusNotFound, errSessionNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})

@@ -96,7 +96,7 @@ func (s *Server) handleGetComments(w http.ResponseWriter, r *http.Request) {
 		// unreadable: keep the stored anchors.
 		ro, rel, resolveErr := s.resolveDocRef(path)
 		if resolveErr != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+			writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 			return
 		}
 		canonical = ro.ID + "/" + rel
@@ -149,7 +149,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	canonical, content, err := s.commentDoc(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无法读取文档，不能定位评论位置"})
+		writeError(w, http.StatusBadRequest, errCouldNotReadDocumentLocate)
 		return
 	}
 	discussionIDs, err := s.validateDiscussionIDs(canonical, req.DiscussionIDs)
@@ -179,7 +179,7 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
@@ -220,7 +220,7 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 		req.Before, req.After, req.BeforeSnapshot, snapshot, req.Resolve, discussionIDs, templateID)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+			writeError(w, http.StatusNotFound, errCommentNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -245,12 +245,12 @@ func (s *Server) handleTriggerCommentAgent(w http.ResponseWriter, r *http.Reques
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	if _, ok := s.comments.get(canonical, req.ID); !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+		writeError(w, http.StatusNotFound, errCommentNotFound)
 		return
 	}
 	if err := s.enqueueAutoReview(canonical, req.ID, true, promptLanguage(r)); err != nil {
@@ -267,14 +267,14 @@ func (s *Server) handleResolveComment(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	comment, err := s.comments.resolve(canonical, req.ID, req.Resolved)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+			writeError(w, http.StatusNotFound, errCommentNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -291,13 +291,13 @@ func (s *Server) handleGroupComment(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	if err := s.comments.setGroup(canonical, req.ID, req.MemberIDs); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+			writeError(w, http.StatusNotFound, errCommentNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -314,13 +314,13 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	comment, ok := s.comments.get(canonical, req.ID)
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+		writeError(w, http.StatusNotFound, errCommentNotFound)
 		return
 	}
 	var target *CommentMessage
@@ -337,7 +337,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if target == nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "找不到这一轮修改"})
+		writeError(w, http.StatusBadRequest, errEditRoundNotFound)
 		return
 	}
 	side := strings.ToLower(strings.TrimSpace(req.Side))
@@ -345,7 +345,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		side = "after"
 	}
 	if side != "before" && side != "after" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "回滚方向必须是 before 或 after"})
+		writeError(w, http.StatusBadRequest, errRollbackDirectionMustBeforeAfter)
 		return
 	}
 	var version docVersion
@@ -357,16 +357,16 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if side == "after" && !haveAfterVersion {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "这一轮修改没有可恢复的修改后快照"})
+		writeError(w, http.StatusBadRequest, errEditRoundHasNoLater)
 		return
 	}
 	if side == "before" && target.BeforeVersionID == "" && strings.TrimSpace(target.Before) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "这一轮修改没有可恢复的修改前内容"})
+		writeError(w, http.StatusBadRequest, errEditRoundHasNoEarlier)
 		return
 	}
 	current, _, err := s.readRootFile(ro, rel, maxDocSize)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "当前文档不存在，无法回滚"})
+		writeError(w, http.StatusNotFound, errDocumentNoLongerExistsCannot)
 		return
 	}
 	currentComments := s.comments.list(canonical, string(current))
@@ -378,7 +378,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	if haveAfterVersion {
 		targets, err = s.comments.versionTargets(canonical, version.ID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "读取版本关联评论失败：" + err.Error()})
+			writeErrorDetail(w, http.StatusInternalServerError, errFailedReadLinkedCommentVersions, err.Error())
 			return
 		}
 	}
@@ -465,9 +465,9 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		}
 		if strings.TrimSpace(targetSection) == "" {
 			if side == "before" {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "无法定位这一轮修改前的段落，未做回滚"})
+				writeError(w, http.StatusConflict, errCouldNotLocateOriginalParagraph)
 			} else {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "无法定位这一轮修改后的段落，未做回滚"})
+				writeError(w, http.StatusConflict, errCouldNotLocateEditedParagraph)
 			}
 			return
 		}
@@ -477,7 +477,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		}
 		currentSection, ok := s.comments.currentSectionFor(currentComment, string(current), versions)
 		if !ok || strings.TrimSpace(currentSection) == "" {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "无法定位当前评论所在的段落，未做回滚"})
+			writeError(w, http.StatusConflict, errCouldNotLocateParagraphComment)
 			return
 		}
 		if chosenTarget, seen := seenSections[currentSection]; seen {
@@ -503,7 +503,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	for _, item := range replacements {
 		updated, ok := replaceSection(newContent, item.current, item.target, item.line)
 		if !ok {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "回滚段落发生冲突，未做回滚"})
+			writeError(w, http.StatusConflict, errParagraphRollBackHasConflicting)
 			return
 		}
 		newContent = updated
@@ -512,7 +512,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	existed := statErr == nil
 	doc, err := s.persistDocument(ro, rel, canonical, newContent, "rollback", existed)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "回滚写入失败：" + err.Error()})
+		writeErrorDetail(w, http.StatusInternalServerError, errRollbackWriteFailed, err.Error())
 		return
 	}
 	var updated *Comment
@@ -534,7 +534,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 			false, nil, "",
 		)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "文档已局部回滚，但写入回滚记录失败：" + err.Error()})
+			writeErrorDetail(w, http.StatusInternalServerError, errRollbackRecordFailed, err.Error())
 			return
 		}
 		if item.comment.ID == comment.ID {
@@ -547,7 +547,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if updated == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "文档已局部回滚，但评论记录已不存在"})
+		writeError(w, http.StatusInternalServerError, errRollbackCommentMissing)
 		return
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
@@ -598,13 +598,13 @@ func commentExcerpt(content, quote string, line int) string {
 func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	ro, rel, err := s.resolveDocRef(r.URL.Query().Get("path"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "路径无效或不是 Markdown 文件"})
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
 	canonical := ro.ID + "/" + rel
 	if err := s.comments.delete(canonical, r.URL.Query().Get("id")); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "评论不存在"})
+			writeError(w, http.StatusNotFound, errCommentNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

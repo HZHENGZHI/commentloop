@@ -164,7 +164,7 @@ func (s *Server) rejectInvalidAgentToken(c *gin.Context) bool {
 		message = "Agent 任务令牌无效或已过期"
 	}
 	s.recordAgentDenial(r, message)
-	writeJSON(c.Writer, http.StatusForbidden, map[string]string{"error": message})
+	writeJSON(c.Writer, http.StatusForbidden, map[string]string{"code": errAgentJobTokenInvalidExpired.Code, "error": message})
 	return true
 }
 
@@ -187,7 +187,7 @@ func (s *Server) noRoute(c *gin.Context) {
 		return
 	}
 	s.api(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "接口不存在"})
+		writeError(w, http.StatusNotFound, errAPIEndpointNotFound)
 	})(c)
 }
 

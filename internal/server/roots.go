@@ -296,7 +296,7 @@ func (s *Server) handleAddRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(req.Path) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请输入目录路径"})
+		writeError(w, http.StatusBadRequest, errEnterDirectoryPath)
 		return
 	}
 	resolved, err := resolveDirectory(req.Path)
@@ -306,7 +306,8 @@ func (s *Server) handleAddRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing := s.localRootByPath(resolved); existing != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "目录已在工作区中",
+			"code":  errDirectoryAlreadyWorkspace.Code,
+			"error": errDirectoryAlreadyWorkspace.ZH,
 			"id":    existing.ID,
 		})
 		return
@@ -348,7 +349,8 @@ func (s *Server) handleAddRemoteRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	if !created {
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "该远程目录已在工作区中",
+			"code":  errRemoteDirectoryAlreadyWorkspace.Code,
+			"error": errRemoteDirectoryAlreadyWorkspace.ZH,
 			"id":    ro.ID,
 		})
 		return
@@ -376,7 +378,7 @@ func (s *Server) finishAddRoot(w http.ResponseWriter, ro *root, warning string) 
 func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少目录 id"})
+		writeError(w, http.StatusBadRequest, errMissingDirectoryID)
 		return
 	}
 
@@ -384,7 +386,7 @@ func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 	ro := s.roots[id]
 	if ro == nil {
 		s.rootMu.Unlock()
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "目录不存在"})
+		writeError(w, http.StatusNotFound, errDirectoryNotFound)
 		return
 	}
 	rootWatcher := s.watchers[id]

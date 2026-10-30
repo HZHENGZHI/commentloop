@@ -67,14 +67,14 @@ func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Reque
 	}
 	req.ID = strings.TrimSpace(req.ID)
 	if req.ID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少模板 ID"})
+		writeError(w, http.StatusBadRequest, errMissingTemplateID)
 		return
 	}
 	item, err := s.prompts.update(req.ID, req.Name, req.Description, req.Body,
 		req.AllowDocumentEdit, req.AllowCodeRead, req.AllowCommentReply)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "模板不存在"})
+			writeError(w, http.StatusNotFound, errTemplateNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -86,12 +86,12 @@ func (s *Server) handleUpdatePromptTemplate(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleDeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少模板 ID"})
+		writeError(w, http.StatusBadRequest, errMissingTemplateID)
 		return
 	}
 	if err := s.prompts.delete(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "模板不存在"})
+			writeError(w, http.StatusNotFound, errTemplateNotFound)
 			return
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -125,7 +125,7 @@ func (s *Server) handleResetPromptTemplate(w http.ResponseWriter, r *http.Reques
 	item, err := s.prompts.reset(strings.TrimSpace(req.ID))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "模板不存在"})
+			writeError(w, http.StatusNotFound, errTemplateNotFound)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
