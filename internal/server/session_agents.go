@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -144,12 +145,36 @@ func parseAgentSession(agent, path string) (parsedSession, error) {
 	}
 }
 
+// exec.LookPath probes every PATH entry (times every PATHEXT suffix on
+// Windows), so cache results briefly; the agent list is requested often.
+const commandLookupTTL = 30 * time.Second
+
+var commandLookups = struct {
+	sync.Mutex
+	entries map[string]commandLookup
+}{entries: map[string]commandLookup{}}
+
+type commandLookup struct {
+	installed bool
+	checked   time.Time
+}
+
 func commandInstalled(command string) bool {
 	if command == "" {
 		return false
 	}
+	commandLookups.Lock()
+	cached, ok := commandLookups.entries[command]
+	commandLookups.Unlock()
+	if ok && time.Since(cached.checked) < commandLookupTTL {
+		return cached.installed
+	}
 	_, err := exec.LookPath(command)
-	return err == nil
+	installed := err == nil
+	commandLookups.Lock()
+	commandLookups.entries[command] = commandLookup{installed: installed, checked: time.Now()}
+	commandLookups.Unlock()
+	return installed
 }
 
 func (s *Server) agentInfos(sessions []SessionCandidate, roots []sessionRoot) []agentInfo {

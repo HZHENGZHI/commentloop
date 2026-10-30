@@ -4,12 +4,10 @@ package discovery
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -264,14 +262,10 @@ func removeInstance(pid int) (string, error) {
 	return path, os.Remove(path)
 }
 
-func processAlive(pid int) bool {
+// ProcessAlive reports whether a process with the given PID is running.
+func ProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return processAlive(pid)
 }

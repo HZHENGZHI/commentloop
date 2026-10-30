@@ -387,6 +387,7 @@ func (s *Server) handleRemoveRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rootWatcher := s.watchers[id]
+	s.localTrees.forget(ro)
 	delete(s.roots, id)
 	delete(s.watchers, id)
 	for i, item := range s.rootList {

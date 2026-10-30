@@ -9,6 +9,30 @@ import type { Theme } from "./types";
 type MermaidApi = typeof import("mermaid").default;
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
+
+// Rendered (and contrast-fixed) SVG markup keyed by theme + source. Document
+// updates replace the preview HTML, so without this every agent edit would
+// re-run Mermaid layout for every diagram on the page.
+const SVG_CACHE_LIMIT = 64;
+const svgCache = new Map<string, string>();
+
+function cachedSvg(key: string): string | undefined {
+  const svg = svgCache.get(key);
+  if (svg !== undefined) {
+    svgCache.delete(key);
+    svgCache.set(key, svg);
+  }
+  return svg;
+}
+
+function storeSvg(key: string, svg: string) {
+  svgCache.set(key, svg);
+  while (svgCache.size > SVG_CACHE_LIMIT) {
+    const oldest = svgCache.keys().next().value;
+    if (oldest === undefined) break;
+    svgCache.delete(oldest);
+  }
+}
 let activeModalCleanup: (() => void) | null = null;
 
 function loadMermaid(): Promise<MermaidApi> {
@@ -605,8 +629,10 @@ function openMermaidModal(block: HTMLElement) {
 export async function enhanceMermaidDiagrams(
   article: HTMLElement,
   theme: Theme,
+  isCancelled: () => boolean = () => false,
 ): Promise<() => void> {
   let cancelled = false;
+  const stopped = () => cancelled || isCancelled() || !article.isConnected;
   const blocks = new Set<HTMLElement>();
   const animationDisposers: Array<() => void> = [];
   article.querySelectorAll<HTMLPreElement>("pre").forEach((pre) => {
@@ -634,38 +660,57 @@ export async function enhanceMermaidDiagrams(
     };
   }
 
+  const markClipped = (block: HTMLElement, diagram: HTMLElement) => {
+    requestAnimationFrame(() => {
+      const viewport = block.querySelector<HTMLElement>(".mermaid-viewport");
+      if (!viewport) return;
+      block.classList.toggle(
+        "is-clipped",
+        diagram.scrollHeight > viewport.clientHeight + 1,
+      );
+    });
+  };
+
   try {
-    const mermaid = await loadMermaid();
-    if (cancelled) return () => {};
-    mermaid.initialize(mermaidConfig(theme));
+    let mermaid: MermaidApi | null = null;
     let index = 0;
     for (const block of blocks) {
-      if (cancelled) break;
+      if (stopped()) break;
       const source = block.dataset.source ?? "";
       const diagram = block.querySelector<HTMLElement>(".mermaid-diagram");
       if (!diagram) continue;
-      block.dataset.renderedTheme = theme;
+      const cacheKey = `${theme}\u0000${source}`;
+      const cached = cachedSvg(cacheKey);
+      if (cached !== undefined) {
+        block.dataset.renderedTheme = theme;
+        diagram.innerHTML = cached;
+        animationDisposers.push(setupMermaidAnimation(block, diagram, source));
+        block.querySelector(".mermaid-error")?.remove();
+        markClipped(block, diagram);
+        continue;
+      }
+      if (!mermaid) {
+        mermaid = await loadMermaid();
+        if (stopped()) break;
+        mermaid.initialize(mermaidConfig(theme));
+      }
       try {
         const { svg } = await mermaid.render(
           `commentloop-mermaid-${Date.now()}-${index++}`,
           source,
         );
-        if (cancelled) break;
+        if (stopped()) break;
+        block.dataset.renderedTheme = theme;
         diagram.innerHTML = svg;
         fixMermaidContrast(diagram, theme);
         stripEdgeLabelBackgrounds(diagram);
+        storeSvg(cacheKey, diagram.innerHTML);
         animationDisposers.push(setupMermaidAnimation(block, diagram, source));
         block.querySelector(".mermaid-error")?.remove();
-        requestAnimationFrame(() => {
-          const viewport = block.querySelector<HTMLElement>(".mermaid-viewport");
-          if (!viewport) return;
-          block.classList.toggle(
-            "is-clipped",
-            diagram.scrollHeight > viewport.clientHeight + 1,
-          );
-        });
+        markClipped(block, diagram);
       } catch (error) {
-        if (cancelled) break;
+        if (stopped()) break;
+        block.dataset.renderedTheme = theme;
         diagram.textContent = "";
         const failure = document.createElement("div");
         failure.className = "mermaid-error";

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,10 @@ type Watcher struct {
 	fsw     *fsnotify.Watcher
 	root    string
 	onEvent func(Event)
+	// dirs tracks watched directories so removals/renames, which can no
+	// longer be stat'ed, are still reported as directory events.
+	// Only touched by New and the loop goroutine.
+	dirs map[string]struct{}
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -42,6 +47,7 @@ func New(root string, onEvent func(Event)) (*Watcher, error) {
 		fsw:     fsw,
 		root:    root,
 		onEvent: onEvent,
+		dirs:    make(map[string]struct{}),
 		done:    make(chan struct{}),
 	}
 	if err := w.addRecursive(root); err != nil {
@@ -77,6 +83,7 @@ func (w *Watcher) addRecursive(root string) error {
 		if e := w.fsw.Add(p); e != nil {
 			log.Printf("commentloop: watch %s: %v", p, e)
 		}
+		w.dirs[filepath.Clean(p)] = struct{}{}
 		return nil
 	})
 }
@@ -175,6 +182,12 @@ func (w *Watcher) translate(ev fsnotify.Event) (Event, bool) {
 		}
 	}
 
+	if statErr != nil && ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+		if w.forgetDir(ev.Name) {
+			return Event{Rel: rel, IsDir: true, Removed: true}, true
+		}
+	}
+
 	if !ignore.IsMarkdown(rel) {
 		return Event{}, false
 	}
@@ -183,4 +196,20 @@ func (w *Watcher) translate(ev fsnotify.Event) (Event, bool) {
 		return Event{Rel: rel, Removed: true}, true
 	}
 	return Event{Rel: rel, Removed: statErr != nil}, true
+}
+
+// forgetDir drops dir and everything below it from the watched set and
+// reports whether dir was a watched directory.
+func (w *Watcher) forgetDir(dir string) bool {
+	dir = filepath.Clean(dir)
+	if _, ok := w.dirs[dir]; !ok {
+		return false
+	}
+	prefix := dir + string(filepath.Separator)
+	for p := range w.dirs {
+		if p == dir || strings.HasPrefix(p, prefix) {
+			delete(w.dirs, p)
+		}
+	}
+	return true
 }

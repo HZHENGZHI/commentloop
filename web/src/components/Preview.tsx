@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -11,7 +12,7 @@ import i18n from "../i18n";
 import type { Comment, Theme } from "../types";
 import { enhanceMermaidDiagrams } from "../mermaid";
 import {
-  findQuoteRange,
+  findQuoteRanges,
   isMarkdownPath,
   rawUrl,
   resolveRelative,
@@ -28,7 +29,7 @@ interface PreviewProps {
   theme: Theme;
 }
 
-export function Preview({
+export const Preview = memo(function Preview({
   html,
   currentPath,
   comments,
@@ -106,11 +107,14 @@ export function Preview({
 
     const openRanges: Range[] = [];
     const resolvedRanges: Range[] = [];
-    for (const comment of comments) {
-      const range = findQuoteRange(article, comment.anchor || comment.quote);
-      if (!range) continue;
-      (comment.resolved ? resolvedRanges : openRanges).push(range);
-    }
+    const ranges = findQuoteRanges(
+      article,
+      comments.map((comment) => comment.anchor || comment.quote),
+    );
+    comments.forEach((comment, index) => {
+      const range = ranges[index];
+      if (range) (comment.resolved ? resolvedRanges : openRanges).push(range);
+    });
     const apply = (name: string, ranges: Range[]) => {
       if (ranges.length) {
         css.highlights?.set(name, new HighlightCtor(...ranges));
@@ -137,7 +141,7 @@ export function Preview({
     if (!article) return;
     let cleanup: (() => void) | undefined;
     let cancelled = false;
-    void enhanceMermaidDiagrams(article, theme).then((dispose) => {
+    void enhanceMermaidDiagrams(article, theme, () => cancelled).then((dispose) => {
       if (cancelled) dispose();
       else cleanup = dispose;
     });
@@ -263,7 +267,7 @@ export function Preview({
       ) : null}
     </div>
   );
-}
+});
 
 function isExternalHref(href: string): boolean {
   return /^(https?:|mailto:)/i.test(href) || href.startsWith("//");
