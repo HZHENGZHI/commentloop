@@ -1558,7 +1558,7 @@ func loadRootsFromStateDir(t *testing.T, stateDir string) []stateRoot {
 	if err != nil {
 		t.Fatalf("open state DB: %v", err)
 	}
-	defer db.Close()
+	defer closeStateDB(db)
 	defs, err := loadRootsDB(db)
 	if err != nil {
 		t.Fatalf("load roots DB: %v", err)
@@ -2442,7 +2442,7 @@ func TestOfflineRemoteRootIsRetained(t *testing.T) {
 	if err := saveRootsDB(db, []stateRoot{remote}); err != nil {
 		t.Fatal(err)
 	}
-	_ = db.Close()
+	_ = closeStateDB(db)
 
 	app, err := New(Options{
 		Root: primary, StateDir: stateDir, WebFS: mapFS(),

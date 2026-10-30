@@ -37,10 +37,11 @@ func TestOpenStateDBUpgradesLegacySchemaInPlace(t *testing.T) {
 	_ = legacy.Close()
 
 	for range 2 {
-		db, err := openStateDB(dir)
+		gdb, err := openStateDB(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
+		db, _ := gdb.DB()
 		var tableSQL, groupID, discussionIDs string
 		if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE name = 'comments'`).Scan(&tableSQL); err != nil {
 			t.Fatal(err)
@@ -59,10 +60,11 @@ func TestOpenStateDBUpgradesLegacySchemaInPlace(t *testing.T) {
 }
 
 func TestFreshStateDBCascadesDeletes(t *testing.T) {
-	db, err := openStateDB(t.TempDir())
+	gdb, err := openStateDB(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	db, _ := gdb.DB()
 	defer db.Close()
 	for _, q := range []string{
 		`INSERT INTO comments(id, path, quote, created_at, updated_at) VALUES ('c1', 'a.md', 'q', 't', 't')`,

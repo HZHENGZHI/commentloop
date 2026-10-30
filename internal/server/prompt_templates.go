@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultPromptTemplateID = "builtin-document-review"
@@ -23,11 +26,45 @@ type PromptTemplate struct {
 }
 
 type promptTemplateStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newPromptTemplateStore(db *sql.DB) *promptTemplateStore {
+func newPromptTemplateStore(db *gorm.DB) *promptTemplateStore {
 	return &promptTemplateStore{db: db}
+}
+
+func (r promptTemplateRow) template() PromptTemplate {
+	return PromptTemplate{
+		ID: r.ID, Name: r.Name, Description: r.Description, Body: r.Body,
+		AllowDocumentEdit: r.AllowDocumentEdit != 0,
+		AllowCodeRead:     r.AllowCodeRead != 0,
+		AllowCommentReply: r.AllowCommentReply != 0,
+		Builtin:           r.Builtin != 0,
+		CreatedAt:         parseTime(r.CreatedAt),
+		UpdatedAt:         parseTime(r.UpdatedAt),
+	}
+}
+
+func newPromptTemplateRow(item PromptTemplate) promptTemplateRow {
+	return promptTemplateRow{
+		ID: item.ID, Name: item.Name, Description: item.Description, Body: item.Body,
+		AllowDocumentEdit: boolInt(item.AllowDocumentEdit),
+		AllowCodeRead:     boolInt(item.AllowCodeRead),
+		AllowCommentReply: boolInt(item.AllowCommentReply),
+		Builtin:           boolInt(item.Builtin),
+		CreatedAt:         formatTime(item.CreatedAt),
+		UpdatedAt:         formatTime(item.UpdatedAt),
+	}
+}
+
+func promptTemplateChanges(name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool, now time.Time) map[string]any {
+	return map[string]any{
+		"name": name, "description": description, "body": body,
+		"allow_document_edit": boolInt(allowEdit),
+		"allow_code_read":     boolInt(allowCodeRead),
+		"allow_comment_reply": boolInt(allowCommentReply),
+		"updated_at":          formatTime(now),
+	}
 }
 
 var builtinPromptTemplates = []PromptTemplate{
@@ -92,78 +129,48 @@ func localizePromptTemplate(item PromptTemplate, language string) PromptTemplate
 
 func (s *promptTemplateStore) ensureDefaults() error {
 	for _, item := range builtinPromptTemplates {
-		now := formatTime(time.Now())
-		_, err := s.db.Exec(`INSERT OR IGNORE INTO prompt_templates
-			(id,name,description,body,allow_document_edit,allow_code_read,allow_comment_reply,builtin,created_at,updated_at)
-			VALUES (?,?,?,?,?,?,?,1,?,?)`,
-			item.ID, item.Name, item.Description, item.Body,
-			boolInt(item.AllowDocumentEdit), boolInt(item.AllowCodeRead), boolInt(item.AllowCommentReply), now, now)
-		if err != nil {
+		now := time.Now()
+		item.CreatedAt, item.UpdatedAt = now, now
+		row := newPromptTemplateRow(item)
+		if err := s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return err
 		}
 	}
 	// Repair built-ins seeded before capability columns were populated.
-	var migrated string
-	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key='prompt_template_capabilities_v1'`).Scan(&migrated); err == sql.ErrNoRows {
-		if _, err := s.db.Exec(`UPDATE prompt_templates SET allow_code_read=1, allow_comment_reply=1
-			WHERE builtin=1 AND allow_code_read=0 AND allow_comment_reply=0`); err != nil {
-			return err
-		}
-		if _, err := s.db.Exec(`INSERT OR IGNORE INTO meta (key,value) VALUES ('prompt_template_capabilities_v1','1')`); err != nil {
-			return err
-		}
+	_, migrated, err := metaValue(s.db, "prompt_template_capabilities_v1")
+	if err != nil || migrated {
+		return nil
 	}
-	return nil
+	if err := s.db.Model(&promptTemplateRow{}).
+		Where("builtin = 1 AND allow_code_read = 0 AND allow_comment_reply = 0").
+		Updates(map[string]any{"allow_code_read": 1, "allow_comment_reply": 1}).Error; err != nil {
+		return err
+	}
+	return s.db.Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&metaRow{Key: "prompt_template_capabilities_v1", Value: "1"}).Error
 }
 
 func (s *promptTemplateStore) list() ([]PromptTemplate, error) {
-	rows, err := s.db.Query(`SELECT id,name,description,body,allow_document_edit,allow_code_read,allow_comment_reply,builtin,created_at,updated_at
-		FROM prompt_templates ORDER BY builtin DESC, created_at, id`)
-	if err != nil {
+	var rows []promptTemplateRow
+	if err := s.db.Order("builtin DESC, created_at, id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []PromptTemplate{}
-	for rows.Next() {
-		var item PromptTemplate
-		var allow, codeRead, commentReply, builtin int
-		var created, updated string
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Body,
-			&allow, &codeRead, &commentReply, &builtin, &created, &updated); err != nil {
-			return nil, err
-		}
-		item.AllowDocumentEdit = allow != 0
-		item.AllowCodeRead = codeRead != 0
-		item.AllowCommentReply = commentReply != 0
-		item.Builtin = builtin != 0
-		item.CreatedAt = parseTime(created)
-		item.UpdatedAt = parseTime(updated)
-		out = append(out, item)
+	out := make([]PromptTemplate, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.template())
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *promptTemplateStore) get(id string) (PromptTemplate, bool) {
 	if strings.TrimSpace(id) == "" {
 		id = defaultPromptTemplateID
 	}
-	var item PromptTemplate
-	var allow, codeRead, commentReply, builtin int
-	var created, updated string
-	err := s.db.QueryRow(`SELECT id,name,description,body,allow_document_edit,allow_code_read,allow_comment_reply,builtin,created_at,updated_at
-		FROM prompt_templates WHERE id=?`, id).
-		Scan(&item.ID, &item.Name, &item.Description, &item.Body,
-			&allow, &codeRead, &commentReply, &builtin, &created, &updated)
-	if err != nil {
+	var row promptTemplateRow
+	if err := s.db.Take(&row, "id = ?", id).Error; err != nil {
 		return PromptTemplate{}, false
 	}
-	item.AllowDocumentEdit = allow != 0
-	item.AllowCodeRead = codeRead != 0
-	item.AllowCommentReply = commentReply != 0
-	item.Builtin = builtin != 0
-	item.CreatedAt = parseTime(created)
-	item.UpdatedAt = parseTime(updated)
-	return item, true
+	return row.template(), true
 }
 
 func (s *promptTemplateStore) create(name, description, body string, allowEdit, allowCodeRead, allowCommentReply bool) (PromptTemplate, error) {
@@ -182,12 +189,8 @@ func (s *promptTemplateStore) create(name, description, body string, allowEdit, 
 		AllowDocumentEdit: allowEdit, AllowCodeRead: allowCodeRead,
 		AllowCommentReply: allowCommentReply, CreatedAt: now, UpdatedAt: now,
 	}
-	_, err := s.db.Exec(`INSERT INTO prompt_templates
-		(id,name,description,body,allow_document_edit,allow_code_read,allow_comment_reply,builtin,created_at,updated_at)
-		VALUES (?,?,?,?,?,?,?,0,?,?)`,
-		item.ID, item.Name, item.Description, item.Body, boolInt(allowEdit),
-		boolInt(allowCodeRead), boolInt(allowCommentReply), formatTime(now), formatTime(now))
-	if err != nil {
+	row := newPromptTemplateRow(item)
+	if err := s.db.Create(&row).Error; err != nil {
 		return PromptTemplate{}, err
 	}
 	return item, nil
@@ -205,11 +208,9 @@ func (s *promptTemplateStore) update(id, name, description, body string, allowEd
 		return PromptTemplate{}, fmt.Errorf("模板内容过长")
 	}
 	now := time.Now()
-	_, err := s.db.Exec(`UPDATE prompt_templates SET name=?,description=?,body=?,
-		allow_document_edit=?,allow_code_read=?,allow_comment_reply=?,updated_at=? WHERE id=?`,
-		strings.TrimSpace(name), strings.TrimSpace(description), strings.TrimSpace(body),
-		boolInt(allowEdit), boolInt(allowCodeRead), boolInt(allowCommentReply), formatTime(now), id)
-	if err != nil {
+	changes := promptTemplateChanges(strings.TrimSpace(name), strings.TrimSpace(description), strings.TrimSpace(body),
+		allowEdit, allowCodeRead, allowCommentReply, now)
+	if err := s.db.Model(&promptTemplateRow{}).Where("id = ?", id).Updates(changes).Error; err != nil {
 		return PromptTemplate{}, err
 	}
 	item.Name = strings.TrimSpace(name)
@@ -230,8 +231,7 @@ func (s *promptTemplateStore) delete(id string) error {
 	if item.Builtin {
 		return fmt.Errorf("内置模板不能删除，只能恢复默认")
 	}
-	_, err := s.db.Exec(`DELETE FROM prompt_templates WHERE id=?`, id)
-	return err
+	return s.db.Delete(&promptTemplateRow{}, "id = ?", id).Error
 }
 
 func (s *promptTemplateStore) reset(id string) (PromptTemplate, error) {
@@ -240,11 +240,9 @@ func (s *promptTemplateStore) reset(id string) (PromptTemplate, error) {
 			continue
 		}
 		now := time.Now()
-		_, err := s.db.Exec(`UPDATE prompt_templates SET name=?,description=?,body=?,
-			allow_document_edit=?,allow_code_read=?,allow_comment_reply=?,updated_at=? WHERE id=?`,
-			item.Name, item.Description, item.Body, boolInt(item.AllowDocumentEdit),
-			boolInt(item.AllowCodeRead), boolInt(item.AllowCommentReply), formatTime(now), id)
-		if err != nil {
+		changes := promptTemplateChanges(item.Name, item.Description, item.Body,
+			item.AllowDocumentEdit, item.AllowCodeRead, item.AllowCommentReply, now)
+		if err := s.db.Model(&promptTemplateRow{}).Where("id = ?", id).Updates(changes).Error; err != nil {
 			return PromptTemplate{}, err
 		}
 		item.UpdatedAt = now
