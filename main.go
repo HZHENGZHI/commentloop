@@ -263,18 +263,24 @@ func runServer(args []string) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	fmt.Printf("commentloop %s\n", version)
-	fmt.Printf("  Root      %s\n", app.Root())
-	fmt.Printf("  Roots     %d\n", app.RootCount())
+	mode := "edit + preview"
 	if *debugMode {
-		fmt.Printf("  Mode      debug · review mode · frontend hot reload\n")
+		mode = "debug · review mode · frontend hot reload"
 	} else if readOnly {
-		fmt.Printf("  Mode      review mode (UI read-only, agent writes)\n")
-	} else {
-		fmt.Printf("  Mode      edit + preview\n")
+		mode = "review mode (UI read-only, agent writes)"
 	}
-	fmt.Printf("  URL       %s\n", browseURL)
-	fmt.Printf("  Stop      Ctrl+C\n")
+	if strings.EqualFold(cfg.Log.Format, "json") {
+		// Keep the (daemon) log file valid JSON lines.
+		slog.Info("commentloop started", "version", version, "root", app.Root(),
+			"roots", app.RootCount(), "mode", mode, "url", browseURL)
+	} else {
+		fmt.Printf("commentloop %s\n", version)
+		fmt.Printf("  Root      %s\n", app.Root())
+		fmt.Printf("  Roots     %d\n", app.RootCount())
+		fmt.Printf("  Mode      %s\n", mode)
+		fmt.Printf("  URL       %s\n", browseURL)
+		fmt.Printf("  Stop      Ctrl+C\n")
+	}
 
 	if !*noOpen {
 		openBrowser(browseURL)
