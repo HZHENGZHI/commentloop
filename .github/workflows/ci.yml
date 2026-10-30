@@ -91,6 +91,14 @@ jobs:
             tar -C "${stage}" -czf "dist/commentloop-${target}.tar.gz" .
             rm -rf "${stage}"
           done
+          for target in windows-arm64 windows-amd64; do
+            cp "bin/commentloop-${target}.exe" "dist/commentloop-${target}.exe"
+            stage="$(mktemp -d)"
+            cp "bin/commentloop-${target}.exe" "${stage}/commentloop.exe"
+            cp README.md LICENSE "${stage}/"
+            (cd "${stage}" && zip -q -r - .) > "dist/commentloop-${target}.zip"
+            rm -rf "${stage}"
+          done
           (cd dist && sha256sum commentloop-* > SHA256SUMS)
           ls -lh dist
 
@@ -161,8 +169,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/hzhenzhi/commentloop:${{ github.ref_name }}
-            ghcr.io/hzhenzhi/commentloop:latest
+            ghcr.io/hzhengzhi/commentloop:${{ github.ref_name }}
+            ghcr.io/hzhengzhi/commentloop:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ github.ref_name }}

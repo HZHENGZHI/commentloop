@@ -30,7 +30,7 @@ comment → agent edit → human review → reply / rollback → updated documen
 
 Requirements: Go 1.26+ and Node.js 22+ (Node is only needed to build the frontend).
 
-You can also download a prebuilt macOS/Linux binary (amd64 or arm64) from [Releases](https://github.com/HZHENGZHI/commentloop/releases).
+You can also download a prebuilt macOS/Linux/Windows binary (amd64 or arm64) from [Releases](https://github.com/HZHENGZHI/commentloop/releases).
 
 ```bash
 git clone https://github.com/HZHENGZHI/commentloop.git
