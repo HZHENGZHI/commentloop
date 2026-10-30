@@ -3,37 +3,18 @@
 package agentmcp
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/agentclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-const protocolVersion = "2024-11-05"
-
-type request struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
-
-type rpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-type response struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id"`
-	Result  any             `json:"result,omitempty"`
-	Error   *rpcError       `json:"error,omitempty"`
-}
 
 type toolCallParams struct {
 	Name      string          `json:"name"`
@@ -51,6 +32,7 @@ type toolResult struct {
 }
 
 type server struct {
+	mu          sync.Mutex
 	client      *agentclient.Client
 	explicitURL string
 }
@@ -73,99 +55,63 @@ func Run(args []string, version string) error {
 		explicitURL: *urlFlag,
 	}
 	fmt.Fprintf(os.Stderr, "commentloop mcp: connecting to %s\n", s.client.BaseURL())
-
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 64*1024), 20*1024*1024)
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetEscapeHTML(false)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		var req request
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			fmt.Fprintf(os.Stderr, "commentloop mcp: invalid JSON: %v\n", err)
-			continue
-		}
-		if req.Method == "" {
-			continue
-		}
-		notification := len(req.ID) == 0 || string(req.ID) == "null"
-
-		result, rpcErr := s.handle(req, version)
-		if notification {
-			continue
-		}
-		resp := response{JSONRPC: "2.0", ID: req.ID, Result: result, Error: rpcErr}
-		if rpcErr != nil {
-			resp.Result = nil
-		}
-		if err := encoder.Encode(resp); err != nil {
-			return err
-		}
-	}
-	return scanner.Err()
+	return s.mcpServer(version).Run(context.Background(), &mcp.StdioTransport{MaxLineLength: maxFrameBytes})
 }
 
-func (s *server) handle(req request, version string) (any, *rpcError) {
-	switch req.Method {
-	case "initialize":
-		return map[string]any{
-			"protocolVersion": protocolVersion,
-			"capabilities": map[string]any{
-				"tools": map[string]any{},
-			},
-			"serverInfo": map[string]any{"name": "commentloop", "version": version},
-			"instructions": "commentloop exposes the Markdown workspace currently open in the commentloop app, " +
-				"including local and SSH/SFTP remote roots. Use list_files to discover canonical paths, " +
-				"read_file to read, and write_file to create or overwrite. Remote changes are cached; " +
-				"set refresh=true to force a remote rescan. When editing in response to review comments, " +
-				"read the full comment thread, honor the latest user feedback, then pass comment_ids and a " +
-				"short comment to write_file (or call reply_comment afterwards) so the user sees this round's " +
-				"before/after. Review prompts may include a document consensus and discussion excerpts imported by the user; " +
-				"use them to preserve earlier decisions, but the latest explicit user comment always wins. " +
-				"The user is the only person who can resolve a comment: never mark a comment resolved " +
-				"or pass a resolve flag, even when your edit addresses it. Leave it open for the user to confirm. " +
-				"The user can reply again and request another revision. write_file stores each full-document revision " +
-				"as a rollback snapshot, so the user can locally restore the commented paragraph to an earlier round " +
-				"from the comment UI without reverting unrelated edits. " +
-				"Comments with the same non-empty groupId are related: " +
-				"read every member's full thread, treat them as one coordinated requirement, and pass all of their " +
-				"IDs together in write_file comment_ids so each gets this round's before/after. " +
-				"Documents may have linked local code repositories (read_file returns codeRepos). " +
-				"When writing code-aware documentation, use list_code_repos, code_repo_info, list_code_files, " +
-				"search_code, and read_code to inspect the relevant repository first; code repositories are read-only.",
-		}, nil
-
-	case "notifications/initialized", "notifications/cancelled":
-		return nil, nil
-
-	case "ping":
-		return map[string]any{}, nil
-
-	case "tools/list":
-		return map[string]any{"tools": tools()}, nil
-
-	case "resources/list":
-		return map[string]any{"resources": []any{}}, nil
-
-	case "prompts/list":
-		return map[string]any{"prompts": []any{}}, nil
-
-	case "tools/call":
-		var params toolCallParams
-		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return nil, &rpcError{Code: -32602, Message: "invalid tools/call params"}
-		}
-		result := s.callTool(params)
-		return result, nil
-
-	default:
-		return nil, &rpcError{Code: -32601, Message: "method not found: " + req.Method}
+func (s *server) mcpServer(version string) *mcp.Server {
+	srv := mcp.NewServer(
+		&mcp.Implementation{Name: "commentloop", Version: version},
+		&mcp.ServerOptions{Instructions: serverInstructions},
+	)
+	for _, def := range tools() {
+		name := def.Name
+		srv.AddTool(&mcp.Tool{
+			Name:        def.Name,
+			Description: def.Description,
+			InputSchema: def.InputSchema,
+		}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			result := s.call(toolCallParams{Name: name, Arguments: req.Params.Arguments})
+			content := make([]mcp.Content, 0, len(result.Content))
+			for _, c := range result.Content {
+				content = append(content, &mcp.TextContent{Text: c.Text})
+			}
+			return &mcp.CallToolResult{Content: content, IsError: result.IsError}, nil
+		})
 	}
+	return srv
 }
+
+// call serializes tool calls: callTool swaps s.client and its per-call tool
+// header, and the SDK may dispatch requests concurrently.
+func (s *server) call(params toolCallParams) toolResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.callTool(params)
+}
+
+// maxFrameBytes bounds one JSON-RPC line; write_file carries whole documents,
+// and JSON escaping can roughly double their size.
+const maxFrameBytes = 20 * 1024 * 1024
+
+const serverInstructions = "commentloop exposes the Markdown workspace currently open in the commentloop app, " +
+	"including local and SSH/SFTP remote roots. Use list_files to discover canonical paths, " +
+	"read_file to read, and write_file to create or overwrite. Remote changes are cached; " +
+	"set refresh=true to force a remote rescan. When editing in response to review comments, " +
+	"read the full comment thread, honor the latest user feedback, then pass comment_ids and a " +
+	"short comment to write_file (or call reply_comment afterwards) so the user sees this round's " +
+	"before/after. Review prompts may include a document consensus and discussion excerpts imported by the user; " +
+	"use them to preserve earlier decisions, but the latest explicit user comment always wins. " +
+	"The user is the only person who can resolve a comment: never mark a comment resolved " +
+	"or pass a resolve flag, even when your edit addresses it. Leave it open for the user to confirm. " +
+	"The user can reply again and request another revision. write_file stores each full-document revision " +
+	"as a rollback snapshot, so the user can locally restore the commented paragraph to an earlier round " +
+	"from the comment UI without reverting unrelated edits. " +
+	"Comments with the same non-empty groupId are related: " +
+	"read every member's full thread, treat them as one coordinated requirement, and pass all of their " +
+	"IDs together in write_file comment_ids so each gets this round's before/after. " +
+	"Documents may have linked local code repositories (read_file returns codeRepos). " +
+	"When writing code-aware documentation, use list_code_repos, code_repo_info, list_code_files, " +
+	"search_code, and read_code to inspect the relevant repository first; code repositories are read-only."
 
 func tools() []toolDef {
 	return []toolDef{
