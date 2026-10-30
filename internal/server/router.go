@@ -139,7 +139,11 @@ func (s *Server) secureHeaders(c *gin.Context) {
 		h.Set("Cache-Control", "no-store")
 	}
 	if !s.hostAllowed(c.Request) {
-		http.Error(c.Writer, "forbidden host", http.StatusForbidden)
+		if isAPIPath(c.Request.URL.Path) {
+			writeLocalizedError(c.Writer, c.Request, http.StatusForbidden, errForbiddenHost)
+		} else {
+			http.Error(c.Writer, "forbidden host", http.StatusForbidden)
+		}
 		c.Abort()
 		return
 	}
@@ -159,12 +163,12 @@ func (s *Server) rejectInvalidAgentToken(c *gin.Context) bool {
 	if !s.agentTokenInvalid(r) || strings.HasPrefix(r.URL.Path, "/api/agent/runner/") {
 		return false
 	}
-	message := "Agent job token is invalid or expired."
-	if promptLanguage(r) != "en" {
-		message = "Agent 任务令牌无效或已过期"
+	message := errAgentJobTokenInvalidExpired.ZH
+	if promptLanguage(r) == "en" {
+		message = errAgentJobTokenInvalidExpired.EN
 	}
 	s.recordAgentDenial(r, message)
-	writeJSON(c.Writer, http.StatusForbidden, map[string]string{"code": errAgentJobTokenInvalidExpired.Code, "error": message})
+	writeLocalizedError(c.Writer, r, http.StatusForbidden, errAgentJobTokenInvalidExpired)
 	return true
 }
 
@@ -172,7 +176,11 @@ func (s *Server) noMethod(c *gin.Context) {
 	if isAPIPath(c.Request.URL.Path) && s.rejectInvalidAgentToken(c) {
 		return
 	}
-	http.Error(c.Writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	if !isAPIPath(c.Request.URL.Path) {
+		http.Error(c.Writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	writeLocalizedError(c.Writer, c.Request, http.StatusMethodNotAllowed, errMethodNotAllowed)
 }
 
 func (s *Server) noRoute(c *gin.Context) {
@@ -198,5 +206,10 @@ func isAPIPath(p string) bool {
 func recoverPanic(c *gin.Context, err any) {
 	slog.Error("panic serving request", "method", c.Request.Method, "path", c.Request.URL.Path,
 		"err", err, "stack", string(debug.Stack()))
+	if isAPIPath(c.Request.URL.Path) && !c.Writer.Written() {
+		writeLocalizedError(c.Writer, c.Request, http.StatusInternalServerError, errInternalServer)
+		c.Abort()
+		return
+	}
 	c.AbortWithStatus(http.StatusInternalServerError)
 }

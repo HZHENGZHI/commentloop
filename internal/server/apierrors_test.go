@@ -78,3 +78,49 @@ func TestAgentTokenRejectionHasCode(t *testing.T) {
 		t.Fatalf("code=%q", code)
 	}
 }
+
+func TestLookupAPIErrorBothLanguagesAndTemplates(t *testing.T) {
+	cases := []struct{ message, lang, code, localized string }{
+		{"AI optimization timed out", "en", "ai_optimization_timed_out", "AI optimization timed out."},
+		{"AI optimization failed: exit 1", "en", "ai_optimization_failed", "AI optimization failed: exit 1"},
+		{"最多只能添加 5 个目录", "zh", "too_many_directories", "最多只能添加 5 个目录"},
+		{"最多只能添加 5 个目录", "en", "too_many_directories", "You can add at most 5 directories."},
+		{"暂不支持导入 cursor 会话", "en", "importing_session_type_not_supported", "Importing cursor sessions is not supported yet."},
+	}
+	for _, c := range cases {
+		e := lookupAPIError(c.message)
+		if e == nil || e.Code != c.code {
+			t.Errorf("%q: got %+v, want %s", c.message, e, c.code)
+			continue
+		}
+		if got := e.localize(c.message, c.lang); got != c.localized {
+			t.Errorf("%q (%s): localized %q, want %q", c.message, c.lang, got, c.localized)
+		}
+	}
+}
+
+func TestAPIMethodNotAllowedIsJSONWithCode(t *testing.T) {
+	app, _ := newTestApp(t)
+	rec := doJSONHeaders(t, app, "PATCH", "/api/doc", nil, map[string]string{"Accept-Language": "en"})
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if code, msg := decodeErrorBody(t, rec); code != "method_not_allowed" || msg != "Method not allowed." {
+		t.Fatalf("code=%q msg=%q", code, msg)
+	}
+}
+
+func TestAPIForbiddenHostIsJSONWithCode(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.allowAny = false
+	req := httptest.NewRequest("GET", "/api/health", nil)
+	req.Host = "evil.example"
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if code, _ := decodeErrorBody(t, rec); code != "forbidden_host" {
+		t.Fatalf("code=%q", code)
+	}
+}
