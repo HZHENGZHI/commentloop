@@ -8,8 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 const dbFileName = "commentloop.db"
@@ -22,7 +25,17 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 		}
 		dsn = filepath.Join(stateDir, dbFileName)
 	}
-	db, err := sql.Open("sqlite", dsn)
+	gdb, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: gormlogger.New(slog.NewLogLogger(slog.Default().Handler(), slog.LevelWarn), gormlogger.Config{
+			SlowThreshold:             500 * time.Millisecond,
+			LogLevel:                  gormlogger.Warn,
+			IgnoreRecordNotFoundError: true,
+		}),
+	})
+	if err != nil {
+		return nil, err
+	}
+	db, err := gdb.DB()
 	if err != nil {
 		return nil, err
 	}
@@ -37,9 +50,9 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 			return nil, fmt.Errorf("sqlite WAL: %w", err)
 		}
 	}
-	if err := migrateSchema(db); err != nil {
+	if err := migrateStateSchema(gdb); err != nil {
 		_ = db.Close()
-		return nil, err
+		return nil, fmt.Errorf("sqlite schema: %w", err)
 	}
 	if stateDir != "" {
 		if err := migrateLegacyRoots(db, stateDir); err != nil {
@@ -52,9 +65,42 @@ func openStateDB(stateDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// repairLegacyCodeRepoPaths fixes paths captured before the mdlive -> commentloop
-// rename. It only rewrites a path when the old path is gone and the new path
-// exists, so a deliberate directory with the old name is never touched.
+// migrateStateSchema creates missing tables, columns and indexes from
+// stateModels. Unlike AutoMigrate it never alters existing columns: SQLite can
+// only do that by rebuilding the table, which is risky for user state.
+func migrateStateSchema(gdb *gorm.DB) error {
+	m := gdb.Migrator()
+	for _, model := range stateModels {
+		if !m.HasTable(model) {
+			if err := m.CreateTable(model); err != nil {
+				return err
+			}
+			continue
+		}
+		stmt := &gorm.Statement{DB: gdb}
+		if err := stmt.Parse(model); err != nil {
+			return err
+		}
+		for _, field := range stmt.Schema.Fields {
+			if field.DBName == "" || m.HasColumn(model, field.DBName) {
+				continue
+			}
+			if err := m.AddColumn(model, field.DBName); err != nil {
+				return fmt.Errorf("add %s.%s: %w", stmt.Schema.Table, field.DBName, err)
+			}
+		}
+		for _, idx := range stmt.Schema.ParseIndexes() {
+			if m.HasIndex(model, idx.Name) {
+				continue
+			}
+			if err := m.CreateIndex(model, idx.Name); err != nil {
+				return fmt.Errorf("create index %s: %w", idx.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
 func repairLegacyCodeRepoPaths(db *sql.DB, stateDir string) error {
 	oldState := filepath.Join(filepath.Dir(stateDir), "mdlive")
 	if oldState == stateDir {
@@ -109,268 +155,6 @@ func rewriteLegacyRepoPath(path, oldState, newState string) string {
 func pathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func migrateSchema(db *sql.DB) error {
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS roots (
-			position INTEGER NOT NULL,
-			kind TEXT NOT NULL,
-			path TEXT NOT NULL,
-			name TEXT NOT NULL DEFAULT '',
-			host TEXT NOT NULL DEFAULT '',
-			port INTEGER NOT NULL DEFAULT 0,
-			username TEXT NOT NULL DEFAULT '',
-			key_path TEXT NOT NULL DEFAULT ''
-		);`,
-		`CREATE TABLE IF NOT EXISTS comments (
-			id TEXT PRIMARY KEY,
-			path TEXT NOT NULL,
-			quote TEXT NOT NULL,
-			anchor TEXT NOT NULL DEFAULT '',
-			group_id TEXT NOT NULL DEFAULT '',
-			prefix TEXT NOT NULL DEFAULT '',
-			suffix TEXT NOT NULL DEFAULT '',
-			line INTEGER NOT NULL DEFAULT 0,
-			start_offset INTEGER NOT NULL DEFAULT 0,
-			end_offset INTEGER NOT NULL DEFAULT 0,
-			resolved INTEGER NOT NULL DEFAULT 0,
-			orphaned INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_comments_path ON comments(path);`,
-		`CREATE TABLE IF NOT EXISTS comment_messages (
-			id TEXT PRIMARY KEY,
-			comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
-			author TEXT NOT NULL,
-			body TEXT NOT NULL,
-			before_text TEXT NOT NULL DEFAULT '',
-			after_text TEXT NOT NULL DEFAULT '',
-			version_id TEXT NOT NULL DEFAULT '',
-			before_version_id TEXT NOT NULL DEFAULT '',
-			section_start INTEGER NOT NULL DEFAULT 0,
-			section_end INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_comment_messages_comment ON comment_messages(comment_id);`,
-		`CREATE TABLE IF NOT EXISTS doc_versions (
-			id TEXT PRIMARY KEY,
-			path TEXT NOT NULL,
-			hash TEXT NOT NULL,
-			content TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			UNIQUE(path, hash)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_doc_versions_path ON doc_versions(path, created_at);`,
-		`CREATE TABLE IF NOT EXISTS code_repos (
-			id TEXT PRIMARY KEY,
-			path TEXT NOT NULL UNIQUE,
-			name TEXT NOT NULL,
-			kind TEXT NOT NULL DEFAULT 'local',
-			remote_url TEXT NOT NULL DEFAULT '',
-			remote_branch TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS doc_code_repos (
-			doc_path TEXT NOT NULL,
-			repo_id TEXT NOT NULL REFERENCES code_repos(id) ON DELETE CASCADE,
-			created_at TEXT NOT NULL,
-			PRIMARY KEY(doc_path, repo_id)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_doc_code_repos_doc ON doc_code_repos(doc_path);`,
-		`CREATE TABLE IF NOT EXISTS meta (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS settings (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS agent_sessions (
-			id TEXT PRIMARY KEY,
-			doc_path TEXT NOT NULL,
-			pi_session_id TEXT NOT NULL,
-			title TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_sessions_doc ON agent_sessions(doc_path, created_at);`,
-		`CREATE TABLE IF NOT EXISTS doc_agent_active (
-			doc_path TEXT PRIMARY KEY,
-			session_id TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS doc_discussions (
-			id TEXT PRIMARY KEY,
-			doc_path TEXT NOT NULL,
-			title TEXT NOT NULL,
-			source_path TEXT NOT NULL,
-			source_kind TEXT NOT NULL,
-			agent TEXT NOT NULL DEFAULT 'pi',
-			cwd TEXT NOT NULL DEFAULT '',
-			session_id TEXT NOT NULL DEFAULT '',
-			message_count INTEGER NOT NULL DEFAULT 0,
-			source_mtime INTEGER NOT NULL DEFAULT 0,
-			source_size INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL,
-			imported_at TEXT NOT NULL,
-			UNIQUE(doc_path, source_path)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_doc_discussions_doc ON doc_discussions(doc_path, imported_at);`,
-		`CREATE TABLE IF NOT EXISTS discussion_messages (
-			id TEXT PRIMARY KEY,
-			discussion_id TEXT NOT NULL REFERENCES doc_discussions(id) ON DELETE CASCADE,
-			seq INTEGER NOT NULL,
-			role TEXT NOT NULL,
-			body TEXT NOT NULL,
-			created_at TEXT NOT NULL DEFAULT '',
-			UNIQUE(discussion_id, seq)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_discussion_messages_discussion ON discussion_messages(discussion_id, seq);`,
-		`CREATE TABLE IF NOT EXISTS prompt_templates (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			body TEXT NOT NULL,
-			allow_document_edit INTEGER NOT NULL DEFAULT 1,
-			allow_code_read INTEGER NOT NULL DEFAULT 1,
-			allow_comment_reply INTEGER NOT NULL DEFAULT 1,
-			builtin INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS agent_jobs (
-			id TEXT PRIMARY KEY,
-			doc_path TEXT NOT NULL,
-			comment_id TEXT NOT NULL,
-			agent_type TEXT NOT NULL,
-			prompt TEXT NOT NULL,
-			prompt_template_id TEXT NOT NULL DEFAULT '',
-			capabilities TEXT NOT NULL DEFAULT '{}',
-			repo_ids TEXT NOT NULL DEFAULT '[]',
-			token TEXT NOT NULL,
-			status TEXT NOT NULL,
-			runner_id TEXT NOT NULL DEFAULT '',
-			lease_until TEXT NOT NULL DEFAULT '',
-			error TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL,
-			started_at TEXT NOT NULL DEFAULT '',
-			finished_at TEXT NOT NULL DEFAULT ''
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_jobs_queue ON agent_jobs(status, agent_type, created_at);`,
-		`CREATE TABLE IF NOT EXISTS agent_audit (
-			id TEXT PRIMARY KEY,
-			job_id TEXT NOT NULL DEFAULT '',
-			token TEXT NOT NULL DEFAULT '',
-			tool TEXT NOT NULL DEFAULT '',
-			method TEXT NOT NULL,
-			path TEXT NOT NULL,
-			allowed INTEGER NOT NULL DEFAULT 0,
-			reason TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS doc_consensus (
-			doc_path TEXT PRIMARY KEY,
-			content TEXT NOT NULL,
-			source TEXT NOT NULL DEFAULT '',
-			version INTEGER NOT NULL DEFAULT 1,
-			updated_at TEXT NOT NULL
-		);`,
-	}
-	for _, statement := range statements {
-		if _, err := db.Exec(statement); err != nil {
-			return fmt.Errorf("sqlite schema: %w", err)
-		}
-	}
-	if err := ensureColumn(db, "comments", "anchor", `ALTER TABLE comments ADD COLUMN anchor TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comments", "group_id", `ALTER TABLE comments ADD COLUMN group_id TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comment_messages", "version_id", `ALTER TABLE comment_messages ADD COLUMN version_id TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comment_messages", "before_version_id", `ALTER TABLE comment_messages ADD COLUMN before_version_id TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "code_repos", "kind", `ALTER TABLE code_repos ADD COLUMN kind TEXT NOT NULL DEFAULT 'local'`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "code_repos", "remote_url", `ALTER TABLE code_repos ADD COLUMN remote_url TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "code_repos", "remote_branch", `ALTER TABLE code_repos ADD COLUMN remote_branch TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comment_messages", "section_start", `ALTER TABLE comment_messages ADD COLUMN section_start INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comment_messages", "section_end", `ALTER TABLE comment_messages ADD COLUMN section_end INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comments", "discussion_ids", `ALTER TABLE comments ADD COLUMN discussion_ids TEXT NOT NULL DEFAULT '[]'`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "comments", "prompt_template_id", `ALTER TABLE comments ADD COLUMN prompt_template_id TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "prompt_templates", "allow_code_read", `ALTER TABLE prompt_templates ADD COLUMN allow_code_read INTEGER NOT NULL DEFAULT 1`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "prompt_templates", "allow_comment_reply", `ALTER TABLE prompt_templates ADD COLUMN allow_comment_reply INTEGER NOT NULL DEFAULT 1`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "doc_discussions", "agent", `ALTER TABLE doc_discussions ADD COLUMN agent TEXT NOT NULL DEFAULT 'pi'`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "doc_discussions", "source_mtime", `ALTER TABLE doc_discussions ADD COLUMN source_mtime INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
-	}
-	if err := ensureColumn(db, "doc_discussions", "source_size", `ALTER TABLE doc_discussions ADD COLUMN source_size INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
-	}
-	for _, statement := range []string{
-		`CREATE INDEX IF NOT EXISTS idx_comments_group ON comments(group_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_comment_messages_version ON comment_messages(version_id)`,
-	} {
-		if _, err := db.Exec(statement); err != nil {
-			return fmt.Errorf("sqlite schema index: %w", err)
-		}
-	}
-	return nil
-}
-
-func ensureColumn(db *sql.DB, table, name, statement string) error {
-	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
-	if err != nil {
-		return err
-	}
-	found := false
-	for rows.Next() {
-		var cid, notNull, pk int
-		var columnName, kind string
-		var defaultValue any
-		if err := rows.Scan(&cid, &columnName, &kind, &notNull, &defaultValue, &pk); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		if columnName == name {
-			found = true
-		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	_ = rows.Close()
-	if !found {
-		if _, err := db.Exec(statement); err != nil {
-			return fmt.Errorf("add %s.%s: %w", table, name, err)
-		}
-	}
-	return nil
 }
 
 func saveRootsDB(db *sql.DB, defs []stateRoot) error {
