@@ -27,6 +27,7 @@ func openStateDB(stateDir string) (*gorm.DB, error) {
 		dsn = filepath.Join(stateDir, dbFileName)
 	}
 	gdb, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		SkipDefaultTransaction: true,
 		Logger: gormlogger.New(slog.NewLogLogger(slog.Default().Handler(), slog.LevelWarn), gormlogger.Config{
 			SlowThreshold:             500 * time.Millisecond,
 			LogLevel:                  gormlogger.Warn,

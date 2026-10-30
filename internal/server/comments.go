@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,6 +12,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type CommentMessage struct {
@@ -65,10 +67,10 @@ var (
 )
 
 type commentStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newCommentStore(db *sql.DB) *commentStore {
+func newCommentStore(db *gorm.DB) *commentStore {
 	return &commentStore{db: db}
 }
 
@@ -127,26 +129,22 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string,
 	}
 	message := CommentMessage{ID: commentID(), Author: "user", Body: body, CreatedAt: now}
 
-	tx, err := s.db.Begin()
+	row := commentRow{
+		ID: comment.ID, Path: path, Quote: quote, Anchor: quote, Prefix: prefix, Suffix: suffix,
+		Line: line, StartOffset: start, EndOffset: end, Orphaned: boolInt(orphaned),
+		CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
+		DiscussionIDs: discussionIDsJSON(discussionIDs), PromptTemplateID: promptTemplateID,
+	}
+	messageRow := commentMessageRow{
+		ID: message.ID, CommentID: comment.ID, Author: "user", Body: body, CreatedAt: formatTime(now),
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		return tx.Create(&messageRow).Error
+	})
 	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	discussionJSON := discussionIDsJSON(discussionIDs)
-	if _, err := tx.Exec(`INSERT INTO comments
-		(id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id)
-		VALUES (?,?,?,?,'',?,?,?,?,?,0,?,?,?,?,?)`,
-		comment.ID, path, quote, quote, prefix, suffix, line, start, end, boolInt(orphaned),
-		formatTime(now), formatTime(now), discussionJSON, promptTemplateID); err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec(`INSERT INTO comment_messages
-		(id,comment_id,author,body,before_text,after_text,created_at)
-		VALUES (?,?,?,?, '', '', ?)`,
-		message.ID, comment.ID, "user", body, formatTime(now)); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	comment.Messages = []CommentMessage{message}
@@ -207,18 +205,10 @@ func (s *commentStore) list(path, content string) []Comment {
 }
 
 func (s *commentStore) all() []Comment {
-	rows, err := s.db.Query(`SELECT id FROM comments ORDER BY created_at`)
-	if err != nil {
+	var ids []string
+	if err := s.db.Model(&commentRow{}).Order("created_at").Pluck("id", &ids).Error; err != nil {
 		return nil
 	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
-		}
-	}
-	_ = rows.Close()
 	out := make([]Comment, 0, len(ids))
 	for _, id := range ids {
 		if comment, ok := s.getByID(id); ok {
@@ -237,12 +227,11 @@ func (s *commentStore) get(path, id string) (Comment, bool) {
 }
 
 func (s *commentStore) getByID(id string) (Comment, bool) {
-	row := s.db.QueryRow(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id FROM comments WHERE id=?`, id)
-	comment, err := scanComment(row)
-	if err != nil {
+	var row commentRow
+	if err := s.db.Take(&row, "id = ?", id).Error; err != nil {
 		return Comment{}, false
 	}
+	comment := row.comment()
 	messages, err := s.messages(comment.ID)
 	if err != nil {
 		return Comment{}, false
@@ -252,82 +241,66 @@ func (s *commentStore) getByID(id string) (Comment, bool) {
 }
 
 func (s *commentStore) query(path string) ([]Comment, error) {
-	rows, err := s.db.Query(`SELECT id,path,quote,anchor,group_id,prefix,suffix,line,start_offset,end_offset,
-		resolved,orphaned,created_at,updated_at,discussion_ids,prompt_template_id FROM comments WHERE path=? ORDER BY created_at,id`, path)
-	if err != nil {
+	var rows []commentRow
+	if err := s.db.Where("path = ?", path).Order("created_at, id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	var out []Comment
-	for rows.Next() {
-		comment, err := scanComment(rows)
-		if err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	// One query for every thread on the document instead of one per comment.
+	var messageRows []commentMessageRow
+	if err := s.db.
+		Where("comment_id IN (?)", s.db.Model(&commentRow{}).Select("id").Where("path = ?", path)).
+		Order("created_at").Find(&messageRows).Error; err != nil {
+		return nil, err
+	}
+	byComment := make(map[string][]CommentMessage, len(rows))
+	for _, row := range messageRows {
+		byComment[row.CommentID] = append(byComment[row.CommentID], row.message())
+	}
+	out := make([]Comment, 0, len(rows))
+	for _, row := range rows {
+		comment := row.comment()
+		comment.Messages = byComment[comment.ID]
 		out = append(out, comment)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, err
-	}
-	_ = rows.Close()
-	for i := range out {
-		messages, err := s.messages(out[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		out[i].Messages = messages
 	}
 	return out, nil
 }
 
-type commentScanner interface {
-	Scan(dest ...any) error
+func (r commentRow) comment() Comment {
+	comment := Comment{
+		ID: r.ID, Path: r.Path, Quote: r.Quote, Anchor: r.Anchor, GroupID: r.GroupID,
+		Prefix: r.Prefix, Suffix: r.Suffix,
+		Line: r.Line, Start: r.StartOffset, End: r.EndOffset,
+		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
+		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
+		PromptTemplateID: r.PromptTemplateID,
+	}
+	if r.DiscussionIDs != "" && r.DiscussionIDs != "null" {
+		_ = json.Unmarshal([]byte(r.DiscussionIDs), &comment.DiscussionIDs)
+	}
+	return comment
 }
 
-func scanComment(scanner commentScanner) (Comment, error) {
-	var comment Comment
-	var resolved, orphaned int
-	var createdAt, updatedAt, discussionIDs, promptTemplateID string
-	err := scanner.Scan(
-		&comment.ID, &comment.Path, &comment.Quote, &comment.Anchor, &comment.GroupID,
-		&comment.Prefix, &comment.Suffix,
-		&comment.Line, &comment.Start, &comment.End, &resolved, &orphaned,
-		&createdAt, &updatedAt, &discussionIDs, &promptTemplateID,
-	)
-	if err != nil {
-		return Comment{}, err
+func (r commentMessageRow) message() CommentMessage {
+	return CommentMessage{
+		ID: r.ID, Author: r.Author, Body: r.Body, Before: r.BeforeText, After: r.AfterText,
+		VersionID: r.VersionID, BeforeVersionID: r.BeforeVersionID,
+		SectionStart: r.SectionStart, SectionEnd: r.SectionEnd, CreatedAt: parseTime(r.CreatedAt),
 	}
-	comment.Resolved = resolved != 0
-	comment.Orphaned = orphaned != 0
-	comment.CreatedAt = parseTime(createdAt)
-	comment.UpdatedAt = parseTime(updatedAt)
-	if discussionIDs != "" && discussionIDs != "null" {
-		_ = json.Unmarshal([]byte(discussionIDs), &comment.DiscussionIDs)
-	}
-	comment.PromptTemplateID = promptTemplateID
-	return comment, nil
 }
 
 func (s *commentStore) messages(commentID string) ([]CommentMessage, error) {
-	rows, err := s.db.Query(`SELECT id,author,body,before_text,after_text,version_id,before_version_id,section_start,section_end,created_at
-		FROM comment_messages WHERE comment_id=? ORDER BY created_at`, commentID)
-	if err != nil {
+	var rows []commentMessageRow
+	if err := s.db.Where("comment_id = ?", commentID).Order("created_at").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []CommentMessage
-	for rows.Next() {
-		var message CommentMessage
-		var createdAt string
-		if err := rows.Scan(&message.ID, &message.Author, &message.Body, &message.Before, &message.After,
-			&message.VersionID, &message.BeforeVersionID, &message.SectionStart, &message.SectionEnd, &createdAt); err != nil {
-			return nil, err
-		}
-		message.CreatedAt = parseTime(createdAt)
-		out = append(out, message)
+	for _, row := range rows {
+		out = append(out, row.message())
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapshot, snapshot string, resolve bool, discussionIDs []string, promptTemplateID string) (*Comment, error) {
@@ -359,94 +332,78 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 	if author == "system" {
 		resolved = false
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	versionID := ""
-	beforeVersionID := ""
-	sectionStart, sectionEnd := 0, 0
-	if author == "agent" && strings.TrimSpace(snapshot) != "" {
-		versionID, err = saveDocVersion(tx, path, snapshot, now)
-		if err != nil {
-			return nil, err
-		}
-		if start, end, ok := sectionRange(snapshot, after, comment.Quote, comment.Line); ok {
-			sectionStart, sectionEnd = start, end
-		}
-	}
-	if author == "agent" && strings.TrimSpace(beforeSnapshot) != "" {
-		beforeVersionID, err = saveDocVersion(tx, path, beforeSnapshot, now)
-		if err != nil {
-			return nil, err
-		}
-	}
-	message := CommentMessage{
-		ID: commentID(), Author: author, Body: body,
-		Before: before, After: after, VersionID: versionID,
-		BeforeVersionID: beforeVersionID,
-		SectionStart:    sectionStart, SectionEnd: sectionEnd, CreatedAt: now,
-	}
-	if _, err := tx.Exec(`INSERT INTO comment_messages
-		(id,comment_id,author,body,before_text,after_text,version_id,before_version_id,section_start,section_end,created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		message.ID, id, author, body, before, after, versionID, beforeVersionID,
-		sectionStart, sectionEnd, formatTime(now)); err != nil {
-		return nil, err
-	}
 	anchor := ""
 	if strings.TrimSpace(after) != "" {
 		anchor = plainTextAnchor(after)
 	}
-	if anchor != "" {
-		if _, err := tx.Exec(`UPDATE comments SET updated_at=?, resolved=?, anchor=? WHERE id=?`,
-			formatTime(now), boolInt(resolved), anchor, id); err != nil {
-			return nil, err
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		versionID := ""
+		beforeVersionID := ""
+		sectionStart, sectionEnd := 0, 0
+		var err error
+		if author == "agent" && strings.TrimSpace(snapshot) != "" {
+			versionID, err = saveDocVersion(tx, path, snapshot, now)
+			if err != nil {
+				return err
+			}
+			if start, end, ok := sectionRange(snapshot, after, comment.Quote, comment.Line); ok {
+				sectionStart, sectionEnd = start, end
+			}
 		}
-	} else if _, err := tx.Exec(`UPDATE comments SET updated_at=?, resolved=? WHERE id=?`,
-		formatTime(now), boolInt(resolved), id); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
+		if author == "agent" && strings.TrimSpace(beforeSnapshot) != "" {
+			beforeVersionID, err = saveDocVersion(tx, path, beforeSnapshot, now)
+			if err != nil {
+				return err
+			}
+		}
+		if err := tx.Create(&commentMessageRow{
+			ID: commentID(), CommentID: id, Author: author, Body: body,
+			BeforeText: before, AfterText: after, VersionID: versionID, BeforeVersionID: beforeVersionID,
+			SectionStart: sectionStart, SectionEnd: sectionEnd, CreatedAt: formatTime(now),
+		}).Error; err != nil {
+			return err
+		}
+		changes := map[string]any{"updated_at": formatTime(now), "resolved": boolInt(resolved)}
+		if anchor != "" {
+			changes["anchor"] = anchor
+		}
+		return tx.Model(&commentRow{}).Where("id = ?", id).Updates(changes).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 	updated, _ := s.get(path, id)
 	return &updated, nil
 }
 
-func saveDocVersion(tx *sql.Tx, path, content string, now time.Time) (string, error) {
+func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, error) {
 	// Keep rollback history bounded. Older snapshots (and rollback links on
 	// their messages) are pruned first so a re-created identical snapshot gets
 	// a fresh row.
-	if _, err := tx.Exec(`DELETE FROM doc_versions
-		WHERE path=? AND id NOT IN (
-			SELECT id FROM doc_versions WHERE path=?
-			ORDER BY created_at DESC, rowid DESC LIMIT ?
-		)`, path, path, maxDocVersionsPerPath-1); err != nil {
+	newest := tx.Model(&docVersionRow{}).Select("id").Where("path = ?", path).
+		Order("created_at DESC, rowid DESC").Limit(maxDocVersionsPerPath - 1)
+	if err := tx.Where("path = ? AND id NOT IN (?)", path, newest).Delete(&docVersionRow{}).Error; err != nil {
 		return "", err
 	}
-	if _, err := tx.Exec(`UPDATE comment_messages SET version_id=''
-		WHERE version_id != '' AND version_id NOT IN (SELECT id FROM doc_versions)`); err != nil {
-		return "", err
-	}
-	if _, err := tx.Exec(`UPDATE comment_messages SET before_version_id=''
-		WHERE before_version_id != '' AND before_version_id NOT IN (SELECT id FROM doc_versions)`); err != nil {
-		return "", err
+	for _, column := range []string{"version_id", "before_version_id"} {
+		if err := tx.Model(&commentMessageRow{}).
+			Where(column+" != '' AND "+column+" NOT IN (?)", tx.Model(&docVersionRow{}).Select("id")).
+			Update(column, "").Error; err != nil {
+			return "", err
+		}
 	}
 	sum := sha256.Sum256([]byte(content))
 	hash := hex.EncodeToString(sum[:])
-	id := "ver_" + commentID()
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO doc_versions
-		(id,path,hash,content,created_at) VALUES (?,?,?,?,?)`,
-		id, path, hash, content, formatTime(now)); err != nil {
+	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&docVersionRow{
+		ID: "ver_" + commentID(), Path: path, Hash: hash, Content: content, CreatedAt: formatTime(now),
+	}).Error; err != nil {
 		return "", err
 	}
-	if err := tx.QueryRow(`SELECT id FROM doc_versions WHERE path=? AND hash=?`,
-		path, hash).Scan(&id); err != nil {
+	var row docVersionRow
+	if err := tx.Select("id").Take(&row, "path = ? AND hash = ?", path, hash).Error; err != nil {
 		return "", err
 	}
-	return id, nil
+	return row.ID, nil
 }
 
 type versionTarget struct {
@@ -488,15 +445,11 @@ func (s *commentStore) versionTargets(path, versionID string) ([]versionTarget, 
 }
 
 func (s *commentStore) version(id string) (docVersion, bool) {
-	var version docVersion
-	var createdAt string
-	err := s.db.QueryRow(`SELECT id,path,content,created_at FROM doc_versions WHERE id=?`, id).
-		Scan(&version.ID, &version.Path, &version.Content, &createdAt)
-	if err != nil {
+	var row docVersionRow
+	if err := s.db.Select("id", "path", "content", "created_at").Take(&row, "id = ?", id).Error; err != nil {
 		return docVersion{}, false
 	}
-	version.CreatedAt = parseTime(createdAt)
-	return version, true
+	return docVersion{ID: row.ID, Path: row.Path, Content: row.Content, CreatedAt: parseTime(row.CreatedAt)}, true
 }
 
 func (s *commentStore) resolve(path, id string, resolved bool) (*Comment, error) {
@@ -505,8 +458,9 @@ func (s *commentStore) resolve(path, id string, resolved bool) (*Comment, error)
 		return nil, os.ErrNotExist
 	}
 	now := time.Now()
-	if _, err := s.db.Exec(`UPDATE comments SET resolved=?, updated_at=? WHERE id=?`,
-		boolInt(resolved), formatTime(now), id); err != nil {
+	if err := s.db.Model(&commentRow{}).Where("id = ?", id).Updates(map[string]any{
+		"resolved": boolInt(resolved), "updated_at": formatTime(now),
+	}).Error; err != nil {
 		return nil, err
 	}
 	comment.Resolved = resolved
@@ -519,22 +473,20 @@ func (s *commentStore) delete(path, id string) error {
 	if !ok {
 		return os.ErrNotExist
 	}
-	result, err := s.db.Exec(`DELETE FROM comments WHERE id=? AND path=?`, id, path)
-	if err != nil {
-		return err
+	result := s.db.Where("id = ? AND path = ?", id, path).Delete(&commentRow{})
+	if result.Error != nil {
+		return result.Error
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	if result.RowsAffected == 0 {
 		return os.ErrNotExist
 	}
 	s.cleanupGroup(path, comment.GroupID)
 	// Drop snapshots that only belonged to the deleted comment. Versions shared
 	// by other comments remain available.
-	_, _ = s.db.Exec(`DELETE FROM doc_versions
-		WHERE path=? AND id NOT IN (
-			SELECT version_id FROM comment_messages WHERE version_id != ''
-			UNION SELECT before_version_id FROM comment_messages WHERE before_version_id != ''
-		)`, path)
+	_ = s.db.Where("path = ? AND id NOT IN (?) AND id NOT IN (?)", path,
+		s.db.Model(&commentMessageRow{}).Select("version_id").Where("version_id != ''"),
+		s.db.Model(&commentMessageRow{}).Select("before_version_id").Where("before_version_id != ''"),
+	).Delete(&docVersionRow{}).Error
 	return nil
 }
 
@@ -542,24 +494,14 @@ func (s *commentStore) delete(path, id string) error {
 // comment and memberIDs become the complete membership of one group; any
 // previous group members that were not selected leave the group.
 func (s *commentStore) setGroup(path, id string, memberIDs []string) error {
-	rows, err := s.db.Query(`SELECT id,group_id FROM comments WHERE path=?`, path)
-	if err != nil {
+	var rows []commentRow
+	if err := s.db.Select("id", "group_id").Where("path = ?", path).Find(&rows).Error; err != nil {
 		return err
 	}
-	groups := make(map[string]string)
-	for rows.Next() {
-		var commentID, groupID string
-		if err := rows.Scan(&commentID, &groupID); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		groups[commentID] = groupID
+	groups := make(map[string]string, len(rows))
+	for _, row := range rows {
+		groups[row.ID] = row.GroupID
 	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-	_ = rows.Close()
 	if _, ok := groups[id]; !ok {
 		return os.ErrNotExist
 	}
@@ -584,7 +526,8 @@ func (s *commentStore) setGroup(path, id string, memberIDs []string) error {
 		if groupID == "" {
 			return nil
 		}
-		if _, err := s.db.Exec(`UPDATE comments SET group_id='' WHERE path=? AND id=?`, path, id); err != nil {
+		if err := s.db.Model(&commentRow{}).Where("path = ? AND id = ?", path, id).
+			Update("group_id", "").Error; err != nil {
 			return err
 		}
 		s.cleanupGroup(path, groupID)
@@ -608,59 +551,46 @@ func (s *commentStore) setGroup(path, id string, memberIDs []string) error {
 			oldGroups[groupID] = struct{}{}
 		}
 	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(desired)), ",")
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for groupID := range oldGroups {
-		args := make([]any, 0, len(desired)+2)
-		args = append(args, path, groupID)
-		for _, desiredID := range desired {
-			args = append(args, desiredID)
-		}
-		if _, err := tx.Exec(`UPDATE comments SET group_id=''
-			WHERE path=? AND group_id=? AND id NOT IN (`+placeholders+`)`, args...); err != nil {
-			return err
-		}
-	}
-	args := make([]any, 0, len(desired)+2)
-	args = append(args, target, path)
-	for _, desiredID := range desired {
-		args = append(args, desiredID)
-	}
-	if _, err := tx.Exec(`UPDATE comments SET group_id=?
-		WHERE path=? AND id IN (`+placeholders+`)`, args...); err != nil {
-		return err
-	}
-	for groupID := range oldGroups {
-		var count int
-		if err := tx.QueryRow(`SELECT COUNT(*) FROM comments
-			WHERE path=? AND group_id=?`, path, groupID).Scan(&count); err != nil {
-			return err
-		}
-		if count < 2 {
-			if _, err := tx.Exec(`UPDATE comments SET group_id='' WHERE path=? AND group_id=?`, path, groupID); err != nil {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for groupID := range oldGroups {
+			if err := tx.Model(&commentRow{}).
+				Where("path = ? AND group_id = ? AND id NOT IN ?", path, groupID, desired).
+				Update("group_id", "").Error; err != nil {
 				return err
 			}
 		}
-	}
-	return tx.Commit()
+		if err := tx.Model(&commentRow{}).Where("path = ? AND id IN ?", path, desired).
+			Update("group_id", target).Error; err != nil {
+			return err
+		}
+		for groupID := range oldGroups {
+			if err := dissolveSmallGroup(tx, path, groupID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *commentStore) cleanupGroup(path, groupID string) {
 	if groupID == "" {
 		return
 	}
-	var count int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM comments
-		WHERE path=? AND group_id=?`, path, groupID).Scan(&count); err != nil {
-		return
+	_ = dissolveSmallGroup(s.db, path, groupID)
+}
+
+// dissolveSmallGroup clears a group that no longer links at least two comments.
+func dissolveSmallGroup(db *gorm.DB, path, groupID string) error {
+	var count int64
+	if err := db.Model(&commentRow{}).Where("path = ? AND group_id = ?", path, groupID).
+		Count(&count).Error; err != nil {
+		return err
 	}
-	if count < 2 {
-		_, _ = s.db.Exec(`UPDATE comments SET group_id='' WHERE path=? AND group_id=?`, path, groupID)
+	if count >= 2 {
+		return nil
 	}
+	return db.Model(&commentRow{}).Where("path = ? AND group_id = ?", path, groupID).
+		Update("group_id", "").Error
 }
 
 func boolInt(value bool) int {
