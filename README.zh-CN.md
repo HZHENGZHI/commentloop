@@ -30,7 +30,7 @@
 
 需要 Go 1.26+、Node.js 22+（仅构建前端时需要）。
 
-也可以直接从 [Releases](https://github.com/HZHENGZHI/commentloop/releases) 下载 macOS / Linux 的 amd64 / arm64 二进制。
+也可以直接从 [Releases](https://github.com/HZHENGZHI/commentloop/releases) 下载 macOS / Linux / Windows 的 amd64 / arm64 二进制。
 
 ```bash
 git clone https://github.com/HZHENGZHI/commentloop.git
