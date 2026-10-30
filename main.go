@@ -24,6 +24,7 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/agentcli"
 	"github.com/hzhengzhi/commentloop/internal/agentmcp"
 	"github.com/hzhengzhi/commentloop/internal/agentrunner"
+	"github.com/hzhengzhi/commentloop/internal/config"
 	"github.com/hzhengzhi/commentloop/internal/discovery"
 	"github.com/hzhengzhi/commentloop/internal/ignore"
 	"github.com/hzhengzhi/commentloop/internal/logging"
@@ -113,17 +114,18 @@ func runServer(args []string) {
 
 	var (
 		dirFlag   = flag.String("dir", "", "Directory to open (defaults to the current directory; a Markdown file is also accepted)")
-		addrFlag  = flag.String("addr", "127.0.0.1:4571", "Listen address")
+		_         = flag.String("addr", "127.0.0.1:4571", "Listen address")
 		noOpen    = flag.Bool("no-open", false, "Do not open a browser")
 		devMode   = flag.Bool("dev", false, "Development mode: start even when the frontend is not built (for Vite)")
 		debugMode = flag.Bool("debug", false, "Debug mode: review mode (read-only UI, agent writes) + hot reload of frontend assets")
 		preview   = flag.Bool("preview", false, "Compatibility flag: Commentloop is review-only by default; the UI is read-only and agents write through MCP/CLI")
 		webDir    = flag.String("web-dir", "web/dist", "Frontend directory loaded from disk in debug mode")
 		noState   = flag.Bool("no-state", false, "Do not read or save workspace roots")
-		stateDir  = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
+		_         = flag.String("state-dir", "", "State directory (default: user config dir/commentloop)")
 		showVer   = flag.Bool("version", false, "Print version and exit")
-		logLevel  = flag.String("log-level", envOr("COMMENTLOOP_LOG_LEVEL", "info"), "Log level: debug, info, warn or error (env COMMENTLOOP_LOG_LEVEL)")
-		logFormat = flag.String("log-format", envOr("COMMENTLOOP_LOG_FORMAT", "text"), "Log format: text or json (env COMMENTLOOP_LOG_FORMAT)")
+		configArg = flag.String("config", "", "Config file (YAML; default: user config dir/commentloop/config.yaml if present; env COMMENTLOOP_CONFIG)")
+		_         = flag.String("log-level", "info", "Log level: debug, info, warn or error (env COMMENTLOOP_LOG_LEVEL)")
+		_         = flag.String("log-format", "text", "Log format: text or json (env COMMENTLOOP_LOG_FORMAT)")
 	)
 	flag.BoolVar(showVer, "v", false, "Print version and exit")
 	flag.Usage = func() {
@@ -146,8 +148,15 @@ func runServer(args []string) {
 		fmt.Println(version)
 		return
 	}
-	if _, err := logging.Setup(os.Stderr, *logLevel, *logFormat); err != nil {
+	cfg, cfgFile, err := loadConfig(*configArg)
+	if err != nil {
 		fatal("%v", err)
+	}
+	if _, err := logging.Setup(os.Stderr, cfg.Log.Level, cfg.Log.Format); err != nil {
+		fatal("%v", err)
+	}
+	if cfgFile != "" {
+		slog.Info("loaded config", "file", cfgFile)
 	}
 
 	rootArg := *dirFlag
@@ -191,14 +200,14 @@ func runServer(args []string) {
 		slog.Warn("embedded frontend is not built; using the disk frontend or Vite dev server")
 	}
 
-	ln, actualAddr, err := listenWithFallback(*addrFlag)
+	ln, actualAddr, err := listenWithFallback(cfg.Server.Addr)
 	if err != nil {
-		fatal("Could not listen on %s: %v", *addrFlag, err)
+		fatal("Could not listen on %s: %v", cfg.Server.Addr, err)
 	}
 
 	stateDirPath := ""
 	if !*noState {
-		dir := *stateDir
+		dir := cfg.Server.StateDir
 		if dir == "" {
 			if userDir, err := os.UserConfigDir(); err == nil {
 				dir = filepath.Join(userDir, "commentloop")
@@ -227,6 +236,7 @@ func runServer(args []string) {
 		PreviewOnly: readOnly,
 		Debug:       *debugMode,
 		WebDir:      *webDir,
+		Config:      cfg,
 	})
 	if err != nil {
 		fatal("Startup failed: %v", err)
@@ -329,11 +339,30 @@ func isBoolFlag(f *flag.Flag) bool {
 	return ok && b.IsBoolFlag()
 }
 
-func envOr(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
+// configFlagKeys maps CLI flags to config keys; only flags set explicitly
+// override the config file and environment.
+var configFlagKeys = map[string]string{
+	"addr":       "server.addr",
+	"state-dir":  "server.state_dir",
+	"log-level":  "log.level",
+	"log-format": "log.format",
+}
+
+func loadConfig(path string) (config.Config, string, error) {
+	overrides := map[string]any{}
+	flag.Visit(func(f *flag.Flag) {
+		if key, ok := configFlagKeys[f.Name]; ok {
+			overrides[key] = f.Value.String()
+		}
+	})
+	if path == "" {
+		path = strings.TrimSpace(os.Getenv("COMMENTLOOP_CONFIG"))
 	}
-	return fallback
+	defaultFile := ""
+	if userDir, err := os.UserConfigDir(); err == nil {
+		defaultFile = filepath.Join(userDir, "commentloop", "config.yaml")
+	}
+	return config.Load(config.LoadOptions{File: path, DefaultFile: defaultFile, Overrides: overrides})
 }
 
 func fatal(format string, args ...any) {

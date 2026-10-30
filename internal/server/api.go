@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	maxDocSize   = 8 << 20 // 8 MiB per document / websocket edit
-	maxTreeFiles = 5000
+	maxDocSize = 8 << 20 // 8 MiB per document / websocket edit
 )
 
 var errBadPath = errors.New("invalid path")
@@ -180,7 +179,7 @@ func (s *Server) listRootFiles(ro *root) ([]fileEntry, bool, error) {
 			Path: ro.ID + "/" + rel, RelPath: rel, Name: name, Dir: dir,
 			RootID: ro.ID, RootName: ro.Name, Size: info.Size(), ModTime: info.ModTime(),
 		})
-		if len(entry) >= maxTreeFiles {
+		if len(entry) >= s.cfg.Limits.TreeFiles {
 			truncated = true
 			return fs.SkipAll
 		}

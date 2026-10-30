@@ -161,6 +161,7 @@ Common flags:
 --no-state              # do not read or write state
 --log-level LEVEL       # debug | info (default) | warn | error; env COMMENTLOOP_LOG_LEVEL
 --log-format FORMAT     # text (default) | json; env COMMENTLOOP_LOG_FORMAT
+--config FILE           # YAML config (see config.example.yaml); default <user config dir>/commentloop/config.yaml
 --add-dir DIR           # add another workspace directory
 ```
 

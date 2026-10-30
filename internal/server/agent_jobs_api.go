@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 )
-
-const agentJobLease = 20 * time.Minute
 
 type agentClaimResponse struct {
 	AgentJob
@@ -43,7 +40,7 @@ func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "runnerId 和 agentType 不能为空"})
 		return
 	}
-	job, ok, err := s.agentJobs.claim(req.AgentType, req.RunnerID, agentJobLease)
+	job, ok, err := s.agentJobs.claim(req.AgentType, req.RunnerID, s.cfg.Agent.JobLease)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -102,7 +99,7 @@ func (s *Server) handleAgentRunnerHeartbeat(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
-	if err := s.agentJobs.heartbeat(req.ID, req.RunnerID, agentJobLease); err != nil {
+	if err := s.agentJobs.heartbeat(req.ID, req.RunnerID, s.cfg.Agent.JobLease); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

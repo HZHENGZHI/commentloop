@@ -19,11 +19,12 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/watcher"
 )
 
-const maxRoots = 32
-
-const defaultRemotePollInterval = 15 * time.Second
-
 var errTooManyRoots = errors.New("too many roots")
+
+type tooManyRootsError struct{ limit int }
+
+func (e tooManyRootsError) Error() string        { return errTooManyRoots.Error() }
+func (e tooManyRootsError) Is(target error) bool { return target == errTooManyRoots }
 
 const (
 	rootKindLocal  = "local"
@@ -153,9 +154,9 @@ func (s *Server) registerLocalRoot(path string, primary bool) (*root, bool, erro
 		s.rootMu.Unlock()
 		return existing, false, nil
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
-		return nil, false, errTooManyRoots
+		return nil, false, tooManyRootsError{limit: s.cfg.Limits.Roots}
 	}
 
 	id := uniqueRootID(resolved, s.roots)
@@ -191,7 +192,7 @@ func (s *Server) addOfflineRemoteRoot(cfg remoteConfig, cause error) *root {
 		s.rootMu.Unlock()
 		return existing
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
 		return nil
 	}
@@ -247,13 +248,13 @@ func (s *Server) registerRemoteRoot(cfg remoteConfig, primary bool) (*root, bool
 		}
 		return existing, false, nil
 	}
-	if len(s.rootList) >= maxRoots {
+	if len(s.rootList) >= s.cfg.Limits.Roots {
 		s.rootMu.Unlock()
 		_ = fs.Close()
 		if lister != nil {
 			_ = lister.Close()
 		}
-		return nil, false, errTooManyRoots
+		return nil, false, tooManyRootsError{limit: s.cfg.Limits.Roots}
 	}
 	id := uniqueRootID(key, s.roots)
 	name := strings.TrimSpace(cfg.Name)
@@ -595,8 +596,10 @@ func rootError(err error) string {
 		return "目录不存在"
 	case errors.Is(err, os.ErrPermission):
 		return "没有权限访问该目录"
-	case errors.Is(err, errTooManyRoots):
-		return fmt.Sprintf("最多只能添加 %d 个目录", maxRoots)
+	case errors.As(err, new(tooManyRootsError)):
+		var tooMany tooManyRootsError
+		errors.As(err, &tooMany)
+		return fmt.Sprintf("最多只能添加 %d 个目录", tooMany.limit)
 	default:
 		if err != nil && err.Error() == "路径不是目录" {
 			return "路径不是目录"
