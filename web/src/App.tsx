@@ -1441,7 +1441,6 @@ export default function App() {
             <span className="brand-mark">C</span>
             <span className="brand-name">Commentloop</span>
           </div>
-          <span className="brand-tag">AI review loop</span>
           {debugMode ? (
             <span
               className="mode-pill debug"
