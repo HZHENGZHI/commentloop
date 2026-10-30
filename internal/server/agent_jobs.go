@@ -2,11 +2,13 @@ package server
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type AgentJob struct {
@@ -29,10 +31,10 @@ type AgentJob struct {
 }
 
 type agentJobStore struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func newAgentJobStore(db *sql.DB) *agentJobStore { return &agentJobStore{db: db} }
+func newAgentJobStore(db *gorm.DB) *agentJobStore { return &agentJobStore{db: db} }
 
 func newAgentToken() string {
 	var b [24]byte
@@ -48,73 +50,74 @@ func (s *agentJobStore) create(job AgentJob) (AgentJob, error) {
 	job.CreatedAt = now
 	caps, _ := json.Marshal(job.Capabilities)
 	repoIDs, _ := json.Marshal(job.RepoIDs)
-	_, err := s.db.Exec(`INSERT INTO agent_jobs
-		(id,doc_path,comment_id,agent_type,prompt,prompt_template_id,capabilities,repo_ids,token,status,created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		job.ID, job.DocPath, job.CommentID, job.AgentType, job.Prompt, job.PromptTemplateID,
-		string(caps), string(repoIDs), job.Token, job.Status, formatTime(now))
+	err := s.db.Create(&agentJobRow{
+		ID: job.ID, DocPath: job.DocPath, CommentID: job.CommentID, AgentType: job.AgentType,
+		Prompt: job.Prompt, PromptTemplateID: job.PromptTemplateID,
+		Capabilities: string(caps), RepoIDs: string(repoIDs), Token: job.Token,
+		Status: job.Status, CreatedAt: formatTime(now),
+	}).Error
 	if err != nil {
 		return AgentJob{}, err
 	}
 	return job, nil
 }
 
+func (r agentJobRow) job() AgentJob {
+	job := AgentJob{
+		ID: r.ID, DocPath: r.DocPath, CommentID: r.CommentID, AgentType: r.AgentType,
+		Prompt: r.Prompt, PromptTemplateID: r.PromptTemplateID, Token: r.Token,
+		Status: r.Status, RunnerID: r.RunnerID, Error: r.Error,
+		LeaseUntil: parseTime(r.LeaseUntil), CreatedAt: parseTime(r.CreatedAt),
+		StartedAt: parseTime(r.StartedAt), FinishedAt: parseTime(r.FinishedAt),
+	}
+	_ = json.Unmarshal([]byte(r.Capabilities), &job.Capabilities)
+	_ = json.Unmarshal([]byte(r.RepoIDs), &job.RepoIDs)
+	return job
+}
+
 func (s *agentJobStore) claim(agentType, runnerID string, lease time.Duration) (AgentJob, bool, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return AgentJob{}, false, err
-	}
-	defer tx.Rollback()
 	var job AgentJob
-	var caps, repoIDs string
-	var created string
-	err = tx.QueryRow(`SELECT id,doc_path,comment_id,agent_type,prompt,prompt_template_id,capabilities,repo_ids,token
-		FROM agent_jobs WHERE status='queued' AND agent_type=? ORDER BY created_at,id LIMIT 1`, agentType).
-		Scan(&job.ID, &job.DocPath, &job.CommentID, &job.AgentType, &job.Prompt,
-			&job.PromptTemplateID, &caps, &repoIDs, &job.Token)
-	if err == sql.ErrNoRows {
-		return AgentJob{}, false, nil
-	}
-	if err != nil {
-		return AgentJob{}, false, err
-	}
-	_ = json.Unmarshal([]byte(caps), &job.Capabilities)
-	_ = json.Unmarshal([]byte(repoIDs), &job.RepoIDs)
-	now := time.Now()
-	_ = created
-	job.Status = "running"
-	job.RunnerID = runnerID
-	job.StartedAt = now
-	job.LeaseUntil = now.Add(lease)
-	if _, err := tx.Exec(`UPDATE agent_jobs SET status='running',runner_id=?,started_at=?,lease_until=?
-		WHERE id=? AND status='queued'`, runnerID, formatTime(now), formatTime(job.LeaseUntil), job.ID); err != nil {
-		return AgentJob{}, false, err
-	}
-	if err := tx.Commit(); err != nil {
+	claimed := false
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var row agentJobRow
+		err := tx.Select("id", "doc_path", "comment_id", "agent_type", "prompt", "prompt_template_id",
+			"capabilities", "repo_ids", "token").
+			Where("status = ? AND agent_type = ?", "queued", agentType).
+			Order("created_at, id").Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		job = row.job()
+		job.Status = "running"
+		job.RunnerID = runnerID
+		job.StartedAt = now
+		job.LeaseUntil = now.Add(lease)
+		if err := tx.Model(&agentJobRow{}).Where("id = ? AND status = ?", job.ID, "queued").
+			Updates(map[string]any{
+				"status": "running", "runner_id": runnerID,
+				"started_at": formatTime(now), "lease_until": formatTime(job.LeaseUntil),
+			}).Error; err != nil {
+			return err
+		}
+		claimed = true
+		return nil
+	})
+	if err != nil || !claimed {
 		return AgentJob{}, false, err
 	}
 	return job, true, nil
 }
 
 func (s *agentJobStore) get(id string) (AgentJob, bool) {
-	var job AgentJob
-	var caps, repoIDs, lease, created, started, finished string
-	err := s.db.QueryRow(`SELECT id,doc_path,comment_id,agent_type,prompt,prompt_template_id,capabilities,repo_ids,
-		token,status,runner_id,lease_until,error,created_at,started_at,finished_at
-		FROM agent_jobs WHERE id=?`, id).
-		Scan(&job.ID, &job.DocPath, &job.CommentID, &job.AgentType, &job.Prompt,
-			&job.PromptTemplateID, &caps, &repoIDs, &job.Token, &job.Status, &job.RunnerID, &lease,
-			&job.Error, &created, &started, &finished)
-	if err != nil {
+	var row agentJobRow
+	if err := s.db.Take(&row, "id = ?", id).Error; err != nil {
 		return AgentJob{}, false
 	}
-	_ = json.Unmarshal([]byte(caps), &job.Capabilities)
-	_ = json.Unmarshal([]byte(repoIDs), &job.RepoIDs)
-	job.LeaseUntil = parseTime(lease)
-	job.CreatedAt = parseTime(created)
-	job.StartedAt = parseTime(started)
-	job.FinishedAt = parseTime(finished)
-	return job, true
+	return row.job(), true
 }
 
 func (s *agentJobStore) finish(id, runnerID string, success bool, message string) error {
@@ -123,65 +126,46 @@ func (s *agentJobStore) finish(id, runnerID string, success bool, message string
 	if success {
 		status = "done"
 	}
-	res, err := s.db.Exec(`UPDATE agent_jobs SET status=?,error=?,finished_at=?,lease_until=''
-		WHERE id=? AND runner_id=? AND status='running'`,
-		status, message, formatTime(now), id, runnerID)
-	if err != nil {
-		return err
+	return s.updateRunning(id, runnerID, map[string]any{
+		"status": status, "error": message, "finished_at": formatTime(now), "lease_until": "",
+	})
+}
+
+// updateRunning changes a running job only on behalf of the runner that owns it.
+func (s *agentJobStore) updateRunning(id, runnerID string, changes map[string]any) error {
+	res := s.db.Model(&agentJobRow{}).
+		Where("id = ? AND runner_id = ? AND status = ?", id, runnerID, "running").Updates(changes)
+	if res.Error != nil {
+		return res.Error
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if res.RowsAffected == 0 {
 		return fmt.Errorf("任务不存在或不属于该 Runner")
 	}
 	return nil
 }
 
 func (s *agentJobStore) heartbeat(id, runnerID string, lease time.Duration) error {
-	res, err := s.db.Exec(`UPDATE agent_jobs SET lease_until=? WHERE id=? AND runner_id=? AND status='running'`,
-		formatTime(time.Now().Add(lease)), id, runnerID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("任务不存在或不属于该 Runner")
-	}
-	return nil
+	return s.updateRunning(id, runnerID, map[string]any{"lease_until": formatTime(time.Now().Add(lease))})
 }
 
 func (s *agentJobStore) recent(limit int) ([]AgentJob, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.db.Query(`SELECT id,doc_path,comment_id,agent_type,prompt,prompt_template_id,capabilities,repo_ids,
-		status,runner_id,lease_until,error,created_at,started_at,finished_at
-		FROM agent_jobs ORDER BY created_at DESC LIMIT ?`, limit)
-	if err != nil {
+	var rows []agentJobRow
+	if err := s.db.Omit("token").Order("created_at DESC").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []AgentJob{}
-	for rows.Next() {
-		var job AgentJob
-		var caps, repoIDs, lease, created, started, finished string
-		if err := rows.Scan(&job.ID, &job.DocPath, &job.CommentID, &job.AgentType, &job.Prompt,
-			&job.PromptTemplateID, &caps, &repoIDs, &job.Status, &job.RunnerID, &lease,
-			&job.Error, &created, &started, &finished); err != nil {
-			return nil, err
-		}
-		_ = json.Unmarshal([]byte(caps), &job.Capabilities)
-		_ = json.Unmarshal([]byte(repoIDs), &job.RepoIDs)
-		job.LeaseUntil = parseTime(lease)
-		job.CreatedAt = parseTime(created)
-		job.StartedAt = parseTime(started)
-		job.FinishedAt = parseTime(finished)
-		out = append(out, job)
+	out := make([]AgentJob, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.job())
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *agentJobStore) audit(jobID, token, tool, method, path string, allowed bool, reason string) {
-	_, _ = s.db.Exec(`INSERT INTO agent_audit
-		(id,job_id,token,tool,method,path,allowed,reason,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-		"aa_"+commentID(), jobID, token, tool, method, path, boolInt(allowed), reason, formatTime(time.Now()))
+	_ = s.db.Create(&agentAuditRow{
+		ID: "aa_" + commentID(), JobID: jobID, Token: token, Tool: tool, Method: method, Path: path,
+		Allowed: boolInt(allowed), Reason: reason, CreatedAt: formatTime(time.Now()),
+	}).Error
 }
