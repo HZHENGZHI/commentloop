@@ -22,7 +22,13 @@ func (c *localTreeCache) get(ro *root, list func(*root) ([]fileEntry, bool, erro
 		c.mu.Unlock()
 		return cloneFileEntries(entry.files), entry.truncated, nil
 	}
-	gen := c.gen[ro]
+	if c.gen == nil {
+		c.gen = make(map[*root]uint64)
+	}
+	gen, known := c.gen[ro]
+	if !known {
+		c.gen[ro] = 0
+	}
 	c.mu.Unlock()
 
 	files, truncated, err := list(ro)
@@ -31,8 +37,9 @@ func (c *localTreeCache) get(ro *root, list func(*root) ([]fileEntry, bool, erro
 	}
 
 	c.mu.Lock()
-	// Only store the listing if nothing changed while we were walking.
-	if c.gen[ro] == gen {
+	// Only store the listing if nothing changed (or was forgotten) while we
+	// were walking.
+	if cur, ok := c.gen[ro]; ok && cur == gen {
 		if c.entries == nil {
 			c.entries = make(map[*root]localTreeEntry)
 		}
@@ -48,10 +55,9 @@ func (c *localTreeCache) invalidate(ro *root) {
 	}
 	c.mu.Lock()
 	delete(c.entries, ro)
-	if c.gen == nil {
-		c.gen = make(map[*root]uint64)
+	if _, ok := c.gen[ro]; ok {
+		c.gen[ro]++
 	}
-	c.gen[ro]++
 	c.mu.Unlock()
 }
 

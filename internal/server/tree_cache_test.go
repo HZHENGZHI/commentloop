@@ -42,3 +42,15 @@ func TestLocalTreeCacheDropsListingRacingInvalidation(t *testing.T) {
 		t.Fatalf("stale listing was cached: %d walks", calls)
 	}
 }
+
+func TestLocalTreeCacheDropsListingRacingForget(t *testing.T) {
+	var cache localTreeCache
+	ro := &root{ID: "r"}
+	cache.get(ro, func(*root) ([]fileEntry, bool, error) {
+		cache.forget(ro)
+		return []fileEntry{{Path: "r/a.md"}}, false, nil
+	})
+	if len(cache.entries) != 0 || len(cache.gen) != 0 {
+		t.Fatalf("forgotten root retained: entries=%d gen=%d", len(cache.entries), len(cache.gen))
+	}
+}

@@ -265,6 +265,7 @@ func runServer(args []string) {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	notifyStopRequests(stop)
 	go func() {
 		<-stop
 		log.Println("commentloop: shutting down…")

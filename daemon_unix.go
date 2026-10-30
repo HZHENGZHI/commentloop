@@ -18,3 +18,6 @@ func terminateProcess(process *os.Process) error {
 	}
 	return nil
 }
+
+// notifyStopRequests is a no-op on Unix; `commentloop stop` sends SIGTERM.
+func notifyStopRequests(chan<- os.Signal) {}

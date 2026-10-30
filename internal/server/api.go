@@ -110,6 +110,9 @@ func (s *Server) handleTree(w http.ResponseWriter, _ *http.Request) {
 				resp.Truncated = truncated
 			} else {
 				files, truncated, err := s.localTrees.get(ro, s.listRootFiles)
+				if s.currentRoot(ro.ID) != ro {
+					s.localTrees.forget(ro)
+				}
 				if err == nil {
 					entry.Files = files
 					resp.Truncated = truncated
