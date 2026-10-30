@@ -494,7 +494,8 @@ kbd {
 }
 
 .btn.primary:hover {
-  background: var(--accent-strong);
+  background: var(--accent-fill);
+  filter: brightness(1.12);
   border-color: transparent;
 }
 
