@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -74,10 +73,8 @@ func (s *Server) handleAvailableDiscussionSessions(w http.ResponseWriter, r *htt
 }
 
 func (s *Server) handleImportDiscussion(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req importDiscussionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
 	canonical, err := s.canonicalDoc(req.Path)
@@ -155,10 +152,8 @@ func (s *Server) handleDeleteDiscussion(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleRefreshConsensus(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req refreshConsensusRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
 	canonical, err := s.canonicalDoc(req.Path)

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -144,10 +143,8 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	if s.rejectAgentWrite(w, r) {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req createCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	canonical, content, err := s.commentDoc(req.Path)
@@ -176,10 +173,8 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 2*maxDocSize+(1<<20))
 	var req replyCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 2*maxDocSize+(1<<20), &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
@@ -244,10 +239,8 @@ type triggerCommentRequest struct {
 }
 
 func (s *Server) handleTriggerCommentAgent(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req triggerCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
@@ -269,8 +262,7 @@ func (s *Server) handleTriggerCommentAgent(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleResolveComment(w http.ResponseWriter, r *http.Request) {
 	var req resolveCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
@@ -293,10 +285,8 @@ func (s *Server) handleResolveComment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGroupComment(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	var req groupCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 32*1024, &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)
@@ -318,10 +308,8 @@ func (s *Server) handleGroupComment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var req rollbackCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 64*1024, &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.Path)

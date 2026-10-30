@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -249,10 +248,8 @@ func (s *Server) handleDocCodeRepos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAddDocCodeRepo(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	var req docCodeRepoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 32*1024, &req) {
 		return
 	}
 	ro, rel, err := s.resolveDocRef(req.DocPath)
@@ -550,10 +547,8 @@ func (s *Server) handleCodeRepoBranches(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleSwitchCodeRepoBranch(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req switchBranchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)

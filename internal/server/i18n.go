@@ -92,6 +92,7 @@ func localizeErrorMessage(message string, status int) string {
 var apiErrorTranslations = map[string]string{
 	"接口不存在":                     "API endpoint not found.",
 	"请求格式错误":                    "Invalid request.",
+	"请求内容过大":                    "Request body is too large.",
 	"路径无效或不是 Markdown 文件":       "Invalid path or not a Markdown file.",
 	"路径无效":                      "Invalid path.",
 	"路径不是目录":                    "Path is not a directory.",
