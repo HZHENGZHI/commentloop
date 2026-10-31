@@ -39,6 +39,7 @@ import { CodeBrowserModal } from "./components/CodeBrowserModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { DiscussionModal } from "./components/DiscussionModal";
 import { InboxModal } from "./components/InboxModal";
+import { HistoryModal } from "./components/HistoryModal";
 import { ReviewStatusSelect } from "./components/ReviewStatus";
 import { AgentSessionPicker } from "./components/AgentSessionPicker";
 import { Sidebar } from "./components/Sidebar";
@@ -54,6 +55,7 @@ import {
   IconFolder,
   IconFolderPlus,
   IconGitBranch,
+  IconHistory,
   IconInbox,
   IconMessage,
   IconMoon,
@@ -231,6 +233,7 @@ export default function App() {
   const [consensusActivity, setConsensusActivity] =
     useState<ConsensusActivity | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [agentActivity, setAgentActivity] = useState<{
     status: "queued" | "working" | "done" | "error";
     message: string;
@@ -1216,6 +1219,16 @@ export default function App() {
           applySavedDoc(incomingContent, incomingHtml);
           break;
         }
+        if (message.origin === "restore") {
+          if (incomingContent !== contentRef.current && dirty) {
+            toast(
+              i18n.t("已恢复版本，未保存的本地改动已被覆盖"),
+              "warn",
+            );
+          }
+          applySavedDoc(incomingContent, incomingHtml);
+          break;
+        }
         if (message.origin === "rollback") {
           if (incomingContent !== contentRef.current && dirty) {
             toast(i18n.t("评论段落已局部回滚，未保存的本地改动已被覆盖"), "warn");
@@ -1896,6 +1909,16 @@ export default function App() {
                         </Button>
                       </Badge>
                     </Tooltip>
+                    <Tooltip title={t("版本历史")}>
+                      <Button
+                        size="small"
+                        type={historyOpen ? "primary" : "default"}
+                        icon={<IconHistory size={13} />}
+                        onClick={() => setHistoryOpen((value) => !value)}
+                      >
+                        {t("历史")}
+                      </Button>
+                    </Tooltip>
                     <Badge
                       status={connection === "open" ? "processing" : "default"}
                       text={
@@ -2041,6 +2064,19 @@ export default function App() {
         />
       ) : null}
 
+      {historyOpen && currentPath ? (
+        <HistoryModal
+          path={currentPath}
+          currentContent={doc.content}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={(restored) => {
+            applySavedDoc(restored.content, restored.html);
+            setMeta({ size: restored.size, modTime: restored.modTime });
+            setHistoryOpen(false);
+            toast(i18n.t("已恢复到所选版本"), "success");
+          }}
+        />
+      ) : null}
       {inboxOpen ? (
         <InboxModal
           docs={inboxDocs}

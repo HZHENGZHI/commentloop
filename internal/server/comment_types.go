@@ -76,6 +76,12 @@ type docVersion struct {
 	CreatedAt time.Time
 }
 
+type docVersionInfo struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	Size      int64     `json:"size"`
+}
+
 type versionTarget struct {
 	Comment Comment
 	Message CommentMessage
