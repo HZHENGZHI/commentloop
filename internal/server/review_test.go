@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -437,5 +438,108 @@ func TestRemotePollDoesNotRevokeApprovalAfterSave(t *testing.T) {
 	review, ok := app.reviews.get(canonical)
 	if !ok || review.Status != reviewStatusApproved {
 		t.Fatalf("status after remote save poll = %+v, %v", review, ok)
+	}
+}
+
+func TestAgentCreatesSevCommentAndReviewSummary(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/hello.md"
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath:      docPath,
+		Capabilities: agentCapabilities{ReadCode: true, ReplyComments: true},
+	})
+	headers := map[string]string{"X-Commentloop-Agent-Token": "agent-token"}
+
+	spoof := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/comment", createCommentRequest{
+		Path: docPath, Quote: "Hello", Body: "spoof", Severity: "nit",
+	}, map[string]string{"X-Commentloop-Agent": "1"})
+	if spoof.Code != http.StatusForbidden {
+		t.Fatalf("header-only agent comment = %d %s", spoof.Code, spoof.Body.String())
+	}
+
+	rec := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/comment", createCommentRequest{
+		Path: docPath, Quote: "Hello", Body: "This claim needs a citation.", Severity: "blocking",
+		PromptTemplateID: defaultPromptTemplateID,
+	}, headers)
+	if rec.Code != 200 {
+		t.Fatalf("agent comment: %d %s", rec.Code, rec.Body.String())
+	}
+	var comment Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+		t.Fatal(err)
+	}
+	if comment.Severity != "blocking" || len(comment.Messages) != 1 || comment.Messages[0].Author != "agent" {
+		t.Fatalf("comment = %+v", comment)
+	}
+	if comment.PromptTemplateID != reviewPromptTemplateID {
+		t.Fatalf("review comment template = %q, want %q", comment.PromptTemplateID, reviewPromptTemplateID)
+	}
+
+	rec = doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/summary", setReviewSummaryRequest{
+		Path: docPath, Summary: "One blocking issue.",
+	}, headers)
+	if rec.Code != 200 {
+		t.Fatalf("summary: %d %s", rec.Code, rec.Body.String())
+	}
+	review, err := app.reviews.effective(docPath)
+	if err != nil || review.Summary != "One blocking issue." {
+		t.Fatalf("review = %+v, err=%v", review, err)
+	}
+
+	rec = doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/request", requestDocReview{Path: docPath}, headers)
+	if rec.Code != 403 {
+		t.Fatalf("agent review request = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBuildDocReviewPrompt(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	prompt, caps, _, err := app.buildDocReviewPrompt(rootID+"/hello.md", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"full-document review", "create_comment", "write_review_summary", "blocking"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if caps.WriteDocs || !caps.ReplyComments || !caps.ReadCode {
+		t.Fatalf("caps = %+v", caps)
+	}
+}
+
+func TestRequestDocReviewQueuesExternalJob(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/hello.md"
+	settings := app.settings.get()
+	settings.Agent.Runner = "external"
+	settings.Agent.Type = "pi"
+	app.settings.set(settings)
+
+	rec := doJSON(t, app, http.MethodPost, "/api/doc/review/request", requestDocReview{Path: docPath})
+	if rec.Code != 200 {
+		t.Fatalf("review request: %d %s", rec.Code, rec.Body.String())
+	}
+	jobs, err := app.agentJobs.recent(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].DocPath != docPath || jobs[0].CommentID != "" {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+	if jobs[0].PromptTemplateID != reviewPromptTemplateID || !strings.Contains(jobs[0].Prompt, "create_comment") {
+		t.Fatalf("job = %+v", jobs[0])
+	}
+	review, err := app.reviews.effective(docPath)
+	if err != nil || review.Status != reviewStatusInReview {
+		t.Fatalf("review = %+v err=%v", review, err)
+	}
+
+	rec = doJSON(t, app, http.MethodPost, "/api/doc/review/request", requestDocReview{Path: rootID + "/missing.md"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing document review = %d %s", rec.Code, rec.Body.String())
 	}
 }

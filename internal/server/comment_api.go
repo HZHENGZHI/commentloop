@@ -88,7 +88,7 @@ func (s *Server) validateDiscussionIDs(docPath string, ids []string) ([]string, 
 }
 
 func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
-	if s.rejectAgentWrite(w, r) {
+	if s.rejectAgentCommentReply(w, r) {
 		return
 	}
 	var req createCommentRequest
@@ -100,6 +100,10 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errCouldNotReadDocumentLocate)
 		return
 	}
+	// This route is the human review surface. Agent-authored review comments
+	// go through /api/doc/review/comment with a managed grant; a client-supplied
+	// header must not be able to impersonate an Agent here.
+	author := "user"
 	discussionIDs, err := s.validateDiscussionIDs(canonical, req.DiscussionIDs)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -110,14 +114,16 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	comment, err := s.comments.create(canonical, req.Quote, req.Prefix, req.Suffix, req.Body, content, discussionIDs, templateID)
+	comment, err := s.comments.createAs(author, canonical, req.Quote, req.Prefix, req.Suffix, req.Body, req.Severity, content, discussionIDs, templateID)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
-	s.noteReviewCommentAdded(canonical)
-	_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
+	if author == "user" {
+		s.noteReviewCommentAdded(canonical)
+		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
+	}
 	writeJSON(w, http.StatusOK, comment)
 }
 
@@ -526,4 +532,57 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleCreateReviewComment is the managed-agent path for review comments.
+// Creating comments from the UI stays user-only (/api/comments); a review task
+// needs this narrow exception so the agent can leave its findings.
+func (s *Server) handleCreateReviewComment(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCommentReply(w, r) {
+		return
+	}
+	if _, known := s.agentGrantForRequest(r); !known {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "只有受管 Agent 审阅任务可以创建审阅评论"})
+		return
+	}
+	var req createCommentRequest
+	if !bindJSON(w, r, 64*1024, &req) {
+		return
+	}
+	ro, rel, err := s.resolveDocRef(req.Path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
+		return
+	}
+	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能评论关联文档") {
+		return
+	}
+	data, _, err := s.readRootFile(ro, rel, maxDocSize)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errCouldNotReadDocumentLocate)
+		return
+	}
+	content := string(data)
+	// Review comments always use the read-only review template. Letting the
+	// Agent choose a template would let a later user reply inherit edit
+	// capabilities that the review task never had.
+	req.PromptTemplateID = reviewPromptTemplateID
+	discussionIDs, err := s.validateDiscussionIDs(canonical, req.DiscussionIDs)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	templateID, err := s.validatePromptTemplateID(req.PromptTemplateID, false)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	comment, err := s.comments.createAs("agent", canonical, req.Quote, req.Prefix, req.Suffix, req.Body, req.Severity, content, discussionIDs, templateID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
+	writeJSON(w, http.StatusOK, comment)
 }

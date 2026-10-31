@@ -110,6 +110,13 @@ export function setDocReview(
   });
 }
 
+export function requestDocReview(path: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/api/doc/review/request", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
+}
+
 export function saveDoc(
   path: string,
   content: string,

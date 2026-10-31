@@ -1,6 +1,8 @@
 package server
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,7 +27,24 @@ type Comment struct {
 	UpdatedAt        time.Time        `json:"updatedAt"`
 	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
 	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
+	Severity         string           `json:"severity,omitempty"`
 	Messages         []CommentMessage `json:"messages"`
+}
+
+var commentSeverities = map[string]bool{
+	"":           true,
+	"blocking":   true,
+	"should_fix": true,
+	"nit":        true,
+	"question":   true,
+}
+
+func normalizeSeverity(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if !commentSeverities[value] {
+		return "", fmt.Errorf("无效的评论级别")
+	}
+	return value, nil
 }
 
 type CommentMessage struct {
@@ -64,6 +83,7 @@ type createCommentRequest struct {
 	Prefix           string   `json:"prefix"`
 	Suffix           string   `json:"suffix"`
 	Body             string   `json:"body"`
+	Severity         string   `json:"severity"`
 	DiscussionIDs    []string `json:"discussionIds"`
 	PromptTemplateID string   `json:"promptTemplateId"`
 }
