@@ -10,11 +10,11 @@ func TestDeleteCommentDropsOnlyItsSnapshots(t *testing.T) {
 	defer closeStateDB(db)
 	store := newCommentStore(db)
 	content := "Alpha beta.\n\nGamma delta.\n"
-	first, err := store.create("a.md", "Alpha", "", "", "fix", content, nil, "")
+	first, err := store.createAs("user", "a.md", "Alpha", "", "", "fix", "", content, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := store.create("a.md", "Gamma", "", "", "fix", content, nil, "")
+	second, err := store.createAs("user", "a.md", "Gamma", "", "", "fix", "", content, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
