@@ -67,6 +67,7 @@ type docVersionRow struct {
 	Path      string `gorm:"type:text;not null;uniqueIndex:idx_doc_versions_path_hash,priority:1;index:idx_doc_versions_path,priority:1"`
 	Hash      string `gorm:"type:text;not null;uniqueIndex:idx_doc_versions_path_hash,priority:2"`
 	Content   string `gorm:"type:text;not null"`
+	Source    string `gorm:"type:text;not null;default:''"`
 	CreatedAt string `gorm:"type:text;not null;index:idx_doc_versions_path,priority:2"`
 }
 
