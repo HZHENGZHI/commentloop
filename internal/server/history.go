@@ -8,12 +8,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func (s *Server) saveDocumentVersion(path, content string) {
-	if s.db == nil || content == "" {
+func (s *Server) saveDocumentVersion(path, content string, touch bool) {
+	if s.db == nil {
 		return
 	}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		_, err := saveDocVersion(tx, path, content, time.Now())
+		_, err := saveDocVersion(tx, path, content, time.Now(), touch, "doc")
 		return err
 	}); err != nil {
 		slog.Warn("failed to save document version", "path", path, "err", err)
@@ -26,7 +26,11 @@ func (s *Server) handleListDocVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
-	versions, err := s.comments.listVersions(ro.ID + "/" + rel)
+	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档") {
+		return
+	}
+	versions, err := s.comments.listVersions(canonical)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -40,8 +44,12 @@ func (s *Server) handleGetDocVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
+	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档") {
+		return
+	}
 	version, ok := s.comments.version(r.URL.Query().Get("id"))
-	if !ok || version.Path != ro.ID+"/"+rel {
+	if !ok || version.Path != canonical {
 		writeError(w, http.StatusNotFound, errDocVersionNotFound)
 		return
 	}
@@ -57,6 +65,9 @@ type restoreDocVersionRequest struct {
 }
 
 func (s *Server) handleRestoreDocVersion(w http.ResponseWriter, r *http.Request) {
+	if s.rejectReadOnly(w, r) {
+		return
+	}
 	var req restoreDocVersionRequest
 	if !bindJSON(w, r, 64*1024, &req) {
 		return

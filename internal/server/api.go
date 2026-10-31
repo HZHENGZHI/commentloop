@@ -233,7 +233,7 @@ func (s *Server) persistDocument(ro *root, rel, canonical, content, origin strin
 	if err := s.writeRootFile(ro, rel, []byte(content)); err != nil {
 		return docResponse{}, err
 	}
-	s.saveDocumentVersion(canonical, content)
+	s.saveDocumentVersion(canonical, content, origin == "restore")
 	if !existed {
 		// A path can be re-created after its document was deleted. Clearing a
 		// stale review row only after a successful write closes the window

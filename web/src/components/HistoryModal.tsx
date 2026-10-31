@@ -13,6 +13,7 @@ import { AppModal } from "./AppModal";
 interface HistoryModalProps {
   path: string;
   currentContent: string;
+  canRestore?: boolean;
   onClose: () => void;
   onRestored: (doc: DocResponse) => void;
 }
@@ -36,6 +37,7 @@ function formatVersionTime(value: string, locale: string): string {
 export function HistoryModal({
   path,
   currentContent,
+  canRestore = true,
   onClose,
   onRestored,
 }: HistoryModalProps) {
@@ -118,17 +120,19 @@ export function HistoryModal({
       className="history-modal"
       footer={
         <div className="history-footer">
-          <span className="history-hint">{t("与当前文档对比")}</span>
+          <span className="history-hint">
+            {canRestore ? t("与当前文档对比") : t("审阅模式只读，无法恢复")}
+          </span>
           <div className="history-footer-actions">
             <Button onClick={onClose}>{t("取消")}</Button>
             <Popconfirm
               title={t("恢复后将覆盖当前内容，确认？")}
               onConfirm={() => void restore()}
-              disabled={!selected || restoring}
+              disabled={!selected || restoring || !canRestore}
             >
               <Button
                 type="primary"
-                disabled={!selected}
+                disabled={!selected || !canRestore}
                 loading={restoring}
               >
                 {t("恢复此版本")}
