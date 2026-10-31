@@ -50,6 +50,7 @@ interface SidebarProps {
   onAddRoot: () => void;
   onRemoveRoot: (root: RootInfo) => void;
   reviewByPath?: Map<string, InboxDoc>;
+  unreadPaths?: Set<string>;
 }
 
 function buildTree(files: FileEntry[], rootId: string): DirNode {
@@ -112,6 +113,7 @@ export const Sidebar = memo(function Sidebar({
   onAddRoot,
   onRemoveRoot,
   reviewByPath,
+  unreadPaths,
 }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
@@ -161,6 +163,7 @@ export const Sidebar = memo(function Sidebar({
   const fileRow = (file: FileEntry, depth: number) => {
     const active = file.path === currentPath;
     const review = reviewByPath?.get(file.path);
+    const unread = !active && Boolean(unreadPaths?.has(file.path));
     const reviewTitle = review
       ? review.awaiting > 0
         ? t("{{status}} · {{count}} 条待我确认", {
@@ -190,6 +193,7 @@ export const Sidebar = memo(function Sidebar({
           <IconFileText size={14} />
         </span>
         <span className="tree-name">{file.name}</span>
+        {unread ? <span className="unread-dot" title={t("有新评论")} /> : null}
         {review ? (
           <ReviewStatusDot
             status={review.status}

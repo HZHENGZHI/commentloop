@@ -17,6 +17,7 @@ import {
   IconLink,
   IconLocate,
   IconMessage,
+  IconSearch,
   IconSparkles,
   IconTrash,
   IconX,
@@ -50,6 +51,7 @@ interface CommentsPanelProps {
   reviewing?: boolean;
   onRequestReview: () => void;
   onSuggestion: (comment: Comment, accept: boolean) => void;
+  onReaction: (comment: Comment, reaction: string) => void;
   agentName?: string;
 }
 
@@ -81,6 +83,7 @@ export function CommentsPanel({
   reviewing = false,
   onRequestReview,
   onSuggestion,
+  onReaction,
   agentName = "Code Agent",
 }: CommentsPanelProps) {
   const { t, i18n } = useTranslation();
@@ -96,6 +99,7 @@ export function CommentsPanel({
   const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "agent">(
     "all",
   );
+  const [query, setQuery] = useState("");
   // If the discussion list finishes loading while a reply form is open, seed
   // its selection from the thread's stored references so the checkboxes match
   // what the server will keep.
@@ -120,7 +124,7 @@ export function CommentsPanel({
   const agentCount = comments.filter(
     (comment) => !comment.resolved && lastCommentAuthor(comment) === "user",
   ).length;
-  const visibleComments = comments.filter((comment) => {
+  const filteredByStatus = comments.filter((comment) => {
     if (statusFilter === "awaiting") {
       return (
         !comment.resolved &&
@@ -133,6 +137,19 @@ export function CommentsPanel({
     }
     return true;
   });
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleComments = normalizedQuery
+    ? filteredByStatus.filter((comment) => {
+        const text = [
+          comment.quote,
+          String(comment.line),
+          ...comment.messages.map((message) => message.body),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return text.includes(normalizedQuery);
+      })
+    : filteredByStatus;
   const unresolved = comments.filter((comment) => !comment.resolved).length;
   const allExpanded =
     comments.length > 0 && comments.every((comment) => expanded.has(comment.id));
@@ -293,6 +310,25 @@ export function CommentsPanel({
           </button>
         ))}
       </div>
+      <div className="comments-search">
+        <IconSearch size={12} />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("搜索评论内容或行号")}
+          aria-label={t("搜索评论内容或行号")}
+        />
+        {query ? (
+          <button
+            type="button"
+            className="comments-search-clear"
+            onClick={() => setQuery("")}
+            aria-label={t("清空搜索")}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
       <div className="comments-body">
         {comments.length === 0 ? (
           <div className="comments-empty">
@@ -303,7 +339,7 @@ export function CommentsPanel({
         ) : visibleComments.length === 0 ? (
           <div className="comments-empty">
             <IconMessage size={22} />
-            <p>{t("该状态下没有评论")}</p>
+            <p>{normalizedQuery ? t("没有匹配的评论") : t("该状态下没有评论")}</p>
           </div>
         ) : (
           visibleComments.map((comment) => {
@@ -407,6 +443,23 @@ export function CommentsPanel({
               >
                 {comment.quote}
               </blockquote>
+
+              <div className="comment-reactions">
+                {["👍", "✅"].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`comment-reaction${comment.reaction === emoji ? " active" : ""}`}
+                    onClick={() =>
+                      onReaction(comment, comment.reaction === emoji ? "" : emoji)
+                    }
+                    title={emoji === "👍" ? t("赞同") : t("确认")}
+                    aria-pressed={comment.reaction === emoji}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               {comment.suggestion ? (
                 <div className={`comment-suggestion ${comment.suggestion.status}`}>

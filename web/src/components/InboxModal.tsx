@@ -10,6 +10,8 @@ interface InboxModalProps {
   docs: InboxDoc[];
   counts: InboxCounts;
   error?: boolean;
+  notificationsEnabled?: boolean;
+  onEnableNotifications?: () => void;
   onClose: () => void;
   onOpen: (path: string) => void;
 }
@@ -33,6 +35,8 @@ export function InboxModal({
   docs,
   counts,
   error = false,
+  notificationsEnabled = false,
+  onEnableNotifications,
   onClose,
   onOpen,
 }: InboxModalProps) {
@@ -198,7 +202,20 @@ export function InboxModal({
           )}
         </div>
 
-        <div className="inbox-foot">{t("只显示有评论或审阅状态的文档")}</div>
+        <div className="inbox-foot">
+          <span>{t("只显示有评论或审阅状态的文档")}</span>
+          {notificationsEnabled ? (
+            <span className="inbox-notify on">{t("桌面通知已开启")}</span>
+          ) : (
+            <button
+              type="button"
+              className="inbox-notify"
+              onClick={onEnableNotifications}
+            >
+              {t("开启桌面通知")}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

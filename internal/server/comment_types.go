@@ -28,6 +28,7 @@ type Comment struct {
 	DiscussionIDs    []string           `json:"discussionIds,omitempty"`
 	PromptTemplateID string             `json:"promptTemplateId,omitempty"`
 	Severity         string             `json:"severity,omitempty"`
+	Reaction         string             `json:"reaction,omitempty"`
 	Suggestion       *CommentSuggestion `json:"suggestion,omitempty"`
 	Messages         []CommentMessage   `json:"messages"`
 }
