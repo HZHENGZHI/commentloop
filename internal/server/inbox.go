@@ -16,19 +16,20 @@ import (
 // inboxDoc is the review state of one document, aggregated across its comment
 // threads. It is what the sidebar and the cross-document inbox render.
 type inboxDoc struct {
-	Path         string    `json:"path"`
-	Name         string    `json:"name"`
-	RelPath      string    `json:"relPath"`
-	RootID       string    `json:"rootId"`
-	RootName     string    `json:"rootName"`
-	Status       string    `json:"status"`
-	Comments     int       `json:"comments"`
-	Unresolved   int       `json:"unresolved"`
-	Awaiting     int       `json:"awaiting"`
-	PendingAgent int       `json:"pendingAgent"`
-	AgentWorking int       `json:"agentWorking"`
-	Orphaned     int       `json:"orphaned"`
-	LastActivity time.Time `json:"lastActivity"`
+	Path          string    `json:"path"`
+	Name          string    `json:"name"`
+	RelPath       string    `json:"relPath"`
+	RootID        string    `json:"rootId"`
+	RootName      string    `json:"rootName"`
+	Status        string    `json:"status"`
+	Comments      int       `json:"comments"`
+	Unresolved    int       `json:"unresolved"`
+	Awaiting      int       `json:"awaiting"`
+	PendingAgent  int       `json:"pendingAgent"`
+	AgentWorking  int       `json:"agentWorking"`
+	Orphaned      int       `json:"orphaned"`
+	LastCommentAt time.Time `json:"lastCommentAt"`
+	LastActivity  time.Time `json:"lastActivity"`
 }
 
 type inboxCounts struct {
@@ -102,8 +103,13 @@ func (s *Server) buildInbox() (inboxResponse, error) {
 		}
 		doc.Comments++
 		activity := parseTime(row.UpdatedAt)
-		if messageAt, ok := lastMessageAt[row.ID]; ok && messageAt.After(activity) {
-			activity = messageAt
+		if messageAt, ok := lastMessageAt[row.ID]; ok {
+			if messageAt.After(doc.LastCommentAt) {
+				doc.LastCommentAt = messageAt
+			}
+			if messageAt.After(activity) {
+				activity = messageAt
+			}
 		}
 		if activity.After(doc.LastActivity) {
 			doc.LastActivity = activity

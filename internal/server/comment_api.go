@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/hzhengzhi/commentloop/internal/anchor"
 )
@@ -620,9 +622,38 @@ func (s *Server) handleReactionComment(w http.ResponseWriter, r *http.Request) {
 
 func mentionsAgent(body, agentName string) bool {
 	lower := strings.ToLower(body)
-	if strings.Contains(lower, "@agent") {
-		return true
+	names := []string{"agent"}
+	if name := strings.TrimSpace(strings.ToLower(agentName)); name != "" {
+		names = append(names, name)
 	}
-	name := strings.TrimSpace(strings.ToLower(agentName))
-	return name != "" && strings.Contains(lower, "@"+name)
+	for _, name := range names {
+		needle := "@" + name
+		for offset := 0; offset < len(lower); {
+			index := strings.Index(lower[offset:], needle)
+			if index < 0 {
+				break
+			}
+			index += offset
+			end := index + len(needle)
+			validStart := index == 0
+			if !validStart {
+				prev, _ := utf8.DecodeLastRuneInString(lower[:index])
+				validStart = !isMentionChar(prev)
+			}
+			validEnd := end >= len(lower)
+			if !validEnd {
+				next, _ := utf8.DecodeRuneInString(lower[end:])
+				validEnd = !isMentionChar(next)
+			}
+			if validStart && validEnd {
+				return true
+			}
+			offset = end
+		}
+	}
+	return false
+}
+
+func isMentionChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-'
 }
