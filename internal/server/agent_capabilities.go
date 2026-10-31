@@ -146,14 +146,12 @@ func (s *Server) rejectAgentDocPath(w http.ResponseWriter, r *http.Request, cano
 func (s *Server) guardAgentRepo(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Code read endpoints name the repository differently: most use
-		// ?repo=, while branch listing uses ?id=. Checking only one spelling
-		// would let a token pass the guard with the other.
-		repoID := r.URL.Query().Get("repo")
-		if repoID == "" {
-			repoID = r.URL.Query().Get("id")
-		}
-		if s.rejectAgentRepo(w, r, repoID) {
-			return
+		// ?repo=, while branch listing uses ?id=. Check every supplied
+		// spelling so an allowed ?repo= cannot mask a disallowed ?id=.
+		for _, repoID := range []string{r.URL.Query().Get("repo"), r.URL.Query().Get("id")} {
+			if repoID != "" && s.rejectAgentRepo(w, r, repoID) {
+				return
+			}
 		}
 		next(w, r)
 	}

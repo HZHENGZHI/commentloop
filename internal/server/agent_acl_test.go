@@ -63,6 +63,20 @@ func TestBranchListChecksRepositoryACL(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("branch list status=%d body=%s", rec.Code, rec.Body)
 	}
+
+	allowed, err := app.codeRepos.ensure(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.agentCaps.setToken("repo-token", agentGrant{
+		Capabilities: agentCapabilities{ReadCode: true}, DocPath: "", RepoIDs: []string{allowed.ID}, JobID: "job-repo",
+	})
+	// An allowed ?repo= must not mask a disallowed ?id= that the handler reads.
+	rec = doJSONHeaders(t, app, http.MethodGet,
+		"/api/code/branches?repo="+allowed.ID+"&id="+repo.ID, nil, tokenHeaders("repo-token"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("conflicting repo parameters status=%d body=%s", rec.Code, rec.Body)
+	}
 }
 
 func TestAgentRunnerRejectsCrossSiteRequests(t *testing.T) {
@@ -97,5 +111,41 @@ func TestManagedAgentCannotReadAnotherDocumentsContext(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("%s: status=%d body=%s", target, rec.Code, rec.Body)
 		}
+	}
+}
+
+type docCodeReposTestResponse struct {
+	Path  string           `json:"path"`
+	Repos []codeRepoRecord `json:"repos"`
+}
+
+func TestDocCodeReposFiltersToGrantedRepositories(t *testing.T) {
+	app, path, _ := newAgentTestApp(t)
+	allowed, err := app.codeRepos.ensure(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := app.codeRepos.ensure(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.codeRepos.link(path, allowed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.codeRepos.link(path, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	app.agentCaps.setToken("repo-token", agentGrant{
+		Capabilities: agentCapabilities{ReadCode: true}, DocPath: path,
+		RepoIDs: []string{allowed.ID}, JobID: "job-repo",
+	})
+	rec := doJSONHeaders(t, app, http.MethodGet,
+		"/api/doc/code-repos?path="+url.QueryEscape(path), nil, tokenHeaders("repo-token"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("doc code repos status=%d body=%s", rec.Code, rec.Body)
+	}
+	resp := decode[docCodeReposTestResponse](t, rec)
+	if len(resp.Repos) != 1 || resp.Repos[0].ID != allowed.ID {
+		t.Fatalf("repos = %+v, want only %s", resp.Repos, allowed.ID)
 	}
 }

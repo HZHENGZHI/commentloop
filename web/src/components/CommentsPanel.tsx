@@ -567,7 +567,10 @@ export function CommentsPanel({
                     setReplyTo(comment.id);
                     setReplyText("");
                     setReplyError(null);
-                    setReplyDiscussions([]);
+                    // Start from the thread's current context: sending an empty
+                    // list would otherwise clear the linked discussions the
+                    // user never touched.
+                    setReplyDiscussions([...(comment.discussionIds ?? [])]);
                     setReplyTemplateId(
                       comment.promptTemplateId ||
                         promptTemplates.find((item) => item.allowDocumentEdit)?.id ||
