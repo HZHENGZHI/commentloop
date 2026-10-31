@@ -10,9 +10,11 @@ import {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // The server pushes changes over WebSocket and handlers invalidate
-      // explicitly, so focus refetches and retries only add load.
-      staleTime: 30_000,
+      // Data stays stale so opening a document always revalidates it (other
+      // clients may have changed it); cached data renders meanwhile. Pushes
+      // over WebSocket invalidate explicitly, so focus refetches and retries
+      // only add load.
+      staleTime: 0,
       refetchOnWindowFocus: false,
       retry: false,
     },
@@ -26,7 +28,7 @@ type QueryRoot =
   | "promptTemplates"
   | "agentSessions";
 
-/** Refetches every active query under `root` (all documents). */
+/** Marks every query under `root` stale (all documents) and refetches the active ones. */
 export function invalidate(root: QueryRoot, options?: { cancelRefetch?: boolean }) {
   return queryClient.invalidateQueries({ queryKey: [root] }, options);
 }

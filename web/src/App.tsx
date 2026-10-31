@@ -1064,31 +1064,25 @@ export default function App() {
         scheduleTreeRefresh();
         break;
       case "comments":
-        if (message.path === currentPathRef.current) {
-          void invalidate("comments");
-        }
+        void invalidate("comments");
         break;
       case "discussions":
-        if (message.path === currentPathRef.current) {
-          void invalidate("discussions");
-        }
+        void invalidate("discussions");
         break;
       case "consensus":
-        if (message.path === currentPathRef.current) {
-          if (message.status) {
-            setConsensusActivity({
-              path: message.path,
-              status: message.status,
-              message: message.message,
-            });
-          }
-          if (
-            !message.status ||
-            message.status === "done" ||
-            message.status === "error"
-          ) {
-            void invalidate("discussions");
-          }
+        if (message.path === currentPathRef.current && message.status) {
+          setConsensusActivity({
+            path: message.path,
+            status: message.status,
+            message: message.message,
+          });
+        }
+        if (
+          !message.status ||
+          message.status === "done" ||
+          message.status === "error"
+        ) {
+          void invalidate("discussions");
         }
         break;
       case "agent":
