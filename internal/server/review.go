@@ -160,7 +160,7 @@ func (s *Server) handleSetDocReview(w http.ResponseWriter, r *http.Request) {
 	if s.rejectAgentWrite(w, r) {
 		return
 	}
-	if _, known := s.agentGrantForRequest(r); known {
+	if _, known := s.agentGrantForRequest(r); known || r.Header.Get("X-Commentloop-Agent") == "1" {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "审阅状态只能由用户设置"})
 		return
 	}

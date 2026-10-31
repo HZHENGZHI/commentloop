@@ -268,6 +268,12 @@ func TestInboxRejectsManagedAgents(t *testing.T) {
 	if rec.Code != 403 {
 		t.Fatalf("inbox with agent token = %d %s", rec.Code, rec.Body.String())
 	}
+	rec = doJSONHeaders(t, app, "GET", "/api/inbox", nil, map[string]string{
+		"X-Commentloop-Agent": "1",
+	})
+	if rec.Code != 403 {
+		t.Fatalf("inbox with agent header = %d %s", rec.Code, rec.Body.String())
+	}
 
 	rec = doJSONHeaders(t, app, "GET", "/api/doc/review?path="+rootID+"/notes/sub/deep.md", nil, map[string]string{
 		"X-Commentloop-Agent-Token": "agent-token",
@@ -281,6 +287,13 @@ func TestInboxRejectsManagedAgents(t *testing.T) {
 	})
 	if rec.Code != 200 {
 		t.Fatalf("review of granted document = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSONHeaders(t, app, "POST", "/api/doc/review", map[string]string{
+		"path": granted, "status": reviewStatusApproved,
+	}, map[string]string{"X-Commentloop-Agent": "1"})
+	if rec.Code != 403 {
+		t.Fatalf("status change by manual agent = %d %s", rec.Code, rec.Body.String())
 	}
 }
 

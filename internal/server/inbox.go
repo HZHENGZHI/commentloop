@@ -45,7 +45,7 @@ type inboxResponse struct {
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	// The inbox is a workspace-wide UI surface. Managed Agent tasks only have
 	// access to their granted document, so they must not enumerate the rest.
-	if _, known := s.agentGrantForRequest(r); known {
+	if _, known := s.agentGrantForRequest(r); known || r.Header.Get("X-Commentloop-Agent") == "1" {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "当前任务不能读取收件箱"})
 		return
 	}
