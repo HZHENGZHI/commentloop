@@ -28,6 +28,7 @@ type Comment struct {
 	DiscussionIDs    []string           `json:"discussionIds,omitempty"`
 	PromptTemplateID string             `json:"promptTemplateId,omitempty"`
 	Severity         string             `json:"severity,omitempty"`
+	Reaction         string             `json:"reaction,omitempty"`
 	Suggestion       *CommentSuggestion `json:"suggestion,omitempty"`
 	Messages         []CommentMessage   `json:"messages"`
 }
@@ -73,6 +74,12 @@ type docVersion struct {
 	Path      string
 	Content   string
 	CreatedAt time.Time
+}
+
+type docVersionInfo struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	Size      int64     `json:"size"`
 }
 
 type versionTarget struct {

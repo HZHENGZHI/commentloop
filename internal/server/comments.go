@@ -108,6 +108,25 @@ func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, sever
 	return &comment, nil
 }
 
+func (s *commentStore) setReaction(path, id, reaction string) (Comment, error) {
+	if reaction != "" && reaction != "👍" && reaction != "✅" && reaction != "👀" {
+		return Comment{}, fmt.Errorf("无效的表情回复")
+	}
+	if _, ok := s.get(path, id); !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	if err := s.db.Model(&commentRow{}).Where("id = ? AND path = ?", id, path).Updates(map[string]any{
+		"reaction": reaction, "updated_at": formatTime(time.Now()),
+	}).Error; err != nil {
+		return Comment{}, err
+	}
+	comment, ok := s.get(path, id)
+	if !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	return comment, nil
+}
+
 func (s *commentStore) setSuggestion(path, id, quote, text, mode string) (Comment, error) {
 	quote = strings.TrimSpace(quote)
 	text = strings.TrimSpace(text)
@@ -287,7 +306,7 @@ func (r commentRow) comment() Comment {
 		Line: r.Line, Start: r.StartOffset, End: r.EndOffset,
 		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
 		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
-		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity,
+		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity, Reaction: r.Reaction,
 	}
 	if r.SuggestionQuote != "" {
 		comment.Suggestion = &CommentSuggestion{
@@ -408,9 +427,16 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 }
 
 func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, error) {
+	sum := sha256.Sum256([]byte(content))
+	hash := hex.EncodeToString(sum[:])
+	var existing docVersionRow
+	if err := tx.Select("id").Take(&existing, "path = ? AND hash = ?", path, hash).Error; err == nil {
+		return existing.ID, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return "", err
+	}
 	// Keep rollback history bounded. Older snapshots (and rollback links on
-	// their messages) are pruned first so a re-created identical snapshot gets
-	// a fresh row.
+	// their messages) are pruned before adding a genuinely new snapshot.
 	newest := tx.Model(&docVersionRow{}).Select("id").Where("path = ?", path).
 		Order("created_at DESC, rowid DESC").Limit(maxDocVersionsPerPath - 1)
 	if err := tx.Where("path = ? AND id NOT IN (?)", path, newest).Delete(&docVersionRow{}).Error; err != nil {
@@ -423,8 +449,6 @@ func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, e
 			return "", err
 		}
 	}
-	sum := sha256.Sum256([]byte(content))
-	hash := hex.EncodeToString(sum[:])
 	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&docVersionRow{
 		ID: "ver_" + commentID(), Path: path, Hash: hash, Content: content, CreatedAt: formatTime(now),
 	}).Error; err != nil {
@@ -475,6 +499,19 @@ func (s *commentStore) version(id string) (docVersion, bool) {
 		return docVersion{}, false
 	}
 	return docVersion{ID: row.ID, Path: row.Path, Content: row.Content, CreatedAt: parseTime(row.CreatedAt)}, true
+}
+
+func (s *commentStore) listVersions(path string) ([]docVersionInfo, error) {
+	var rows []docVersionRow
+	if err := s.db.Select("id", "content", "created_at").Where("path = ?", path).
+		Order("created_at DESC, rowid DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]docVersionInfo, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, docVersionInfo{ID: row.ID, CreatedAt: parseTime(row.CreatedAt), Size: int64(len(row.Content))})
+	}
+	return out, nil
 }
 
 func (s *commentStore) resolve(path, id string, resolved bool) (*Comment, error) {

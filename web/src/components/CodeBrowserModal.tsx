@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Button, Empty, Input, Select, Tag } from "antd";
 import {
   fetchCodeRepoBranches,
   lspDefinition,
@@ -21,9 +22,9 @@ import {
   IconFolderOpen,
   IconGitBranch,
   IconLocate,
-  IconX,
 } from "./Icons";
 import { CodeViewer } from "./CodeViewer";
+import { AppModal } from "./AppModal";
 
 const NO_FILES: CodeFileEntry[] = [];
 
@@ -275,16 +276,6 @@ export function CodeBrowserModal({
     setPending(null);
   }, [pending, selectedFile, fileResult.data, fileResult.isFetching]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector(".code-repo-modal")) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const openBranchMenu = async () => {
     if (!repo) return;
     if (repo.kind !== "github" && !repo.branch) return;
@@ -412,60 +403,57 @@ export function CodeBrowserModal({
   };
 
   return (
-    <div
-      className="modal-backdrop code-browser-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AppModal
+      title={
+        <span className="app-modal-title code-browser-title">
+          <IconGitBranch size={16} />
+          {t("代码浏览")}
+          <span>{fileName(docPath)}</span>
+        </span>
+      }
+      width="92vw"
+      onClose={onClose}
+      className="code-browser-modal"
     >
-      <div
-        className="modal code-browser-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("代码浏览")}
-      >
-        <div className="code-browser-head">
-          <div className="code-browser-title">
-            <IconGitBranch size={16} />
-            {t("代码浏览")}
-            <span>{fileName(docPath)}</span>
-          </div>
-          {repos.length > 0 ? (
-            <>
-            <select
+      <div className="code-browser-head">
+        {repos.length > 0 ? (
+          <>
+            <Select
               className="code-browser-repo"
+              size="small"
               value={repo?.id ?? ""}
-              onChange={(event) => setRepoID(event.target.value)}
+              onChange={(value) => setRepoID(value)}
               aria-label={t("选择代码仓库")}
-            >
-              {repos.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.branch ? ` · ${item.branch}` : ""}
-                  {item.dirty ? ` · ${t("有改动")}` : ""}
-                </option>
-              ))}
-            </select>
+              options={repos.map((item) => ({
+                value: item.id,
+                label: `${item.name}${item.branch ? ` · ${item.branch}` : ""}${
+                  item.dirty ? ` · ${t("有改动")}` : ""
+                }`,
+              }))}
+            />
             {repo && repo.kind === "local" && !repo.branch ? (
-              <span
+              <Tag
                 className="code-browser-no-branch"
                 title={t("这个本地目录不是 Git 仓库，无法切换分支；请关联仓库根目录或初始化 Git")}
               >
                 {t("非 Git 仓库")}
-              </span>
+              </Tag>
             ) : null}
             {repo && (repo.kind === "github" || repo.branch) ? (
               <div className="code-browser-branch-wrap">
-                <button
-                  type="button"
-                  className={`code-browser-branch${branchOpen ? " active" : ""}`}
+                <Button
+                  type="text"
+                  size="small"
+                  className={`code-browser-branch${
+                    branchOpen ? " active" : ""
+                  }`}
                   onClick={() => void openBranchMenu()}
                   title={t("切换分支")}
+                  icon={<IconGitBranch size={11} />}
                 >
-                  <IconGitBranch size={11} />
                   {repo.branch || repo.remoteBranch || t("分支")}
                   <IconChevronDown size={10} />
-                </button>
+                </Button>
                 {branchOpen ? (
                   <div className="code-browser-branch-menu">
                     <div className="code-browser-branch-head">{t("切换分支")}</div>
@@ -494,134 +482,137 @@ export function CodeBrowserModal({
                 ) : null}
               </div>
             ) : null}
-            </>
-          ) : null}
-          <button
-            type="button"
-            className="code-browser-manage"
-            onClick={onManageRepos}
-          >
-            {t("管理仓库")}
-          </button>
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭代码浏览")}
-          >
-            <IconX size={15} />
-          </button>
-        </div>
+          </>
+        ) : null}
+        <Button
+          type="text"
+          size="small"
+          className="code-browser-manage"
+          onClick={onManageRepos}
+        >
+          {t("管理仓库")}
+        </Button>
+      </div>
 
-        <div className="code-browser-body">
-          <aside className="code-browser-tree">
-            <div className="code-browser-filter">
-              <input
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                placeholder={t("筛选文件…")}
-              />
-            </div>
-            <div className="code-browser-files">
-              {repos.length === 0 ? (
-                <div className="code-browser-empty">
-                  <p>{t("还没有关联代码仓库")}</p>
-                  <button type="button" className="btn primary" onClick={onManageRepos}>
-                    {t("关联代码仓库")}
-                  </button>
-                </div>
-              ) : filesLoading ? (
-                <div className="code-browser-empty">{t("正在读取文件…")}</div>
-              ) : visibleFiles.length === 0 ? (
-                <div className="code-browser-empty">
-                  {files.length === 0 ? t("仓库中没有源码文件") : t("没有匹配的文件")}
-                </div>
-              ) : (
-                <CodeTree
-                  node={tree}
-                  depth={0}
-                  expanded={expandedDirs}
-                  forceExpanded={forceExpanded}
-                  selectedFile={selectedFile}
-                  onToggle={(path) =>
-                    setExpandedDirs((current) => {
-                      const next = new Set(current);
-                      if (next.has(path)) {
-                        next.delete(path);
-                      } else {
-                        next.add(path);
-                      }
-                      return next;
-                    })
-                  }
-                  onSelect={(path) => {
-                    setSelectedFile(path);
-                    setPending(null);
-                    setMessage("");
-                  }}
-                />
-              )}
-            </div>
-            {fileListMeta?.truncated ? (
-              <div className="code-browser-truncated">
-                {t("文件列表已截断（共 {{count}} 个匹配）", { count: fileListMeta.total })}
-              </div>
-            ) : null}
-          </aside>
-
-          <section className="code-browser-main">
-            <div className="code-browser-file-head">
-              <span className="code-browser-path">
-                {selectedFile || t("选择一个代码文件")}
-              </span>
-              <div className="code-browser-lsp-actions">
-                <span className="code-browser-lsp-hint">
-                  {lspBusy ? t("LSP 查询中…") : t("⌘/Ctrl + 点击代码符号")}
-                </span>
-                <button
-                  type="button"
-                  className="code-browser-jump"
-                  disabled={!cursor || lspBusy || !selectedFile}
-                  onClick={() => {
-                    if (cursor) {
-                      void definition(cursor.line, cursor.character);
-                    }
-                  }}
-                  title={t("跳转到光标位置的定义")}
-                >
-                  <IconLocate size={11} />
-                  {t("跳转定义")}
-                </button>
-              </div>
-            </div>
-            {codeLoading ? (
-              <div className="code-browser-code-empty">{t("正在读取代码…")}</div>
-            ) : selectedFile ? (
-              <CodeViewer
-                filename={selectedFile}
-                content={content}
-                theme={theme}
-                target={target}
-                onCursorChange={(line, character) =>
-                  setCursor({ line, character })
-                }
-                onDefinition={(line, character) =>
-                  void definition(line, character)
+      <div
+        className="code-browser-body"
+        style={{ height: "max(160px, calc(min(860px, 90vh) - 150px))" }}
+      >
+        <aside className="code-browser-tree">
+          <div className="code-browser-filter">
+            <Input
+              size="small"
+              allowClear
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder={t("筛选文件…")}
+            />
+          </div>
+          <div className="code-browser-files">
+            {repos.length === 0 ? (
+              <Empty
+                className="code-browser-empty"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t("还没有关联代码仓库")}
+              >
+                <Button type="primary" onClick={onManageRepos}>
+                  {t("关联代码仓库")}
+                </Button>
+              </Empty>
+            ) : filesLoading ? (
+              <div className="code-browser-empty">{t("正在读取文件…")}</div>
+            ) : visibleFiles.length === 0 ? (
+              <Empty
+                className="code-browser-empty"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  files.length === 0 ? t("仓库中没有源码文件") : t("没有匹配的文件")
                 }
               />
             ) : (
-              <div className="code-browser-code-empty">
-                {repos.length === 0
-                  ? t("关联代码仓库后可以浏览源码")
-                  : t("从左侧选择文件查看代码")}
-              </div>
+              <CodeTree
+                node={tree}
+                depth={0}
+                expanded={expandedDirs}
+                forceExpanded={forceExpanded}
+                selectedFile={selectedFile}
+                onToggle={(path) =>
+                  setExpandedDirs((current) => {
+                    const next = new Set(current);
+                    if (next.has(path)) {
+                      next.delete(path);
+                    } else {
+                      next.add(path);
+                    }
+                    return next;
+                  })
+                }
+                onSelect={(path) => {
+                  setSelectedFile(path);
+                  setPending(null);
+                  setMessage("");
+                }}
+              />
             )}
-          </section>
-        </div>
-        <div className={`code-browser-status${message ? " visible" : ""}`}>
-          {message || t("代码只读；不会修改仓库文件")}
-        </div>
+          </div>
+          {fileListMeta?.truncated ? (
+            <div className="code-browser-truncated">
+              {t("文件列表已截断（共 {{count}} 个匹配）", { count: fileListMeta.total })}
+            </div>
+          ) : null}
+        </aside>
+
+        <section className="code-browser-main">
+          <div className="code-browser-file-head">
+            <span className="code-browser-path">
+              {selectedFile || t("选择一个代码文件")}
+            </span>
+            <div className="code-browser-lsp-actions">
+              <span className="code-browser-lsp-hint">
+                {lspBusy ? t("LSP 查询中…") : t("⌘/Ctrl + 点击代码符号")}
+              </span>
+              <Button
+                size="small"
+                icon={<IconLocate size={11} />}
+                disabled={!cursor || lspBusy || !selectedFile}
+                onClick={() => {
+                  if (cursor) {
+                    void definition(cursor.line, cursor.character);
+                  }
+                }}
+                title={t("跳转到光标位置的定义")}
+              >
+                {t("跳转定义")}
+              </Button>
+            </div>
+          </div>
+          {codeLoading ? (
+            <div className="code-browser-code-empty">{t("正在读取代码…")}</div>
+          ) : selectedFile ? (
+            <CodeViewer
+              filename={selectedFile}
+              content={content}
+              theme={theme}
+              target={target}
+              onCursorChange={(line, character) =>
+                setCursor({ line, character })
+              }
+              onDefinition={(line, character) =>
+                void definition(line, character)
+              }
+            />
+          ) : (
+            <div className="code-browser-code-empty">
+              {repos.length === 0
+                ? t("关联代码仓库后可以浏览源码")
+                : t("从左侧选择文件查看代码")}
+            </div>
+          )}
+        </section>
       </div>
-    </div>
+      <div className={`code-browser-status${message ? " visible" : ""}`}>
+        {message || t("代码只读；不会修改仓库文件")}
+      </div>
+    </AppModal>
   );
 }

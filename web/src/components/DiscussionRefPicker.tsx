@@ -1,3 +1,4 @@
+import { Checkbox } from "antd";
 import { useTranslation } from "react-i18next";
 import type { Discussion } from "../types";
 
@@ -33,11 +34,15 @@ export function DiscussionRefPicker({
       </summary>
       <div className="discussion-ref-list">
         {discussions.map((item) => (
-          <label key={item.id} className="discussion-ref-item">
-            <input
-              type="checkbox"
+          <div
+            key={item.id}
+            className="discussion-ref-item"
+            onClick={() => toggle(item.id)}
+          >
+            <Checkbox
               checked={selected.includes(item.id)}
               onChange={() => toggle(item.id)}
+              onClick={(event) => event.stopPropagation()}
             />
             <span className="discussion-ref-main">
               <span className="discussion-ref-title">{item.title}</span>
@@ -46,7 +51,7 @@ export function DiscussionRefPicker({
                 {item.sourceKind}
               </span>
             </span>
-          </label>
+          </div>
         ))}
       </div>
     </details>

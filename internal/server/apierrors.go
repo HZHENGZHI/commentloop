@@ -151,6 +151,7 @@ var (
 	errLinkedCommentDoesNotExist             = defineError("linked_comment_does_not_exist", "关联的评论不存在或不属于当前文档", "The linked comment does not exist or belongs to another document.")
 	errSelectTextComment                     = defineError("select_text_comment", "请选择要评论的文本", "Select the text to comment on.")
 	errDocumentNotFound                      = defineError("document_not_found", "文档不存在", "Document not found.")
+	errDocVersionNotFound                    = defineError("doc_version_not_found", "文档版本不存在", "Document version not found.")
 	errDocumentPathDoesNotMatch              = defineError("document_path_does_not_match", "文档路径不匹配", "Document path does not match.")
 	errNoDocumentOpen                        = defineError("no_document_open", "尚未打开文档", "No document is open.")
 	errCouldNotReadDocumentLocate            = defineError("could_not_read_document_locate", "无法读取文档，不能定位评论位置", "Could not read the document to locate the comment.")

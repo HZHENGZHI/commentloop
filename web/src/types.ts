@@ -31,6 +31,17 @@ export interface TreeResponse {
   truncated: boolean;
 }
 
+export interface DocVersion {
+  id: string;
+  createdAt: string;
+  size: number;
+}
+
+export interface DocVersionDetail extends DocVersion {
+  path: string;
+  content: string;
+}
+
 export interface DocResponse {
   path: string;
   content: string;
@@ -80,6 +91,7 @@ export interface InboxDoc {
   pendingAgent: number;
   agentWorking: number;
   orphaned: number;
+  lastCommentAt: string;
   lastActivity: string;
 }
 
@@ -178,7 +190,7 @@ export type WsServerMessage =
       content: string;
       html: string;
       revision: string;
-      origin: "save" | "external" | "remote" | "init" | "rollback" | "suggestion";
+      origin: "save" | "external" | "remote" | "init" | "rollback" | "suggestion" | "restore";
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
@@ -365,6 +377,7 @@ export interface Comment {
   discussionIds?: string[];
   promptTemplateId?: string;
   severity?: ReviewSeverity;
+  reaction?: string;
   suggestion?: CommentSuggestion;
   messages: CommentMessage[];
 }

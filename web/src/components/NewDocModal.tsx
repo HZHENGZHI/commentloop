@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { IconFilePlus, IconX } from "./Icons";
+import { Button, Input } from "antd";
+import { IconFilePlus } from "./Icons";
+import { AppModal } from "./AppModal";
 import { withMarkdownExtension } from "../utils";
 
 interface NewDocModalProps {
@@ -22,16 +24,6 @@ export function NewDocModal({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const preview = name.trim()
     ? [displayDir, withMarkdownExtension(name)].filter(Boolean).join("/")
@@ -73,66 +65,51 @@ export function NewDocModal({
   };
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AppModal
+      title={
+        <span className="app-modal-title">
+          <IconFilePlus size={17} />
+          {t("新建 Markdown 文档")}
+        </span>
+      }
+      width={480}
+      onClose={onClose}
+      className="new-doc-modal"
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-label={t("新建文档")}>
-        <div className="modal-head">
-          <div className="modal-title">
-            <IconFilePlus size={17} />
-            {t("新建 Markdown 文档")}
-          </div>
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭")}
-          >
-            <IconX size={15} />
-          </button>
+      <form onSubmit={submit}>
+        <label className="modal-label" htmlFor="new-doc-name">
+          {t("文件路径")}
+        </label>
+        <Input
+          id="new-doc-name"
+          autoFocus
+          addonBefore={displayDir ? `${displayDir}/` : undefined}
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            setError(null);
+          }}
+          placeholder={t("未命名.md")}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <p className="modal-hint">
+          {preview ? (
+            <>
+              {t("将创建")} <code>{preview}</code>
+            </>
+          ) : (
+            t("可以输入子目录，如 notes/想法.md")
+          )}
+        </p>
+        {error ? <p className="modal-error">{error}</p> : null}
+        <div className="modal-actions">
+          <Button onClick={onClose}>{t("取消")}</Button>
+          <Button type="primary" htmlType="submit" loading={busy}>
+            {busy ? t("创建中…") : t("创建")}
+          </Button>
         </div>
-        <form onSubmit={submit}>
-          <label className="modal-label" htmlFor="new-doc-name">
-            {t("文件路径")}
-          </label>
-          <div className="modal-input-wrap">
-            {displayDir ? <span className="modal-prefix">{displayDir}/</span> : null}
-            <input
-              id="new-doc-name"
-              ref={inputRef}
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setError(null);
-              }}
-              placeholder={t("未命名.md")}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </div>
-          <p className="modal-hint">
-            {preview ? (
-              <>
-                {t("将创建")} <code>{preview}</code>
-              </>
-            ) : (
-              t("可以输入子目录，如 notes/想法.md")
-            )}
-          </p>
-          {error ? <p className="modal-error">{error}</p> : null}
-          <div className="modal-actions">
-            <button type="button" className="btn ghost" onClick={onClose}>
-              {t("取消")}
-            </button>
-            <button type="submit" className="btn primary" disabled={busy}>
-              {busy ? t("创建中…") : t("创建")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </AppModal>
   );
 }

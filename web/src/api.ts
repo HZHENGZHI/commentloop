@@ -18,6 +18,8 @@ import type {
   DiscussionSession,
   DocCodeRepoResponse,
   DocReview,
+  DocVersion,
+  DocVersionDetail,
   ImportDiscussionResponse,
   InboxResponse,
   LSPLocation,
@@ -86,6 +88,33 @@ export function fetchTree(): Promise<TreeResponse> {
   return request<TreeResponse>("/api/tree");
 }
 
+export function fetchDocVersions(
+  path: string,
+): Promise<{ versions: DocVersion[] }> {
+  return request<{ versions: DocVersion[] }>(
+    `/api/doc/versions?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export function fetchDocVersion(
+  path: string,
+  id: string,
+): Promise<DocVersionDetail> {
+  return request<DocVersionDetail>(
+    `/api/doc/version?path=${encodeURIComponent(path)}&id=${encodeURIComponent(id)}`,
+  );
+}
+
+export function restoreDocVersion(
+  path: string,
+  id: string,
+): Promise<DocResponse> {
+  return request<DocResponse>("/api/doc/restore", {
+    method: "POST",
+    body: JSON.stringify({ path, id }),
+  });
+}
+
 export function fetchDoc(path: string): Promise<DocResponse> {
   return request<DocResponse>(`/api/doc?path=${encodeURIComponent(path)}`);
 }
@@ -107,6 +136,17 @@ export function setDocReview(
   return request<DocReview>("/api/doc/review", {
     method: "POST",
     body: JSON.stringify({ path, status }),
+  });
+}
+
+export function reactComment(
+  path: string,
+  id: string,
+  reaction: string,
+): Promise<Comment> {
+  return request<Comment>("/api/comments/reaction", {
+    method: "POST",
+    body: JSON.stringify({ path, id, reaction }),
   });
 }
 

@@ -2415,7 +2415,7 @@ body.dragging-split * {
   position: fixed;
   right: 18px;
   bottom: 42px;
-  z-index: 300;
+  z-index: 1100;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -6685,4 +6685,382 @@ body.mermaid-modal-open {
     width: auto;
     min-height: 0;
   }
+}
+
+
+/* ===== Comment search, reactions and unread ===== */
+.comments-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  margin: 0 10px 8px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+.comments-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 10px;
+}
+
+.comments-search-clear {
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.comment-reactions {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.comment-reaction {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.comment-reaction:hover {
+  background: var(--surface-2);
+  opacity: 1;
+}
+
+.comment-reaction.active {
+  border-color: var(--accent-soft-border);
+  background: var(--accent-soft);
+  opacity: 1;
+}
+
+
+.unread-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  margin-left: 2px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.inbox-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inbox-notify {
+  flex: none;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--accent-soft-border);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 550;
+}
+
+.inbox-notify.on {
+  border-color: transparent;
+  background: transparent;
+  color: var(--success);
+  font-weight: 500;
+}
+
+/* ===== Ant Design shell ===== */
+.app-modal .ant-modal-container {
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+
+.app-modal .ant-modal-header {
+  margin-bottom: 16px;
+}
+
+.app-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.app-modal .ant-modal-body {
+  padding-top: 0;
+}
+
+.app-modal .modal-actions {
+  margin-top: 22px;
+}
+
+.comment-template-field .ant-select {
+  width: 100%;
+}
+
+.topbar .ant-btn {
+  color: var(--text-secondary);
+}
+
+.topbar .ant-btn-primary {
+  color: #fff;
+}
+
+.topbar-actions .ant-badge {
+  line-height: 1;
+}
+
+/* ===== Ant Design controls ===== */
+.sidebar-search-input {
+  width: calc(100% - 24px);
+  margin: 0 12px 10px;
+}
+
+.sidebar-search-input .ant-input {
+  background: transparent;
+}
+
+.comments-filter .ant-segmented {
+  width: 100%;
+}
+
+.comments-filter .ant-segmented-item-label {
+  font-size: 11.5px;
+}
+
+.comments-body .ant-empty {
+  margin-top: 40px;
+}
+
+.comments-panel .ant-empty-description {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.pane-head .ant-btn {
+  font-size: 12px;
+}
+
+.pane-head .ant-badge-status-text {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.sidebar-tools .ant-btn,
+.row-action.ant-btn {
+  color: var(--text-faint);
+}
+
+.row-action.ant-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  opacity: 0;
+}
+
+.tree-row:hover .row-action.ant-btn,
+.tree-row:focus-within .row-action.ant-btn {
+  opacity: 1;
+}
+
+.app-modal .ant-modal-title {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.comments-panel .ant-input,
+.comments-panel .ant-select-selector {
+  font-size: 12px;
+}
+
+.review-status-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-status-control.ant-select {
+  min-width: 92px;
+}
+
+.review-status-control .ant-select-selector {
+  padding-inline: 2px !important;
+}
+
+.toasts .ant-alert {
+  pointer-events: auto;
+  min-width: 260px;
+  max-width: min(400px, calc(100vw - 36px));
+  box-shadow: var(--shadow-md);
+}
+
+.ant-modal.inbox-modal .ant-modal-container {
+  display: flex;
+  flex-direction: column;
+  max-height: min(680px, calc(100vh - 40px));
+}
+
+.ant-modal.inbox-modal .ant-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ant-modal.code-browser-modal .ant-modal-container {
+  max-height: 92vh;
+}
+
+.ant-modal.code-browser-modal .ant-modal-body {
+  min-height: 0;
+}
+
+.topbar .ant-badge-count,
+.pane-head .ant-badge-count {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--surface) inset;
+}
+
+.comments-search-input {
+  width: calc(100% - 20px);
+  margin: 0 10px 8px;
+}
+
+
+/* ===== Version history ===== */
+.history-layout {
+  display: flex;
+  gap: 14px;
+  height: 440px;
+}
+
+.history-list {
+  width: 210px;
+  flex: none;
+  overflow: auto;
+  padding-right: 8px;
+  border-right: 1px solid var(--border);
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.history-item:hover {
+  background: var(--surface-2);
+}
+
+.history-item.active {
+  background: var(--accent-soft);
+}
+
+.history-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-item-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.history-item-meta em {
+  color: var(--accent-strong);
+  font-style: normal;
+}
+
+.history-diff-pane {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.history-diff {
+  margin: 0;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.diff-line {
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line.add {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.diff-line.remove {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.diff-sign {
+  display: inline-block;
+  width: 12px;
+  opacity: 0.7;
+}
+
+.history-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history-hint {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.history-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+}
+
+.history-error {
+  margin-bottom: 10px;
 }

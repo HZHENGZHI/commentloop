@@ -1,6 +1,6 @@
+import { Alert } from "antd";
 import { useTranslation } from "react-i18next";
 import type { ToastItem } from "../types";
-import { IconAlert, IconCheck, IconWifi, IconX } from "./Icons";
 
 interface ToastsProps {
   items: ToastItem[];
@@ -9,29 +9,24 @@ interface ToastsProps {
 
 export function Toasts({ items, onDismiss }: ToastsProps) {
   const { t } = useTranslation();
+  const kindToType = (kind: ToastItem["kind"]) => {
+    if (kind === "success") return "success" as const;
+    if (kind === "error") return "error" as const;
+    if (kind === "warn") return "warning" as const;
+    return "info" as const;
+  };
   return (
     <div className="toasts" aria-live="polite">
       {items.map((toast) => (
-        <div key={toast.id} className={`toast ${toast.kind}`}>
-          <span className="toast-icon">
-            {toast.kind === "success" ? (
-              <IconCheck size={15} />
-            ) : toast.kind === "error" || toast.kind === "warn" ? (
-              <IconAlert size={15} />
-            ) : (
-              <IconWifi size={15} />
-            )}
-          </span>
-          <span className="toast-text">{toast.message}</span>
-          <button
-            type="button"
-            className="toast-close"
-            onClick={() => onDismiss(toast.id)}
-            aria-label={t("关闭提示")}
-          >
-            <IconX size={13} />
-          </button>
-        </div>
+        <Alert
+          key={toast.id}
+          type={kindToType(toast.kind)}
+          message={toast.message}
+          showIcon
+          closable
+          onClose={() => onDismiss(toast.id)}
+          aria-label={t("关闭提示")}
+        />
       ))}
     </div>
   );

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/hzhengzhi/commentloop/internal/anchor"
 )
@@ -122,7 +124,8 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	if author == "user" {
 		s.noteReviewCommentAdded(canonical)
-		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
+		force := mentionsAgent(req.Body, s.settings.get().Agent.Name)
+		_ = s.enqueueAutoReview(canonical, comment.ID, force, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)
 }
@@ -190,7 +193,8 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	if author == "user" {
 		s.noteReviewCommentAdded(canonical)
-		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
+		force := mentionsAgent(req.Body, s.settings.get().Agent.Name)
+		_ = s.enqueueAutoReview(canonical, comment.ID, force, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)
 }
@@ -585,4 +589,71 @@ func (s *Server) handleCreateReviewComment(w http.ResponseWriter, r *http.Reques
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	writeJSON(w, http.StatusOK, comment)
+}
+
+type reactionCommentRequest struct {
+	Path     string `json:"path"`
+	ID       string `json:"id"`
+	Reaction string `json:"reaction"`
+}
+
+func (s *Server) handleReactionComment(w http.ResponseWriter, r *http.Request) {
+	var req reactionCommentRequest
+	if !bindJSON(w, r, 16*1024, &req) {
+		return
+	}
+	ro, rel, err := s.resolveDocRef(req.Path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
+		return
+	}
+	comment, err := s.comments.setReaction(ro.ID+"/"+rel, req.ID, req.Reaction)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, errCommentNotFound)
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.hub.broadcast(outMessage{Type: "comments", Path: ro.ID + "/" + rel})
+	writeJSON(w, http.StatusOK, comment)
+}
+
+func mentionsAgent(body, agentName string) bool {
+	lower := strings.ToLower(body)
+	names := []string{"agent"}
+	if name := strings.TrimSpace(strings.ToLower(agentName)); name != "" {
+		names = append(names, name)
+	}
+	for _, name := range names {
+		needle := "@" + name
+		for offset := 0; offset < len(lower); {
+			index := strings.Index(lower[offset:], needle)
+			if index < 0 {
+				break
+			}
+			index += offset
+			end := index + len(needle)
+			validStart := index == 0
+			if !validStart {
+				prev, _ := utf8.DecodeLastRuneInString(lower[:index])
+				validStart = !isMentionChar(prev)
+			}
+			validEnd := end >= len(lower)
+			if !validEnd {
+				next, _ := utf8.DecodeRuneInString(lower[end:])
+				validEnd = !isMentionChar(next)
+			}
+			if validStart && validEnd {
+				return true
+			}
+			offset = end
+		}
+	}
+	return false
+}
+
+func isMentionChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-'
 }
