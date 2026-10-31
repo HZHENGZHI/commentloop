@@ -27,7 +27,10 @@ const NO_TEMPLATES: PromptTemplate[] = [];
 
 export function PromptTemplatesPanel() {
   const { t, i18n } = useTranslation();
-  const query = useQuery(promptTemplatesQuery(i18n.language));
+  // Pin the language the panel opened with: switching languages mid-edit must
+  // not swap the list (and reset the form) underneath unsaved changes.
+  const [language] = useState(i18n.language);
+  const query = useQuery(promptTemplatesQuery(language));
   const templates = query.data?.templates ?? NO_TEMPLATES;
   const loading = query.isPending;
   const [selected, setSelected] = useState<PromptTemplate | null>(null);
