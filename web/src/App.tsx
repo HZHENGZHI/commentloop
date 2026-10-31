@@ -250,7 +250,7 @@ export default function App() {
     for (const doc of inboxDocs) {
       if (doc.path === currentPath) continue;
       const seen = seenPaths[doc.path] ?? 0;
-      if (doc.comments > 0 && Date.parse(doc.lastActivity) > seen) {
+      if (doc.comments > 0 && Date.parse(doc.lastCommentAt) > seen) {
         out.add(doc.path);
       }
     }
@@ -1298,6 +1298,21 @@ export default function App() {
         break;
       case "agent":
         void invalidate("inbox");
+        if (
+          message.status === "done" &&
+          notificationPermission === "granted" &&
+          document.hidden
+        ) {
+          try {
+            const suffix = message.path ? ` · ${baseName(message.path)}` : "";
+            const text =
+              localizeServerMessage(message.message || "", "done") ||
+              t("Agent 已完成任务");
+            new Notification("Commentloop", { body: text + suffix });
+          } catch {
+            // Notifications can be unavailable despite permission.
+          }
+        }
         if (!message.path || message.path === currentPathRef.current) {
           const status =
             message.status === "error"
@@ -1317,23 +1332,6 @@ export default function App() {
                 ? null
                 : current,
             );
-          }
-          if (
-            status === "done" &&
-            notificationPermission === "granted" &&
-            document.hidden
-          ) {
-            try {
-              new Notification("Commentloop", {
-                body:
-                  localizeServerMessage(
-                    message.message || "",
-                    "done",
-                  ) || t("Agent 已完成任务"),
-              });
-            } catch {
-              // Notifications can be unavailable despite permission.
-            }
           }
           if (status === "queued" || status === "done" || status === "error") {
             toast(

@@ -80,6 +80,7 @@ export interface InboxDoc {
   pendingAgent: number;
   agentWorking: number;
   orphaned: number;
+  lastCommentAt: string;
   lastActivity: string;
 }
 
