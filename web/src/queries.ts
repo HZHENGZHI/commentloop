@@ -1,6 +1,8 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import {
   fetchAgentSessions,
+  fetchCodeFile,
+  fetchCodeFiles,
   fetchCodeRepos,
   fetchComments,
   fetchConfig,
@@ -25,6 +27,8 @@ export const queryClient = new QueryClient({
 });
 
 type QueryRoot =
+  | "codeFile"
+  | "codeFiles"
   | "comments"
   | "config"
   | "codeRepos"
@@ -92,4 +96,20 @@ export const agentSessionsQuery = (path: string) =>
     queryKey: ["agentSessions", path],
     queryFn: () => fetchAgentSessions(path),
     enabled: path !== "",
+  });
+
+// The branch is part of both keys so a branch switch never shows the other
+// branch's cached files.
+export const codeFilesQuery = (repoId: string, branch: string) =>
+  queryOptions({
+    queryKey: ["codeFiles", repoId, branch],
+    queryFn: () => fetchCodeFiles(repoId, "", 5000),
+    enabled: repoId !== "",
+  });
+
+export const codeFileQuery = (repoId: string, branch: string, path: string) =>
+  queryOptions({
+    queryKey: ["codeFile", repoId, branch, path],
+    queryFn: () => fetchCodeFile(repoId, path),
+    enabled: repoId !== "" && path !== "",
   });
