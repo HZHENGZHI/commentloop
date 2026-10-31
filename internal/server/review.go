@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,9 +27,11 @@ var reviewStatuses = map[string]bool{
 }
 
 type docReview struct {
-	Path      string    `json:"path"`
-	Status    string    `json:"status"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Path             string    `json:"path"`
+	Status           string    `json:"status"`
+	Summary          string    `json:"summary,omitempty"`
+	SummaryUpdatedAt time.Time `json:"summaryUpdatedAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type reviewStore struct {
@@ -44,7 +47,11 @@ func (s *reviewStore) get(path string) (docReview, bool) {
 	if err := s.db.Take(&row, "doc_path = ?", path).Error; err != nil {
 		return docReview{}, false
 	}
-	return docReview{Path: row.DocPath, Status: row.Status, UpdatedAt: parseTime(row.UpdatedAt)}, true
+	return docReview{
+		Path: row.DocPath, Status: row.Status, Summary: row.Summary,
+		SummaryUpdatedAt: parseTime(row.SummaryUpdatedAt),
+		UpdatedAt:        parseTime(row.UpdatedAt),
+	}, true
 }
 
 // effective returns the explicit status when the user has set one. Documents
@@ -77,7 +84,36 @@ func (s *reviewStore) set(path, status string) (docReview, error) {
 	}).Create(&row).Error; err != nil {
 		return docReview{}, err
 	}
+	if saved, ok := s.get(path); ok {
+		return saved, nil
+	}
 	return docReview{Path: path, Status: status, UpdatedAt: now}, nil
+}
+
+func (s *reviewStore) setSummary(path, summary string) (docReview, error) {
+	summary = strings.TrimSpace(summary)
+	if len(summary) > 12000 {
+		return docReview{}, errors.New("审阅摘要过长")
+	}
+	current, err := s.effective(path)
+	if err != nil {
+		return docReview{}, err
+	}
+	now := time.Now()
+	row := docReviewRow{
+		DocPath: path, Status: current.Status, Summary: summary,
+		SummaryUpdatedAt: formatTime(now), UpdatedAt: formatTime(now),
+	}
+	if err := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "doc_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"summary", "summary_updated_at", "updated_at"}),
+	}).Create(&row).Error; err != nil {
+		return docReview{}, err
+	}
+	return docReview{
+		Path: path, Status: current.Status, Summary: summary,
+		SummaryUpdatedAt: now, UpdatedAt: now,
+	}, nil
 }
 
 // noteCommentAdded records that a human added review feedback. An approval
@@ -127,7 +163,9 @@ func (s *reviewStore) all() (map[string]docReview, error) {
 	out := make(map[string]docReview, len(rows))
 	for _, row := range rows {
 		out[row.DocPath] = docReview{
-			Path: row.DocPath, Status: row.Status, UpdatedAt: parseTime(row.UpdatedAt),
+			Path: row.DocPath, Status: row.Status, Summary: row.Summary,
+			SummaryUpdatedAt: parseTime(row.SummaryUpdatedAt),
+			UpdatedAt:        parseTime(row.UpdatedAt),
 		}
 	}
 	return out, nil
@@ -136,6 +174,11 @@ func (s *reviewStore) all() (map[string]docReview, error) {
 type setReviewRequest struct {
 	Path   string `json:"path"`
 	Status string `json:"status"`
+}
+
+type setReviewSummaryRequest struct {
+	Path    string `json:"path"`
+	Summary string `json:"summary"`
 }
 
 func (s *Server) handleGetDocReview(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +196,34 @@ func (s *Server) handleGetDocReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, errInternalServer)
 		return
 	}
+	writeJSON(w, http.StatusOK, review)
+}
+
+func (s *Server) handleSetDocReviewSummary(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentCommentReply(w, r) {
+		return
+	}
+	var req setReviewSummaryRequest
+	if !bindJSON(w, r, 64*1024, &req) {
+		return
+	}
+	ro, rel, err := s.resolveDocRef(req.Path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
+		return
+	}
+	canonical := ro.ID + "/" + rel
+	if _, known := s.agentGrantForRequest(r); known || r.Header.Get("X-Commentloop-Agent") == "1" {
+		if s.rejectAgentDocPath(w, r, canonical, "当前任务只能更新关联文档的审阅摘要") {
+			return
+		}
+	}
+	review, err := s.reviews.setSummary(canonical, req.Summary)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.hub.broadcast(outMessage{Type: "reviews", Path: canonical, Status: review.Status})
 	writeJSON(w, http.StatusOK, review)
 }
 

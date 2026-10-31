@@ -121,7 +121,11 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		RepoIDs:      job.RepoIDs,
 	})
 	defer r.srv.agentCaps.clear(r.session.ID)
-	r.srv.broadcastAgent(job.Path, "working", fmt.Sprintf("%s 正在处理评论…", agent.Name))
+	phase := "处理评论"
+	if job.CommentID == "" {
+		phase = "审阅全文"
+	}
+	r.srv.broadcastAgent(job.Path, "working", fmt.Sprintf("%s 正在%s…", agent.Name, phase))
 	progress := func(message string) {
 		r.srv.broadcastAgent(job.Path, "working", message)
 	}
@@ -131,7 +135,11 @@ func (r *sessionAgentWorker) run(job reviewAgentJob) {
 		slog.Error("pi agent failed", "err", err)
 		return
 	}
-	r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))
+	if job.CommentID == "" {
+		r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成全文审阅，等待你确认", agent.Name))
+	} else {
+		r.srv.broadcastAgent(job.Path, "done", fmt.Sprintf("%s 已完成一轮修改，等待你确认", agent.Name))
+	}
 	if r.srv.consensus != nil {
 		r.srv.consensus.schedule(job.Path, true)
 	}

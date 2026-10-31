@@ -550,6 +550,18 @@ const en: Record<string, string> = {
   "请重试。": "Try again.",
   "有评论或审阅状态后，这里会按文档聚合待办。": "Documents with comments or a review status are grouped here.",
   "只显示有评论或审阅状态的文档": "Only documents with comments or a review status are shown.",
+  // Full-document review
+  "Agent 审阅": "Agent review",
+  "让 Agent 审一遍": "Review with Agent",
+  "审阅中…": "Reviewing…",
+  "让 Agent 通读全文，留下分级评论和审阅摘要。": "Ask the Agent to read the whole document and leave ranked comments and a review summary.",
+  "已开始 Agent 审阅": "Agent review started.",
+  "发起审阅失败：{{error}}": "Failed to start review: {{error}}",
+  "阻塞": "Blocking",
+  "应修": "Should fix",
+  "小问题": "Nit",
+  "疑问": "Question",
+
 };
 
 export default en;

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { ReviewStatus } from "../types";
+import type { ReviewSeverity, ReviewStatus } from "../types";
 
 export const REVIEW_STATUSES: ReviewStatus[] = [
   "draft",
@@ -14,6 +14,22 @@ export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   changes_requested: "需要修改",
   approved: "已通过",
 };
+
+export const SEVERITY_LABELS: Record<ReviewSeverity, string> = {
+  blocking: "阻塞",
+  should_fix: "应修",
+  nit: "小问题",
+  question: "疑问",
+};
+
+export function SeverityBadge({ severity }: { severity: ReviewSeverity }) {
+  const { t } = useTranslation();
+  return (
+    <span className={`comment-severity ${severity}`}>
+      {t(SEVERITY_LABELS[severity])}
+    </span>
+  );
+}
 
 export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
   const { t } = useTranslation();

@@ -57,8 +57,19 @@ func normalizeDiscussionIDs(ids []string) []string {
 }
 
 func (s *commentStore) create(path, quote, prefix, suffix, body, content string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
+	return s.createAs("user", path, quote, prefix, suffix, body, "", content, discussionIDs, promptTemplateID)
+}
+
+func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, severity, content string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
 	quote = strings.TrimSpace(quote)
 	body = strings.TrimSpace(body)
+	severity, err := normalizeSeverity(severity)
+	if err != nil {
+		return nil, err
+	}
+	if author != "agent" {
+		author = "user"
+	}
 	if quote == "" {
 		return nil, fmt.Errorf("请选择要评论的文本")
 	}
@@ -73,20 +84,20 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string,
 	comment := Comment{
 		ID: commentID(), Path: path, Quote: quote, Prefix: prefix, Suffix: suffix,
 		Start: start, End: end, Line: line, Orphaned: orphaned,
-		Anchor: quote, CreatedAt: now, UpdatedAt: now,
+		Anchor: quote, CreatedAt: now, UpdatedAt: now, Severity: severity,
 	}
-	message := CommentMessage{ID: commentID(), Author: "user", Body: body, CreatedAt: now}
+	message := CommentMessage{ID: commentID(), Author: author, Body: body, CreatedAt: now}
 
 	row := commentRow{
 		ID: comment.ID, Path: path, Quote: quote, Anchor: quote, Prefix: prefix, Suffix: suffix,
 		Line: line, StartOffset: start, EndOffset: end, Orphaned: boolInt(orphaned),
-		CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
+		Severity: severity, CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
 		DiscussionIDs: discussionIDsJSON(discussionIDs), PromptTemplateID: promptTemplateID,
 	}
 	messageRow := commentMessageRow{
-		ID: message.ID, CommentID: comment.ID, Author: "user", Body: body, CreatedAt: formatTime(now),
+		ID: message.ID, CommentID: comment.ID, Author: author, Body: body, CreatedAt: formatTime(now),
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -223,7 +234,7 @@ func (r commentRow) comment() Comment {
 		Line: r.Line, Start: r.StartOffset, End: r.EndOffset,
 		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
 		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
-		PromptTemplateID: r.PromptTemplateID,
+		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity,
 	}
 	if r.DiscussionIDs != "" && r.DiscussionIDs != "null" {
 		_ = json.Unmarshal([]byte(r.DiscussionIDs), &comment.DiscussionIDs)

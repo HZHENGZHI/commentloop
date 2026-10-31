@@ -31,7 +31,11 @@ func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) 
 		RepoIDs:      job.RepoIDs,
 		JobID:        job.ID,
 	})
-	s.broadcastAgent(job.DocPath, "working", "外部 Agent 正在处理评论…")
+	if job.CommentID == "" {
+		s.broadcastAgent(job.DocPath, "working", "外部 Agent 正在审阅全文…")
+	} else {
+		s.broadcastAgent(job.DocPath, "working", "外部 Agent 正在处理评论…")
+	}
 	writeJSON(w, http.StatusOK, agentClaimResponse{AgentJob: job, Token: job.Token})
 }
 

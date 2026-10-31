@@ -199,6 +199,43 @@ func tools() []toolDef {
 			},
 		},
 		{
+			Name:        "create_comment",
+			Description: "Create an inline review comment as Code Agent on an exact quote from the document. Use this for a full-document review: quote the shortest unique text that needs attention, write a concise explanation, and set severity to blocking, should_fix, nit, or question. The comment is anchored to the quote; do not resolve comments.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":     map[string]any{"type": "string", "description": "document path"},
+					"quote":    map[string]any{"type": "string", "description": "exact text from the document, short and unique"},
+					"body":     map[string]any{"type": "string", "description": "review comment"},
+					"severity": map[string]any{"type": "string", "enum": []string{"blocking", "should_fix", "nit", "question"}, "description": "issue severity"},
+				},
+				"required": []string{"path", "quote", "body"},
+			},
+		},
+		{
+			Name:        "get_review",
+			Description: "Read the document's current review status and the latest review summary.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string", "description": "document path"},
+				},
+				"required": []string{"path"},
+			},
+		},
+		{
+			Name:        "write_review_summary",
+			Description: "Write or replace the document's review summary. Use this after a full-document review to list the main issues, suggested order, and anything that can be ignored. This does not change the review status.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":    map[string]any{"type": "string", "description": "document path"},
+					"summary": map[string]any{"type": "string", "description": "concise Markdown review summary"},
+				},
+				"required": []string{"path", "summary"},
+			},
+		},
+		{
 			Name:        "list_code_repos",
 			Description: "List code repositories. Pass a document path to list only repositories linked to that document; omit it to list all registered repositories. read_file also returns linked codeRepos.",
 			InputSchema: map[string]any{
@@ -470,6 +507,43 @@ func (s *server) callTool(params toolCallParams) toolResult {
 			"size": doc.Size, "modTime": doc.ModTime, "written": true,
 			"replied_comment_ids": commentIDs, "replied": replied, "warnings": warnings,
 		})
+
+	case "create_comment":
+		path, _ := args["path"].(string)
+		quote, _ := args["quote"].(string)
+		body, _ := args["body"].(string)
+		severity, _ := args["severity"].(string)
+		if path == "" || quote == "" || body == "" {
+			return errorResult("path, quote and body are required")
+		}
+		comment, err := s.client.CreateComment(path, quote, body, severity)
+		if err != nil {
+			return errorResult(err.Error())
+		}
+		return jsonResult(comment)
+
+	case "get_review":
+		path, _ := args["path"].(string)
+		if path == "" {
+			return errorResult("path is required")
+		}
+		review, err := s.client.GetReview(path)
+		if err != nil {
+			return errorResult(err.Error())
+		}
+		return jsonResult(review)
+
+	case "write_review_summary":
+		path, _ := args["path"].(string)
+		summary, _ := args["summary"].(string)
+		if path == "" {
+			return errorResult("path is required")
+		}
+		review, err := s.client.WriteReviewSummary(path, summary)
+		if err != nil {
+			return errorResult(err.Error())
+		}
+		return jsonResult(review)
 
 	case "list_code_repos":
 		path, _ := args["path"].(string)
