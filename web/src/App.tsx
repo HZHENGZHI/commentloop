@@ -226,8 +226,8 @@ export default function App() {
   const inboxAttention = inboxDocs.filter((doc) => doc.awaiting > 0).length;
   const comments = useQuery(commentsQuery(docKey)).data?.comments ?? NO_COMMENTS;
   const codeRepos = useQuery(docCodeReposQuery(docKey)).data?.repos ?? NO_CODE_REPOS;
-  const discussions =
-    useQuery(discussionsQuery(docKey)).data?.discussions ?? NO_DISCUSSIONS;
+  const discussionsResult = useQuery(discussionsQuery(docKey));
+  const discussions = discussionsResult.data?.discussions ?? NO_DISCUSSIONS;
   const promptTemplates =
     useQuery(promptTemplatesQuery(i18nHook.language)).data?.templates ?? NO_PROMPT_TEMPLATES;
   const agentSessionsData = useQuery(agentSessionsQuery(docKey)).data;
@@ -606,7 +606,12 @@ export default function App() {
   );
 
   const handleReplyComment = useCallback(
-    async (comment: Comment, body: string, discussionIds: string[] = [], promptTemplateId = "") => {
+    async (
+      comment: Comment,
+      body: string,
+      discussionIds: string[] | undefined,
+      promptTemplateId = "",
+    ) => {
       const path = currentPathRef.current;
       if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       await replyComment(path, comment.id, body, {
@@ -1739,6 +1744,7 @@ export default function App() {
                     onDelete={(comment) => void handleDeleteComment(comment)}
                     agentName={config?.agentName || "Code Agent"}
                     discussions={discussions}
+                    discussionsLoaded={discussionsResult.isSuccess}
                     promptTemplates={promptTemplates}
                     onReply={handleReplyComment}
                     onGroup={handleGroupComments}

@@ -454,18 +454,24 @@ export function replyComment(
     promptTemplateId?: string;
   },
 ): Promise<Comment> {
+  const payload: Record<string, unknown> = {
+    path,
+    id,
+    body,
+    before: options?.before ?? "",
+    after: options?.after ?? "",
+    author: options?.author ?? "agent",
+    promptTemplateId: options?.promptTemplateId ?? "",
+  };
+  // Omit the field when the caller does not know the current selection (e.g.
+  // the discussion list has not loaded): the server keeps the stored context
+  // instead of treating it as an explicit clear.
+  if (options?.discussionIds !== undefined) {
+    payload.discussionIds = options.discussionIds;
+  }
   return request<Comment>("/api/comments/reply", {
     method: "POST",
-    body: JSON.stringify({
-      path,
-      id,
-      body,
-      before: options?.before ?? "",
-      after: options?.after ?? "",
-      author: options?.author ?? "agent",
-      discussionIds: options?.discussionIds ?? [],
-      promptTemplateId: options?.promptTemplateId ?? "",
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
