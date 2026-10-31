@@ -12,15 +12,10 @@ import {
   createComment,
   deleteComment,
   deleteDoc,
-  fetchComments,
   fetchConfig,
-  fetchAgentSessions,
   createAgentSession,
   setActiveAgentSession,
   fetchDoc,
-  fetchDocCodeRepos,
-  fetchDocDiscussions,
-  fetchPromptTemplates,
   fetchTree,
   removeRoot,
   renderPreview,
@@ -67,6 +62,16 @@ import i18n from "./i18n";
 import { localizeServerMessage } from "./i18n/serverMessages";
 import { applyTheme, currentTheme } from "./theme";
 import { useWebSocket } from "./useWebSocket";
+import { useQuery } from "@tanstack/react-query";
+import {
+  agentSessionsQuery,
+  commentsQuery,
+  discussionsQuery,
+  docCodeReposQuery,
+  invalidate,
+  promptTemplatesQuery,
+  queryClient,
+} from "./queries";
 import type {
   AddRemoteRootRequest,
   AgentSession,
@@ -105,6 +110,11 @@ const VIEW_KEY = "commentloop:view";
 const SPLIT_KEY = "commentloop:split";
 
 const EMPTY_STATS: DocStats = { words: 0, chars: 0, lines: 1 };
+const NO_COMMENTS: Comment[] = [];
+const NO_CODE_REPOS: CodeRepo[] = [];
+const NO_DISCUSSIONS: Discussion[] = [];
+const NO_PROMPT_TEMPLATES: PromptTemplate[] = [];
+const NO_AGENT_SESSIONS: AgentSession[] = [];
 
 const VIEW_OPTIONS = [
   { value: "split" as const, label: "分栏", icon: <IconColumns size={15} /> },
@@ -167,30 +177,29 @@ export default function App() {
   const [newModal, setNewModal] = useState(false);
   const [addRootOpen, setAddRootOpen] = useState(false);
   const [removingRoot, setRemovingRoot] = useState<{ id: string; name: string } | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentQuote, setCommentQuote] = useState<string | null>(null);
-  const [commentsNonce, setCommentsNonce] = useState(0);
-  const [codeRepos, setCodeRepos] = useState<CodeRepo[]>([]);
   const [codeRepoModalOpen, setCodeRepoModalOpen] = useState(false);
   const [codeBrowserOpen, setCodeBrowserOpen] = useState(false);
-  const [codeRepoNonce, setCodeRepoNonce] = useState(0);
-  const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [discussionModalOpen, setDiscussionModalOpen] = useState(false);
-  const [discussionNonce, setDiscussionNonce] = useState(0);
-  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
-  const [promptNonce, setPromptNonce] = useState(0);
   const [consensusActivity, setConsensusActivity] =
     useState<ConsensusActivity | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [agentSessions, setAgentSessions] = useState<AgentSession[]>([]);
-  const [activeAgentSessionId, setActiveAgentSessionId] = useState("");
-  const [sessionsNonce, setSessionsNonce] = useState(0);
   const [agentActivity, setAgentActivity] = useState<{
     status: "queued" | "working" | "done" | "error";
     message: string;
   } | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const docKey = currentPath ?? "";
+  const comments = useQuery(commentsQuery(docKey)).data?.comments ?? NO_COMMENTS;
+  const codeRepos = useQuery(docCodeReposQuery(docKey)).data?.repos ?? NO_CODE_REPOS;
+  const discussions =
+    useQuery(discussionsQuery(docKey)).data?.discussions ?? NO_DISCUSSIONS;
+  const promptTemplates =
+    useQuery(promptTemplatesQuery).data?.templates ?? NO_PROMPT_TEMPLATES;
+  const agentSessionsData = useQuery(agentSessionsQuery(docKey)).data;
+  const agentSessions = agentSessionsData?.sessions ?? NO_AGENT_SESSIONS;
+  const activeAgentSessionId = agentSessionsData?.activeId ?? "";
   const [theme, setTheme] = useState<Theme>(() => currentTheme());
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebar);
@@ -350,7 +359,7 @@ export default function App() {
         const result = await saveDoc(path, content);
         if (seq !== saveSeqRef.current) return;
         savedContentRef.current = content;
-        setCommentsNonce((value) => value + 1);
+        void invalidate("comments");
         setMeta({ size: result.size, modTime: result.modTime });
         if (contentRef.current === content) {
           setHtml(result.html);
@@ -518,7 +527,7 @@ export default function App() {
       await createComment(path, quote, body, discussionIds, promptTemplateId);
       setCommentQuote(null);
       setCommentsOpen(true);
-      setCommentsNonce((value) => value + 1);
+      void invalidate("comments");
       toast(i18n.t("评论已添加"), "success");
     },
     [commentQuote, toast],
@@ -530,7 +539,7 @@ export default function App() {
       if (!path) return;
       try {
         await resolveComment(path, comment.id, resolved);
-        setCommentsNonce((value) => value + 1);
+        void invalidate("comments");
       } catch (error) {
         toast(i18n.t("更新评论失败：{{error}}", { error: errorMessage(error) }), "error");
       }
@@ -547,7 +556,7 @@ export default function App() {
         discussionIds,
         promptTemplateId,
       });
-      setCommentsNonce((value) => value + 1);
+      void invalidate("comments");
       toast(i18n.t("已回复，等待 Code Agent 继续修改"), "success");
     },
     [toast],
@@ -558,7 +567,7 @@ export default function App() {
       const path = currentPathRef.current;
       if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       await groupComments(path, comment.id, memberIds);
-      setCommentsNonce((value) => value + 1);
+      void invalidate("comments");
       toast(
         memberIds.length > 0
           ? i18n.t("已关联 {{count}} 条评论，Code Agent 会一起处理", {
@@ -597,7 +606,7 @@ export default function App() {
           applySavedDoc(result.doc.content, result.doc.html);
           setMeta({ size: result.doc.size, modTime: result.doc.modTime });
         }
-        setCommentsNonce((value) => value + 1);
+        void invalidate("comments");
         toast(
           i18n.t("已局部回滚到第 {{round}} 次修改{{side}}的段落，等待你的确认", {
             round: result.round,
@@ -617,7 +626,7 @@ export default function App() {
     if (!path) throw new Error(i18n.t("当前没有打开的文档"));
     try {
       await createAgentSession(path);
-      setSessionsNonce((value) => value + 1);
+      void invalidate("agentSessions");
       toast(i18n.t("已新建 Agent 会话"), "success");
     } catch (error) {
       toast(i18n.t("新建会话失败：{{error}}", { error: errorMessage(error) }), "error");
@@ -631,8 +640,10 @@ export default function App() {
       if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       try {
         await setActiveAgentSession(path, id);
-        setActiveAgentSessionId(id);
-        setSessionsNonce((value) => value + 1);
+        queryClient.setQueryData(agentSessionsQuery(path).queryKey, (current) =>
+          current ? { ...current, activeId: id } : current,
+        );
+        void invalidate("agentSessions");
         toast(i18n.t("已切换 Agent 会话"), "success");
       } catch (error) {
         toast(i18n.t("切换会话失败：{{error}}", { error: errorMessage(error) }), "error");
@@ -655,7 +666,7 @@ export default function App() {
 
   const handleCodeRepoChanged = useCallback(
     (message: string) => {
-      setCodeRepoNonce((value) => value + 1);
+      void invalidate("docCodeRepos");
       toast(message, "success");
     },
     [toast],
@@ -667,7 +678,7 @@ export default function App() {
       if (!path) throw new Error(i18n.t("当前没有打开的文档"));
       try {
         await triggerCommentAgent(path, comment.id);
-        setCommentsNonce((value) => value + 1);
+        void invalidate("comments");
         toast(i18n.t("已通知后台 Agent 处理该评论"), "success");
       } catch (error) {
         toast(i18n.t("启动 Agent 失败：{{error}}", { error: errorMessage(error) }), "error");
@@ -684,7 +695,7 @@ export default function App() {
       if (!window.confirm(i18n.t("删除这条评论？"))) return;
       try {
         await deleteComment(path, comment.id);
-        setCommentsNonce((value) => value + 1);
+        void invalidate("comments");
         toast(i18n.t("评论已删除"), "success");
       } catch (error) {
         toast(i18n.t("删除评论失败：{{error}}", { error: errorMessage(error) }), "error");
@@ -1053,31 +1064,25 @@ export default function App() {
         scheduleTreeRefresh();
         break;
       case "comments":
-        if (message.path === currentPathRef.current) {
-          setCommentsNonce((value) => value + 1);
-        }
+        void invalidate("comments");
         break;
       case "discussions":
-        if (message.path === currentPathRef.current) {
-          setDiscussionNonce((value) => value + 1);
-        }
+        void invalidate("discussions");
         break;
       case "consensus":
-        if (message.path === currentPathRef.current) {
-          if (message.status) {
-            setConsensusActivity({
-              path: message.path,
-              status: message.status,
-              message: message.message,
-            });
-          }
-          if (
-            !message.status ||
-            message.status === "done" ||
-            message.status === "error"
-          ) {
-            setDiscussionNonce((value) => value + 1);
-          }
+        if (message.path === currentPathRef.current && message.status) {
+          setConsensusActivity({
+            path: message.path,
+            status: message.status,
+            message: message.message,
+          });
+        }
+        if (
+          !message.status ||
+          message.status === "done" ||
+          message.status === "error"
+        ) {
+          void invalidate("discussions");
         }
         break;
       case "agent":
@@ -1187,24 +1192,9 @@ export default function App() {
   }, [tree, currentPath, clearCurrent, toast]);
 
   useEffect(() => {
-    if (!currentPath) {
-      setComments([]);
-      return;
-    }
-    let alive = true;
-    fetchComments(currentPath)
-      .then((result) => {
-        if (alive && currentPathRef.current === currentPath) {
-          setComments(result.comments ?? []);
-        }
-      })
-      .catch(() => {
-        // Comments are optional; do not interrupt preview on failure.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [currentPath, doc.version, commentsNonce]);
+    // Anchors and orphan state depend on the document text.
+    if (currentPath) void invalidate("comments", { cancelRefetch: false });
+  }, [currentPath, doc.version]);
 
   useEffect(() => {
     setCodeRepoModalOpen(false);
@@ -1236,81 +1226,6 @@ export default function App() {
     const timer = window.setTimeout(() => setConsensusActivity(null), 6000);
     return () => window.clearTimeout(timer);
   }, [consensusActivity]);
-
-  useEffect(() => {
-    if (!currentPath) {
-      setCodeRepos([]);
-      return;
-    }
-    let alive = true;
-    fetchDocCodeRepos(currentPath)
-      .then((result) => {
-        if (alive && currentPathRef.current === currentPath) {
-          setCodeRepos(result.repos ?? []);
-        }
-      })
-      .catch(() => {
-        // Code repositories are optional metadata.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [currentPath, codeRepoNonce]);
-
-  useEffect(() => {
-    if (!currentPath) {
-      setDiscussions([]);
-      return;
-    }
-    let alive = true;
-    fetchDocDiscussions(currentPath)
-      .then((result) => {
-        if (alive && currentPathRef.current === currentPath) {
-          setDiscussions(result.discussions ?? []);
-        }
-      })
-      .catch(() => {
-        // Discussion context is optional metadata.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [currentPath, discussionNonce]);
-
-  useEffect(() => {
-    let alive = true;
-    fetchPromptTemplates()
-      .then((result) => {
-        if (alive) setPromptTemplates(result.templates ?? []);
-      })
-      .catch(() => {
-        // Prompt templates are optional; built-in defaults live on the server.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [promptNonce]);
-
-  useEffect(() => {
-    if (!currentPath) {
-      setAgentSessions([]);
-      setActiveAgentSessionId("");
-      return;
-    }
-    let alive = true;
-    fetchAgentSessions(currentPath)
-      .then((result) => {
-        if (!alive || currentPathRef.current !== currentPath) return;
-        setAgentSessions(result.sessions ?? []);
-        setActiveAgentSessionId(result.activeId ?? "");
-      })
-      .catch(() => {
-        // Agent sessions are optional metadata for the review surface.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [currentPath, sessionsNonce]);
 
   useEffect(() => {
     if (connection !== "open") return;
@@ -1843,21 +1758,19 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void handleSettingsSaved()}
-          onPromptsChanged={() => setPromptNonce((value) => value + 1)}
+          onPromptsChanged={() => void invalidate("promptTemplates")}
         />
       ) : null}
 
       {discussionModalOpen && currentPath ? (
         <DiscussionModal
           docPath={currentPath}
-          refreshKey={discussionNonce}
           activity={
             consensusActivity?.path === currentPath
               ? consensusActivity
               : undefined
           }
           onClose={() => setDiscussionModalOpen(false)}
-          onChanged={() => setDiscussionNonce((value) => value + 1)}
         />
       ) : null}
 
@@ -1869,7 +1782,7 @@ export default function App() {
           onClose={() => setCodeBrowserOpen(false)}
           onManageRepos={() => setCodeRepoModalOpen(true)}
           onBranchChanged={() => {
-            setCodeRepoNonce((value) => value + 1);
+            void invalidate("docCodeRepos");
             toast(t("已切换分支"), "success");
           }}
         />

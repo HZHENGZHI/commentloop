@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { localizeServerMessage } from "../i18n/serverMessages";
 import {
   deleteDiscussion,
   fetchAvailableDiscussionSessions,
-  fetchDocDiscussions,
   importDiscussionSession,
   refreshConsensus,
 } from "../api";
@@ -13,7 +13,6 @@ import type {
   ConsensusActivity,
   ConsensusPhase,
   DetectedAgent,
-  DiscussionListResponse,
   DiscussionSession,
 } from "../types";
 import {
@@ -26,13 +25,12 @@ import {
   IconTrash,
   IconX,
 } from "./Icons";
+import { discussionsQuery, invalidate, queryClient } from "../queries";
 
 interface DiscussionModalProps {
   docPath: string;
-  refreshKey?: number;
   activity?: ConsensusActivity;
   onClose: () => void;
-  onChanged: () => void;
 }
 
 const CONSENSUS_STEPS = ["整理讨论", "提炼共识", "保存结果"];
@@ -98,14 +96,13 @@ function formatDate(value: string, locale: string): string {
 
 export function DiscussionModal({
   docPath,
-  refreshKey = 0,
   activity,
   onClose,
-  onChanged,
 }: DiscussionModalProps) {
   const { t, i18n } = useTranslation();
-  const [data, setData] = useState<DiscussionListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery({ ...discussionsQuery(docPath), refetchOnMount: "always" });
+  const data = query.data;
+  const loading = query.isPending;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"refresh" | "import" | string>("");
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -115,23 +112,8 @@ export function DiscussionModal({
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
   const sessionsSeq = useRef(0);
-  const loadSeq = useRef(0);
 
-  const load = useCallback(async (showLoading = false) => {
-    const seq = ++loadSeq.current;
-    if (showLoading) setLoading(true);
-    setError("");
-    try {
-      const next = await fetchDocDiscussions(docPath);
-      if (seq !== loadSeq.current) return;
-      setData(next);
-    } catch (err) {
-      if (seq !== loadSeq.current) return;
-      setError(err instanceof Error ? err.message : t("读取讨论上下文失败"));
-    } finally {
-      if (showLoading && seq === loadSeq.current) setLoading(false);
-    }
-  }, [docPath]);
+  const load = () => invalidate("discussions");
 
   const loadSessions = useCallback(async () => {
     const seq = ++sessionsSeq.current;
@@ -151,17 +133,12 @@ export function DiscussionModal({
   }, [docPath]);
 
   useEffect(() => {
-    void load(true);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [load, onClose]);
-
-  useEffect(() => {
-    if (refreshKey > 0) void load();
-  }, [refreshKey, load]);
+  }, [onClose]);
 
   const openSessions = () => {
     const next = !sessionsOpen;
@@ -175,7 +152,6 @@ export function DiscussionModal({
     try {
       await refreshConsensus(docPath);
       await load();
-      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("刷新共识失败"));
     } finally {
@@ -190,7 +166,7 @@ export function DiscussionModal({
     try {
       const result = await importDiscussionSession(docPath, session.path);
       if (result.consensus) {
-        setData((current) =>
+        queryClient.setQueryData(discussionsQuery(docPath).queryKey, (current) =>
           current ? { ...current, consensus: result.consensus } : current,
         );
       }
@@ -200,7 +176,6 @@ export function DiscussionModal({
         ),
       );
       await load();
-      onChanged();
       if (result.consensusError) {
         setError(t("会话已导入，但共识提炼失败：{{error}}", { error: result.consensusError }));
       }
@@ -222,7 +197,6 @@ export function DiscussionModal({
     try {
       await deleteDiscussion(docPath, id);
       await load();
-      onChanged();
       void loadSessions();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("删除讨论失败"));
@@ -286,9 +260,11 @@ export function DiscussionModal({
           {t("导入之前与 Agent 的讨论，提炼成文档共识。之后评论修改会自动参考共识，你也可以在评论里额外选择具体讨论。")}
         </p>
 
-        {error ? (
+        {error || query.error ? (
           <p className="modal-error">
-            <IconAlert size={13} /> {error}
+            <IconAlert size={13} />{" "}
+            {error ||
+              (query.error instanceof Error ? query.error.message : t("读取讨论上下文失败"))}
           </p>
         ) : null}
 
