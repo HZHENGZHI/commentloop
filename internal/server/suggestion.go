@@ -81,6 +81,8 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	canonical := ro.ID + "/" + rel
+	s.suggestionMu.Lock()
+	defer s.suggestionMu.Unlock()
 	comment, ok := s.comments.get(canonical, req.ID)
 	if !ok {
 		writeError(w, http.StatusNotFound, errCommentNotFound)
@@ -121,6 +123,10 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 		at := end
 		if idx := strings.Index(content[at:], "\n\n"); idx >= 0 {
 			at += idx
+		} else if idx := strings.IndexByte(content[at:], '\n'); idx >= 0 {
+			// No later blank line: append after the quote's line instead of
+			// jumping to the end of the whole document.
+			at += idx + 1
 		} else {
 			at = len(content)
 		}
@@ -135,6 +141,13 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 	if _, err := s.persistDocument(ro, rel, canonical, next, "suggestion", true); err != nil {
 		writeErrorDetail(w, http.StatusInternalServerError, errFailedWriteFile, err.Error())
 		return
+	}
+	if comment.Suggestion.Mode == "replace" {
+		line := 1 + strings.Count(content[:start], "\n")
+		if err := s.comments.reanchorAfterSuggestion(canonical, req.ID, text, start, start+len(text), line); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
 	}
 	updated, err := s.comments.setSuggestionStatus(canonical, req.ID, "accepted")
 	if err != nil {
