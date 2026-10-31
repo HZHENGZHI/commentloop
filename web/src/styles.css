@@ -6661,24 +6661,24 @@ body.mermaid-modal-open {
 /* On wide screens the comments rail takes real space beside the document
    instead of covering the text. */
 @media (min-width: 1280px) {
-  .preview-pane:has(.comments-panel) {
+  .workspace:not(.mode-split) .preview-pane:has(.comments-panel) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
     grid-template-rows: var(--pane-head-h) minmax(0, 1fr);
   }
 
-  .preview-pane:has(.comments-panel) > .pane-head {
+  .workspace:not(.mode-split) .preview-pane:has(.comments-panel) > .pane-head {
     grid-column: 1 / -1;
     grid-row: 1;
   }
 
-  .preview-pane:has(.comments-panel) > .preview-scroll {
+  .workspace:not(.mode-split) .preview-pane:has(.comments-panel) > .preview-scroll {
     grid-column: 1;
     grid-row: 2;
     min-height: 0;
   }
 
-  .preview-pane:has(.comments-panel) > .comments-panel {
+  .workspace:not(.mode-split) .preview-pane:has(.comments-panel) > .comments-panel {
     position: static;
     grid-column: 2;
     grid-row: 2;
