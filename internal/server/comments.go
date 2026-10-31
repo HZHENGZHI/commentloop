@@ -142,6 +142,14 @@ func (s *commentStore) setSuggestion(path, id, quote, text, mode string) (Commen
 	return comment, nil
 }
 
+func (s *commentStore) reanchorAfterSuggestion(path, id, quote string, start, end, line int) error {
+	return s.db.Model(&commentRow{}).Where("id = ? AND path = ?", id, path).Updates(map[string]any{
+		"quote": quote, "anchor": quote, "start_offset": start, "end_offset": end,
+		"line": line, "prefix": "", "suffix": "", "orphaned": 0,
+		"updated_at": formatTime(time.Now()),
+	}).Error
+}
+
 func (s *commentStore) setSuggestionStatus(path, id, status string) (Comment, error) {
 	if status != "accepted" && status != "rejected" {
 		return Comment{}, fmt.Errorf("无效的建议状态")

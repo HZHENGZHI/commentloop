@@ -56,22 +56,23 @@ type Options struct {
 
 // Server is the commentloop HTTP application.
 type Server struct {
-	primaryPath string
-	web         fs.FS
-	version     string
-	allowAny    bool
-	previewOnly bool
-	debug       bool
-	webDir      string
-	renderer    *render.Renderer
-	hub         *Hub
-	upgrader    websocket.Upgrader
-	engine      *gin.Engine
-	mu          sync.Mutex
-	diskHash    map[string]string
-	closeOnce   sync.Once
-	assetDone   chan struct{}
-	assetWG     sync.WaitGroup
+	primaryPath  string
+	web          fs.FS
+	version      string
+	allowAny     bool
+	previewOnly  bool
+	debug        bool
+	webDir       string
+	renderer     *render.Renderer
+	hub          *Hub
+	upgrader     websocket.Upgrader
+	engine       *gin.Engine
+	mu           sync.Mutex
+	suggestionMu sync.Mutex
+	diskHash     map[string]string
+	closeOnce    sync.Once
+	assetDone    chan struct{}
+	assetWG      sync.WaitGroup
 
 	remoteSessions *remoteSessionStore
 	db             *gorm.DB

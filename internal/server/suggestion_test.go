@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -103,5 +107,93 @@ func TestSuggestionRejectsOrphanedQuote(t *testing.T) {
 	})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("orphaned accept = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestConcurrentSuggestionAccepts(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/hello.md"
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath: docPath, Capabilities: agentCapabilities{ReplyComments: true},
+	})
+	headers := map[string]string{"X-Commentloop-Agent-Token": "agent-token"}
+	ids := make([]string, 0, 2)
+	for _, tc := range []struct{ quote, text string }{
+		{"Hello", "Hi"},
+		{"done", "finished"},
+	} {
+		rec := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/suggestion", proposeChangeRequest{
+			Path: docPath, Quote: tc.quote, Text: tc.text, Mode: "replace", Body: "Edit.",
+		}, headers)
+		if rec.Code != 200 {
+			t.Fatalf("propose: %d %s", rec.Code, rec.Body.String())
+		}
+		var comment Comment
+		if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, comment.ID)
+	}
+
+	codes := make([]int, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Add(1)
+		go func(i int, id string) {
+			defer wg.Done()
+			data, _ := json.Marshal(resolveSuggestionRequest{Path: docPath, ID: id, Accept: true})
+			req := httptest.NewRequest(http.MethodPost, "http://example.com/api/comments/suggestion", bytes.NewReader(data))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			codes[i] = rec.Code
+		}(i, id)
+	}
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusOK {
+			t.Fatalf("accept %d = %d", i, code)
+		}
+	}
+	snapshot, err := app.snapshot(docPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(snapshot.content, "Hi") || !strings.Contains(snapshot.content, "finished") {
+		t.Fatalf("concurrent accepts lost an edit: %q", snapshot.content)
+	}
+}
+
+func TestAppendSuggestionUsesNearbyLine(t *testing.T) {
+	app, root := newTestApp(t)
+	mustWrite(t, filepath.Join(root, "append.md"), "# Heading\nbody\n")
+	docPath := canonical(app, "append.md")
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath: docPath, Capabilities: agentCapabilities{ReplyComments: true},
+	})
+	headers := map[string]string{"X-Commentloop-Agent-Token": "agent-token"}
+	rec := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/suggestion", proposeChangeRequest{
+		Path: docPath, Quote: "Heading", Text: "extra", Mode: "append", Body: "Add.",
+	}, headers)
+	if rec.Code != 200 {
+		t.Fatalf("propose: %d %s", rec.Code, rec.Body.String())
+	}
+	var comment Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+		t.Fatal(err)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/comments/suggestion", resolveSuggestionRequest{
+		Path: docPath, ID: comment.ID, Accept: true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
+	}
+	snapshot, err := app.snapshot(docPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Index(snapshot.content, "extra") < 0 || strings.Index(snapshot.content, "extra") > strings.Index(snapshot.content, "body") {
+		t.Fatalf("append landed at document end: %q", snapshot.content)
 	}
 }

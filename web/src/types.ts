@@ -178,7 +178,7 @@ export type WsServerMessage =
       content: string;
       html: string;
       revision: string;
-      origin: "save" | "external" | "remote" | "init" | "rollback";
+      origin: "save" | "external" | "remote" | "init" | "rollback" | "suggestion";
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
