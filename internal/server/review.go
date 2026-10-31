@@ -127,10 +127,22 @@ func (s *reviewStore) setSummary(path, summary string) (docReview, error) {
 // stops being current as soon as the reviewer asks for more work.
 func (s *reviewStore) noteCommentAdded(path string) (docReview, bool, error) {
 	review, ok := s.get(path)
-	if !ok || review.Status != reviewStatusApproved {
+	if !ok {
 		return docReview{}, false, nil
 	}
-	updated, err := s.set(path, reviewStatusChangesRequested)
+	next := ""
+	switch review.Status {
+	case reviewStatusApproved:
+		next = reviewStatusChangesRequested
+	case reviewStatusDraft:
+		// A summary written before any comment materializes an explicit draft
+		// row. Once feedback arrives the document is in review, matching the
+		// inference used when no row exists.
+		next = reviewStatusInReview
+	default:
+		return docReview{}, false, nil
+	}
+	updated, err := s.set(path, next)
 	return updated, err == nil, err
 }
 
