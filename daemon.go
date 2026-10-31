@@ -87,9 +87,13 @@ func startDaemon(args []string) error {
 				fmt.Printf("  Stop      commentloop stop\n")
 				fmt.Printf("  Status    commentloop status\n")
 				if !hasFlag(args, "no-open") {
-					if err := browser.OpenURL(info.URL); err != nil {
-						slog.Warn("could not open the browser", "err", err)
-					}
+					// The launcher can stay alive for as long as the browser
+					// does; do not block the CLI on it.
+					go func() {
+						if err := browser.OpenURL(info.URL); err != nil {
+							slog.Warn("could not open the browser", "err", err)
+						}
+					}()
 				}
 				return nil
 			}
