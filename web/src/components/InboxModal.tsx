@@ -37,9 +37,13 @@ export function InboxModal({
   onOpen,
 }: InboxModalProps) {
   const { t, i18n } = useTranslation();
-  const [tab, setTab] = useState<InboxTab>(() =>
-    docs.some((doc) => doc.awaiting > 0) ? "awaiting" : "all",
-  );
+  // No explicit choice yet: follow the data as it arrives (the inbox can open
+  // before /api/inbox resolves). Once the user picks a tab, keep it.
+  const [tabChoice, setTabChoice] = useState<InboxTab | null>(null);
+  const autoTab: InboxTab = docs.some((doc) => doc.awaiting > 0)
+    ? "awaiting"
+    : "all";
+  const tab = tabChoice ?? autoTab;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -125,7 +129,7 @@ export function InboxModal({
               role="tab"
               aria-selected={tab === key}
               className={`inbox-tab${tab === key ? " active" : ""}`}
-              onClick={() => setTab(key)}
+              onClick={() => setTabChoice(key)}
             >
               {t(label)}
               <span className="inbox-tab-count">{count}</span>
