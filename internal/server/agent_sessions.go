@@ -152,16 +152,8 @@ func (s *agentSessionStore) rename(id, title string) error {
 	return nil
 }
 
-func (s *Server) resolveDocCanonical(path string) (string, error) {
-	ro, rel, err := s.resolveDocRef(path)
-	if err != nil {
-		return "", err
-	}
-	return ro.ID + "/" + rel, nil
-}
-
 func (s *Server) handleGetAgentSessions(w http.ResponseWriter, r *http.Request) {
-	canonical, err := s.resolveDocCanonical(r.URL.Query().Get("path"))
+	canonical, err := s.canonicalDoc(r.URL.Query().Get("path"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
@@ -184,7 +176,7 @@ func (s *Server) handleCreateAgentSession(w http.ResponseWriter, r *http.Request
 	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
-	canonical, err := s.resolveDocCanonical(req.Path)
+	canonical, err := s.canonicalDoc(req.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
@@ -203,7 +195,7 @@ func (s *Server) handleSetActiveAgentSession(w http.ResponseWriter, r *http.Requ
 	if !bindJSON(w, r, 16*1024, &req) {
 		return
 	}
-	canonical, err := s.resolveDocCanonical(req.Path)
+	canonical, err := s.canonicalDoc(req.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return

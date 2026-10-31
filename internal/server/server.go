@@ -77,6 +77,7 @@ type Server struct {
 	db             *gorm.DB
 	persistedRoots []stateRoot
 	comments       *commentStore
+	reviews        *reviewStore
 	prompts        *promptTemplateStore
 	discussions    *discussionStore
 	discussionSync *discussionSyncService
@@ -139,6 +140,7 @@ func New(opts Options) (*Server, error) {
 	s := &Server{
 		db:                  db,
 		comments:            newCommentStore(db),
+		reviews:             newReviewStore(db),
 		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
 		agentCaps:           newAgentCapabilityStore(),
@@ -188,13 +190,13 @@ func New(opts Options) (*Server, error) {
 	return s, nil
 }
 
-// Close stops background work.
 // SetAgentBaseURL tells automatically spawned agents which commentloop instance to
 // connect to through COMMENTLOOP_URL, even when multiple instances are running.
 func (s *Server) SetAgentBaseURL(baseURL string) {
 	s.agentBaseURL = strings.TrimSpace(baseURL)
 }
 
+// Close stops background work.
 func (s *Server) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
@@ -374,6 +376,16 @@ func (s *Server) resolveDocRef(canonical string) (*root, string, error) {
 	return ro, rel, nil
 }
 
+// canonicalDoc validates a document path and returns its canonical
+// "<rootID>/<relative-path>" form.
+func (s *Server) canonicalDoc(path string) (string, error) {
+	ro, rel, err := s.resolveDocRef(path)
+	if err != nil {
+		return "", err
+	}
+	return ro.ID + "/" + rel, nil
+}
+
 func localFile(ro *root, rel string) (string, error) {
 	abs := filepath.Join(ro.Path, filepath.FromSlash(rel))
 	if !within(ro.Path, abs) {
@@ -430,6 +442,7 @@ func (s *Server) onFSChange(ro *root, ev watcher.Event) {
 		Type: "doc", Path: canonical, Content: string(data),
 		HTML: res.HTML, Revision: res.Revision, Origin: "external",
 	})
+	s.noteReviewDocChanged(canonical)
 	s.hub.broadcast(outMessage{Type: "tree"})
 }
 

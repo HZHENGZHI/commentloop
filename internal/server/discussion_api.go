@@ -6,14 +6,6 @@ import (
 	"strings"
 )
 
-func (s *Server) canonicalDoc(path string) (string, error) {
-	ro, rel, err := s.resolveDocRef(path)
-	if err != nil {
-		return "", err
-	}
-	return ro.ID + "/" + rel, nil
-}
-
 func (s *Server) handleDocDiscussions(w http.ResponseWriter, r *http.Request) {
 	canonical, err := s.canonicalDoc(r.URL.Query().Get("path"))
 	if err != nil {

@@ -43,16 +43,6 @@ func (s *agentCapabilityStore) lookupToken(token string) (agentGrant, bool) {
 	return grant, ok
 }
 
-func (s *agentCapabilityStore) set(session string, capabilities agentCapabilities) {
-	session = strings.TrimSpace(session)
-	if session == "" {
-		return
-	}
-	s.mu.Lock()
-	s.byTask[session] = agentGrant{Capabilities: capabilities}
-	s.mu.Unlock()
-}
-
 func (s *agentCapabilityStore) clear(session string) {
 	session = strings.TrimSpace(session)
 	if session == "" {
@@ -61,17 +51,6 @@ func (s *agentCapabilityStore) clear(session string) {
 	s.mu.Lock()
 	delete(s.byTask, session)
 	s.mu.Unlock()
-}
-
-func (s *agentCapabilityStore) lookup(session string) (agentCapabilities, bool) {
-	session = strings.TrimSpace(session)
-	if session == "" {
-		return agentCapabilities{WriteDocs: true, ReadCode: true, ReplyComments: true}, false
-	}
-	s.mu.RLock()
-	grant, known := s.byTask[session]
-	s.mu.RUnlock()
-	return grant.Capabilities, known
 }
 
 // rejectAgentWrite blocks document mutations during an analysis-only task.

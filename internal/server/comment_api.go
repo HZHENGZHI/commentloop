@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/hzhengzhi/commentloop/internal/anchor"
 )
 
 func (s *Server) commentDoc(path string) (canonical, content string, err error) {
@@ -114,6 +116,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
+	s.noteReviewCommentAdded(canonical)
 	_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	writeJSON(w, http.StatusOK, comment)
 }
@@ -180,6 +183,7 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	if author == "user" {
+		s.noteReviewCommentAdded(canonical)
 		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)
@@ -392,7 +396,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				if ok {
-					if start, end, found := sectionRange(beforeVersion.Content,
+					if start, end, found := anchor.SectionRange(beforeVersion.Content,
 						targetMessage.Before, item.Comment.Quote, item.Comment.Line); found {
 						targetSection = beforeVersion.Content[start:end]
 					}
@@ -403,8 +407,10 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if haveAfterVersion {
-				if section, found := sectionFromVersion(
-					version.Content, targetMessage, item.Comment.Quote, item.Comment.Line,
+				if section, found := anchor.SectionFromVersion(
+					version.Content, targetMessage.After,
+					targetMessage.SectionStart, targetMessage.SectionEnd,
+					item.Comment.Quote, item.Comment.Line,
 				); found {
 					targetSection = section
 				}
@@ -448,7 +454,7 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	}
 	newContent := string(current)
 	for _, item := range replacements {
-		updated, ok := replaceSection(newContent, item.current, item.target, item.line)
+		updated, ok := anchor.ReplaceSection(newContent, item.current, item.target, item.line)
 		if !ok {
 			writeError(w, http.StatusConflict, errParagraphRollBackHasConflicting)
 			return
@@ -501,45 +507,6 @@ func (s *Server) handleRollbackComment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rollbackCommentResponse{
 		Round: round, Comment: *updated, Doc: doc,
 	})
-}
-
-func commentExcerpt(content, quote string, line int) string {
-	if content == "" {
-		return ""
-	}
-	lineNo := line
-	if index := strings.Index(content, quote); quote != "" && index >= 0 {
-		lineNo = 1 + strings.Count(content[:index], "\n")
-	}
-	lines := strings.Split(content, "\n")
-	if lineNo < 1 {
-		lineNo = 1
-	}
-	if lineNo > len(lines) {
-		lineNo = len(lines)
-	}
-	index := lineNo - 1
-	if strings.TrimSpace(lines[index]) == "" {
-		for i := index - 1; i >= 0; i-- {
-			if strings.TrimSpace(lines[i]) != "" {
-				index = i
-				break
-			}
-		}
-	}
-	start := index
-	for start > 0 && strings.TrimSpace(lines[start-1]) != "" {
-		start--
-	}
-	end := index
-	for end < len(lines)-1 && strings.TrimSpace(lines[end+1]) != "" {
-		end++
-	}
-	text := strings.TrimSpace(strings.Join(lines[start:end+1], "\n"))
-	if runes := []rune(text); len(runes) > 600 {
-		text = string(runes[:600])
-	}
-	return text
 }
 
 func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {

@@ -251,15 +251,6 @@ func stripSessionArgs(args []string) []string {
 	return out
 }
 
-func hasArg(args []string, name string) bool {
-	for _, arg := range args {
-		if arg == name || strings.HasPrefix(arg, name+"=") {
-			return true
-		}
-	}
-	return false
-}
-
 func progressForTool(record piRecord) string {
 	name := strings.ToLower(record.ToolName)
 	if index := strings.LastIndex(name, "__"); index >= 0 {
