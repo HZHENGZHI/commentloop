@@ -245,8 +245,13 @@ export function refreshConsensus(path: string): Promise<Consensus> {
   });
 }
 
-export function fetchPromptTemplates(): Promise<{ templates: PromptTemplate[] }> {
-  return request<{ templates: PromptTemplate[] }>("/api/prompt-templates");
+export function fetchPromptTemplates(
+  language?: string,
+): Promise<{ templates: PromptTemplate[] }> {
+  return request<{ templates: PromptTemplate[] }>(
+    "/api/prompt-templates",
+    language ? { headers: { "Accept-Language": language } } : undefined,
+  );
 }
 
 export function createPromptTemplate(

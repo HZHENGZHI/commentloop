@@ -67,7 +67,7 @@ export const discussionsQuery = (path: string) =>
 export const promptTemplatesQuery = (language: string) =>
   queryOptions({
     queryKey: ["promptTemplates", language],
-    queryFn: fetchPromptTemplates,
+    queryFn: () => fetchPromptTemplates(language),
   });
 
 export const agentSessionsQuery = (path: string) =>
