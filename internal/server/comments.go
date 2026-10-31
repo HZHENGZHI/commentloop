@@ -108,6 +108,25 @@ func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, sever
 	return &comment, nil
 }
 
+func (s *commentStore) setReaction(path, id, reaction string) (Comment, error) {
+	if reaction != "" && reaction != "👍" && reaction != "✅" && reaction != "👀" {
+		return Comment{}, fmt.Errorf("无效的表情回复")
+	}
+	if _, ok := s.get(path, id); !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	if err := s.db.Model(&commentRow{}).Where("id = ? AND path = ?", id, path).Updates(map[string]any{
+		"reaction": reaction, "updated_at": formatTime(time.Now()),
+	}).Error; err != nil {
+		return Comment{}, err
+	}
+	comment, ok := s.get(path, id)
+	if !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	return comment, nil
+}
+
 func (s *commentStore) setSuggestion(path, id, quote, text, mode string) (Comment, error) {
 	quote = strings.TrimSpace(quote)
 	text = strings.TrimSpace(text)
@@ -287,7 +306,7 @@ func (r commentRow) comment() Comment {
 		Line: r.Line, Start: r.StartOffset, End: r.EndOffset,
 		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
 		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
-		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity,
+		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity, Reaction: r.Reaction,
 	}
 	if r.SuggestionQuote != "" {
 		comment.Suggestion = &CommentSuggestion{

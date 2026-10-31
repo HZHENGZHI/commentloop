@@ -94,6 +94,7 @@ func (s *Server) routes() *gin.Engine {
 	api.POST("/doc/agent-sessions/active", s.api(s.userOnly(s.handleSetActiveAgentSession)))
 	api.PATCH("/doc/agent-sessions", s.api(s.userOnly(s.handleRenameAgentSession)))
 	api.POST("/comments/suggestion", s.api(s.userOnly(s.handleResolveSuggestion)))
+	api.POST("/comments/reaction", s.api(s.userOnly(s.handleReactionComment)))
 	api.DELETE("/comments", s.api(s.userOnly(s.handleDeleteComment)))
 	api.POST("/remote/session", s.api(s.userOnly(s.handleCreateRemoteSession)))
 	api.GET("/remote/browse", s.api(s.userOnly(s.handleBrowseRemote)))

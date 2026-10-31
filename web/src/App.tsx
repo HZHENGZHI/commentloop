@@ -23,6 +23,7 @@ import {
   rollbackComment,
   resolveComment,
   triggerCommentAgent,
+  reactComment,
   requestDocReview,
   resolveSuggestion,
   saveDoc,
@@ -121,6 +122,18 @@ const LAST_FILE_KEY = "commentloop:last";
 const SIDEBAR_KEY = "commentloop:sidebar";
 const VIEW_KEY = "commentloop:view";
 const SPLIT_KEY = "commentloop:split";
+const SEEN_KEY = "commentloop:seen";
+
+function loadSeen(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 const EMPTY_STATS: DocStats = { words: 0, chars: 0, lines: 1 };
 const NO_COMMENTS: Comment[] = [];
@@ -204,6 +217,10 @@ export default function App() {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [reviewRequestPath, setReviewRequestPath] = useState<string | null>(null);
+  const [seenPaths, setSeenPaths] = useState<Record<string, number>>(loadSeen);
+  const [notificationPermission, setNotificationPermission] = useState<string>(() =>
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
   const [commentQuote, setCommentQuote] = useState<string | null>(null);
   const [codeRepoModalOpen, setCodeRepoModalOpen] = useState(false);
   const [codeBrowserOpen, setCodeBrowserOpen] = useState(false);
@@ -228,6 +245,17 @@ export default function App() {
     [inboxDocs],
   );
   const inboxAttention = inboxDocs.filter((doc) => doc.awaiting > 0).length;
+  const unreadPaths = useMemo(() => {
+    const out = new Set<string>();
+    for (const doc of inboxDocs) {
+      if (doc.path === currentPath) continue;
+      const seen = seenPaths[doc.path] ?? 0;
+      if (doc.comments > 0 && Date.parse(doc.lastActivity) > seen) {
+        out.add(doc.path);
+      }
+    }
+    return out;
+  }, [inboxDocs, seenPaths, currentPath]);
   const comments = useQuery(commentsQuery(docKey)).data?.comments ?? NO_COMMENTS;
   const codeRepos = useQuery(docCodeReposQuery(docKey)).data?.repos ?? NO_CODE_REPOS;
   const discussionsResult = useQuery(discussionsQuery(docKey));
@@ -626,6 +654,54 @@ export default function App() {
       );
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (!currentPath) return;
+    setSeenPaths((prev) => {
+      const next = { ...prev, [currentPath]: Date.now() };
+      try {
+        localStorage.setItem(SEEN_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage restrictions.
+      }
+      return next;
+    });
+  }, [currentPath, comments]);
+
+  const handleEnableNotifications = useCallback(async () => {
+    if (typeof Notification === "undefined") return;
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        toast(i18n.t("桌面通知已开启"), "success");
+      } else if (permission === "denied") {
+        toast(i18n.t("浏览器已阻止桌面通知"), "warn");
+      }
+    } catch (error) {
+      toast(
+        i18n.t("开启通知失败：{{error}}", { error: errorMessage(error) }),
+        "error",
+      );
+    }
+  }, [toast]);
+
+  const handleReaction = useCallback(
+    async (comment: Comment, reaction: string) => {
+      const path = currentPathRef.current;
+      if (!path) return;
+      try {
+        await reactComment(path, comment.id, reaction);
+        void invalidate("comments");
+      } catch (error) {
+        toast(
+          i18n.t("更新表情失败：{{error}}", { error: errorMessage(error) }),
+          "error",
+        );
+      }
+    },
+    [toast],
+  );
 
   const handleResolveSuggestion = useCallback(
     async (comment: Comment, accept: boolean) => {
@@ -1242,6 +1318,23 @@ export default function App() {
                 : current,
             );
           }
+          if (
+            status === "done" &&
+            notificationPermission === "granted" &&
+            document.hidden
+          ) {
+            try {
+              new Notification("Commentloop", {
+                body:
+                  localizeServerMessage(
+                    message.message || "",
+                    "done",
+                  ) || t("Agent 已完成任务"),
+              });
+            } catch {
+              // Notifications can be unavailable despite permission.
+            }
+          }
           if (status === "queued" || status === "done" || status === "error") {
             toast(
               localizeServerMessage(message.message || "", status as "queued" | "working" | "done" | "error") || i18n.t("后台 Agent 状态更新"),
@@ -1643,6 +1736,7 @@ export default function App() {
           onAddRoot={openAddRoot}
           onRemoveRoot={handleSidebarRemoveRoot}
           reviewByPath={inboxByPath}
+          unreadPaths={unreadPaths}
         />
 
         <main className="main">
@@ -1806,6 +1900,9 @@ export default function App() {
                     onSuggestion={(comment, accept) =>
                       void handleResolveSuggestion(comment, accept)
                     }
+                    onReaction={(comment, reaction) =>
+                      void handleReaction(comment, reaction)
+                    }
                     onClose={() => setCommentsOpen(false)}
                     onJump={handleJumpToComment}
                     onResolve={(comment, resolved) =>
@@ -1924,6 +2021,8 @@ export default function App() {
           docs={inboxDocs}
           counts={inboxCounts}
           error={inboxError}
+          notificationsEnabled={notificationPermission === "granted"}
+          onEnableNotifications={() => void handleEnableNotifications()}
           onClose={() => setInboxOpen(false)}
           onOpen={(path) => {
             setInboxOpen(false);

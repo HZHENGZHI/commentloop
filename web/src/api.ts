@@ -110,6 +110,17 @@ export function setDocReview(
   });
 }
 
+export function reactComment(
+  path: string,
+  id: string,
+  reaction: string,
+): Promise<Comment> {
+  return request<Comment>("/api/comments/reaction", {
+    method: "POST",
+    body: JSON.stringify({ path, id, reaction }),
+  });
+}
+
 export function resolveSuggestion(
   path: string,
   id: string,

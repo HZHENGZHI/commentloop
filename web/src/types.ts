@@ -365,6 +365,7 @@ export interface Comment {
   discussionIds?: string[];
   promptTemplateId?: string;
   severity?: ReviewSeverity;
+  reaction?: string;
   suggestion?: CommentSuggestion;
   messages: CommentMessage[];
 }
