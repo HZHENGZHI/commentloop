@@ -132,7 +132,7 @@ func LocateQuote(content, quote, prefix, suffix string, nearLine int) (start, en
 			break
 		}
 		all = append(all, offset+index)
-		offset += index + maxInt(1, len(quote))
+		offset += index + max(1, len(quote))
 		if len(all) > 200 {
 			break
 		}
@@ -169,13 +169,6 @@ func LocateQuote(content, quote, prefix, suffix string, nearLine int) (start, en
 		}
 	}
 	return best, best + len(quote), 1 + strings.Count(content[:best], "\n"), false
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // SectionRange returns the byte range of the blank-line-delimited Markdown

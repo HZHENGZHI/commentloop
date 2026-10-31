@@ -377,10 +377,3 @@ func Search(root, query string, limit int) (SearchResult, error) {
 	})
 	return out, err
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
