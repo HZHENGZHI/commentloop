@@ -107,6 +107,21 @@ func (s *reviewStore) set(path, status string) (docReview, error) {
 // clear removes the explicit review status of one document. It is used when
 // the document itself is deleted, so a later document created at the same
 // path does not inherit a stale approval.
+// migrateLegacySummaryDrafts clears the explicit draft status that the
+// pre-fix summary writer materialized on summary-only rows. A status set by
+// the user after the summary has a different updated_at and is preserved.
+func migrateLegacySummaryDrafts(db *gorm.DB) error {
+	if migrated, _, _ := metaValue(db, "review_summary_draft_v1"); migrated == "1" {
+		return nil
+	}
+	if err := db.Model(&docReviewRow{}).
+		Where("status = ? AND summary != '' AND updated_at = summary_updated_at", reviewStatusDraft).
+		Update("status", "").Error; err != nil {
+		return err
+	}
+	return setMeta(db, "review_summary_draft_v1", "1")
+}
+
 func (s *reviewStore) clear(path string) error {
 	return s.db.Where("doc_path = ?", path).Delete(&docReviewRow{}).Error
 }

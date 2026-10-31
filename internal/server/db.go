@@ -60,6 +60,10 @@ func openStateDB(stateDir string) (*gorm.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := migrateLegacySummaryDrafts(gdb); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if stateDir != "" {
 		if err := migrateLegacyRoots(gdb, stateDir); err != nil {
 			slog.Error("failed to migrate roots.json", "err", err)

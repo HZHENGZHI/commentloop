@@ -10,6 +10,48 @@ import (
 	"time"
 )
 
+func TestMigrateLegacySummaryDrafts(t *testing.T) {
+	db, err := openStateDB("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeStateDB(db)
+	if err := db.Where("key = ?", "review_summary_draft_v1").Delete(&metaRow{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	now := formatTime(time.Now())
+	later := formatTime(time.Now().Add(time.Second))
+	if err := db.Create(&docReviewRow{
+		DocPath: "legacy.md", Status: reviewStatusDraft, Summary: "old",
+		UpdatedAt: now, SummaryUpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&docReviewRow{
+		DocPath: "explicit.md", Status: reviewStatusDraft, Summary: "old",
+		UpdatedAt: later, SummaryUpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateLegacySummaryDrafts(db); err != nil {
+		t.Fatal(err)
+	}
+	var legacy docReviewRow
+	if err := db.Take(&legacy, "doc_path = ?", "legacy.md").Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Status != "" {
+		t.Fatalf("legacy summary draft kept status %q", legacy.Status)
+	}
+	var explicit docReviewRow
+	if err := db.Take(&explicit, "doc_path = ?", "explicit.md").Error; err != nil {
+		t.Fatal(err)
+	}
+	if explicit.Status != reviewStatusDraft {
+		t.Fatalf("explicit draft was changed to %q", explicit.Status)
+	}
+}
+
 func TestReviewStatusTracksReviewLoop(t *testing.T) {
 	db, err := openStateDB("")
 	if err != nil {
