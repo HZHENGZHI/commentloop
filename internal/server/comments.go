@@ -7,24 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/hzhengzhi/commentloop/internal/anchor"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 const maxDocVersionsPerPath = 30
-
-var (
-	imageRE      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
-	linkRE       = regexp.MustCompile(`\[([^\]]+)\]\([^)]*\)`)
-	htmlTagRE    = regexp.MustCompile(`<[^>]+>`)
-	listMarkerRE = regexp.MustCompile(`^(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s*)?`)
-)
 
 func newCommentStore(db *gorm.DB) *commentStore {
 	return &commentStore{db: db}
@@ -76,7 +68,7 @@ func (s *commentStore) create(path, quote, prefix, suffix, body, content string,
 	if len(quote) > 4000 || len(body) > 8000 || len(prefix) > 500 || len(suffix) > 500 {
 		return nil, fmt.Errorf("评论内容过长")
 	}
-	start, end, line, orphaned := locateQuote(content, quote, prefix, suffix, 0)
+	start, end, line, orphaned := anchor.LocateQuote(content, quote, prefix, suffix, 0)
 	now := time.Now()
 	comment := Comment{
 		ID: commentID(), Path: path, Quote: quote, Prefix: prefix, Suffix: suffix,
@@ -120,7 +112,7 @@ func (s *commentStore) list(path, content string) []Comment {
 			candidates := commentAnchorCandidates(comments[i])
 			found := false
 			for _, candidate := range candidates {
-				start, end, line, orphaned := locateQuote(content, candidate, comments[i].Prefix, comments[i].Suffix, comments[i].Line)
+				start, end, line, orphaned := anchor.LocateQuote(content, candidate, comments[i].Prefix, comments[i].Suffix, comments[i].Line)
 				if !orphaned {
 					comments[i].Anchor = candidate
 					comments[i].Start, comments[i].End, comments[i].Line, comments[i].Orphaned = start, end, line, false
@@ -132,7 +124,7 @@ func (s *commentStore) list(path, content string) []Comment {
 				found = s.reanchorFromVersion(&comments[i], content, versions)
 			}
 			if !found {
-				if line, ok := locateCompact(content, comments[i].Quote, comments[i].Line); ok {
+				if line, ok := anchor.LocateCompact(content, comments[i].Quote, comments[i].Line); ok {
 					comments[i].Anchor = comments[i].Quote
 					comments[i].Start, comments[i].End = 0, 0
 					comments[i].Line = line
@@ -288,9 +280,9 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 	if author == "system" {
 		resolved = false
 	}
-	anchor := ""
+	anchorText := ""
 	if strings.TrimSpace(after) != "" {
-		anchor = plainTextAnchor(after)
+		anchorText = anchor.PlainText(after)
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		versionID := ""
@@ -302,7 +294,7 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 			if err != nil {
 				return err
 			}
-			if start, end, ok := sectionRange(snapshot, after, comment.Quote, comment.Line); ok {
+			if start, end, ok := anchor.SectionRange(snapshot, after, comment.Quote, comment.Line); ok {
 				sectionStart, sectionEnd = start, end
 			}
 		}
@@ -320,8 +312,8 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 			return err
 		}
 		changes := map[string]any{"updated_at": formatTime(now), "resolved": boolInt(resolved)}
-		if anchor != "" {
-			changes["anchor"] = anchor
+		if anchorText != "" {
+			changes["anchor"] = anchorText
 		}
 		return tx.Model(&commentRow{}).Where("id = ?", id).Updates(changes).Error
 	})
@@ -550,64 +542,6 @@ func boolInt(value bool) int {
 	return 0
 }
 
-// locateCompact falls back to letters/digits only. It handles rendered
-// selections such as "Hello world" matching "**Hello** world" without needing
-// a raw source position.
-func locateCompact(content, quote string, nearLine int) (int, bool) {
-	needle := make([]rune, 0, len(quote))
-	for _, r := range quote {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			needle = append(needle, unicode.ToLower(r))
-		}
-	}
-	if len(needle) < 2 {
-		return 0, false
-	}
-	haystack := make([]rune, 0, len(content))
-	lineOf := make([]int, 0, len(content))
-	line := 1
-	for _, r := range content {
-		if r == '\n' {
-			line++
-			continue
-		}
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			haystack = append(haystack, unicode.ToLower(r))
-			lineOf = append(lineOf, line)
-		}
-	}
-	bestLine := 0
-	bestDistance := int(^uint(0) >> 1)
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		matches := true
-		for j := range needle {
-			if haystack[i+j] != needle[j] {
-				matches = false
-				break
-			}
-		}
-		if !matches {
-			continue
-		}
-		candidateLine := lineOf[i]
-		if nearLine <= 0 {
-			return candidateLine, true
-		}
-		distance := candidateLine - nearLine
-		if distance < 0 {
-			distance = -distance
-		}
-		if distance < bestDistance {
-			bestDistance = distance
-			bestLine = candidateLine
-		}
-	}
-	if bestLine == 0 {
-		return 0, false
-	}
-	return bestLine, true
-}
-
 // reanchorFromVersion is a fallback for comments whose stored quote/anchor no
 // longer matches the raw Markdown literally (formatting changed, a previous
 // partial rollback, or an agent rewrote the sentence). It looks for the raw
@@ -626,11 +560,14 @@ func (s *commentStore) reanchorFromVersion(comment *Comment, content string, ver
 			}
 			versions[version.ID] = version
 		}
-		section, ok := sectionFromVersion(version.Content, message, comment.Quote, comment.Line)
+		section, ok := anchor.SectionFromVersion(
+			version.Content, message.After, message.SectionStart, message.SectionEnd,
+			comment.Quote, comment.Line,
+		)
 		if !ok {
 			continue
 		}
-		start, end, line, orphaned := locateQuote(content, section, "", "", comment.Line)
+		start, end, line, orphaned := anchor.LocateQuote(content, section, "", "", comment.Line)
 		if orphaned {
 			continue
 		}
@@ -661,218 +598,10 @@ func commentAnchorCandidates(comment Comment) []string {
 	for i := len(comment.Messages) - 1; i >= 0; i-- {
 		message := comment.Messages[i]
 		if message.Author == "agent" && message.After != "" {
-			add(plainTextAnchor(message.After))
+			add(anchor.PlainText(message.After))
 		}
 	}
 	return out
-}
-
-// plainTextAnchor converts a Markdown excerpt into a plain-text anchor that can
-// be relocated in the rendered preview after an agent edit.
-func plainTextAnchor(raw string) string {
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
-	lines := strings.Split(raw, "\n")
-	cleaned := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "```") {
-			continue
-		}
-		line = imageRE.ReplaceAllString(line, "$1")
-		line = linkRE.ReplaceAllString(line, "$1")
-		line = htmlTagRE.ReplaceAllString(line, "")
-		line = listMarkerRE.ReplaceAllString(line, "")
-		line = strings.TrimLeft(line, "#> ")
-		line = strings.TrimSpace(line)
-		line = strings.Trim(line, "`*_~")
-		line = strings.ReplaceAll(line, "`", "")
-		cleaned = append(cleaned, line)
-	}
-	text := strings.Join(cleaned, "\n")
-	paragraphs := strings.Split(text, "\n\n")
-	best := ""
-	bestLen := 0
-	for _, paragraph := range paragraphs {
-		paragraph = strings.Join(strings.Fields(paragraph), " ")
-		length := len([]rune(paragraph))
-		if length > bestLen {
-			best, bestLen = paragraph, length
-		}
-	}
-	if bestLen > 400 {
-		best = string([]rune(best)[:400])
-	}
-	return strings.TrimSpace(best)
-}
-
-// locateQuote maps a (possibly rendered/plain-text) quote back to the Markdown
-// source. Prefix/suffix help with duplicate text; the stored line is a fallback.
-func locateQuote(content, quote, prefix, suffix string, nearLine int) (start, end, line int, orphaned bool) {
-	if content == "" || quote == "" {
-		return 0, 0, 0, true
-	}
-	all := make([]int, 0, 2)
-	offset := 0
-	for {
-		index := strings.Index(content[offset:], quote)
-		if index < 0 {
-			break
-		}
-		all = append(all, offset+index)
-		offset += index + maxInt(1, len(quote))
-		if len(all) > 200 {
-			break
-		}
-	}
-	if len(all) == 0 {
-		return 0, 0, 0, true
-	}
-	best := all[0]
-	bestScore := -1
-	for _, index := range all {
-		lineNo := 1 + strings.Count(content[:index], "\n")
-		score := 0
-		if nearLine > 0 {
-			distance := lineNo - nearLine
-			if distance < 0 {
-				distance = -distance
-			}
-			score -= distance
-		}
-		if prefix != "" {
-			startPrefix := index - len(prefix)
-			if startPrefix >= 0 && content[startPrefix:index] == prefix {
-				score += 20
-			}
-		}
-		if suffix != "" {
-			endSuffix := index + len(quote) + len(suffix)
-			if endSuffix <= len(content) && content[index+len(quote):endSuffix] == suffix {
-				score += 20
-			}
-		}
-		if score > bestScore {
-			best, bestScore = index, score
-		}
-	}
-	return best, best + len(quote), 1 + strings.Count(content[:best], "\n"), false
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// sectionRange returns the byte range of the blank-line-delimited Markdown
-// block containing marker (an agent after excerpt) or, as a fallback, line.
-// The block never includes the surrounding blank lines.
-func sectionRange(content, marker, quote string, line int) (int, int, bool) {
-	if content == "" {
-		return 0, 0, false
-	}
-	index := -1
-	for _, candidate := range []string{strings.TrimSpace(marker), strings.TrimSpace(quote)} {
-		if candidate == "" {
-			continue
-		}
-		if at := strings.Index(content, candidate); at >= 0 {
-			index = at
-			break
-		}
-	}
-	if index < 0 {
-		lines := strings.Split(content, "\n")
-		if len(lines) == 0 {
-			return 0, 0, false
-		}
-		lineNo := line
-		if lineNo < 1 {
-			lineNo = 1
-		}
-		if lineNo > len(lines) {
-			lineNo = len(lines)
-		}
-		chosen := lineNo - 1
-		if strings.TrimSpace(lines[chosen]) == "" {
-			found := -1
-			for delta := 1; delta < len(lines); delta++ {
-				if next := chosen + delta; next < len(lines) && strings.TrimSpace(lines[next]) != "" {
-					found = next
-					break
-				}
-				if prev := chosen - delta; prev >= 0 && strings.TrimSpace(lines[prev]) != "" {
-					found = prev
-					break
-				}
-			}
-			if found < 0 {
-				return 0, 0, false
-			}
-			chosen = found
-		}
-		index = 0
-		for i := 0; i < chosen; i++ {
-			index += len(lines[i]) + 1
-		}
-	}
-	return expandSection(content, index)
-}
-
-func expandSection(content string, index int) (int, int, bool) {
-	if index < 0 || index >= len(content) {
-		return 0, 0, false
-	}
-	lineStart := strings.LastIndex(content[:index], "\n") + 1
-	start := lineStart
-	for start > 0 {
-		previousEnd := start - 1
-		previousStart := strings.LastIndex(content[:previousEnd], "\n") + 1
-		if strings.TrimSpace(content[previousStart:previousEnd]) == "" {
-			break
-		}
-		start = previousStart
-	}
-	end := len(content)
-	if relative := strings.Index(content[index:], "\n"); relative >= 0 {
-		end = index + relative
-	}
-	for end < len(content) {
-		nextStart := end + 1
-		if nextStart >= len(content) {
-			end = len(content)
-			break
-		}
-		nextEnd := len(content)
-		if relative := strings.Index(content[nextStart:], "\n"); relative >= 0 {
-			nextEnd = nextStart + relative
-		}
-		if strings.TrimSpace(content[nextStart:nextEnd]) == "" {
-			break
-		}
-		end = nextEnd
-	}
-	for end > start && (content[end-1] == '\n' || content[end-1] == '\r') {
-		end--
-	}
-	if end <= start {
-		return 0, 0, false
-	}
-	return start, end, true
-}
-
-func sectionFromVersion(content string, message CommentMessage, quote string, line int) (string, bool) {
-	if message.SectionStart >= 0 && message.SectionEnd > message.SectionStart && message.SectionEnd <= len(content) {
-		if text := strings.TrimRight(content[message.SectionStart:message.SectionEnd], "\r\n"); strings.TrimSpace(text) != "" {
-			return text, true
-		}
-	}
-	start, end, ok := sectionRange(content, message.After, quote, line)
-	if !ok {
-		return "", false
-	}
-	return strings.TrimRight(content[start:end], "\r\n"), true
 }
 
 func (s *commentStore) currentSectionFor(comment Comment, content string, versions map[string]docVersion) (string, bool) {
@@ -889,51 +618,20 @@ func (s *commentStore) currentSectionFor(comment Comment, content string, versio
 			}
 			versions[version.ID] = version
 		}
-		if section, ok := sectionFromVersion(version.Content, message, comment.Quote, comment.Line); ok {
+		if section, ok := anchor.SectionFromVersion(
+			version.Content, message.After, message.SectionStart, message.SectionEnd,
+			comment.Quote, comment.Line,
+		); ok {
 			if strings.Contains(content, section) {
 				return section, true
 			}
 		}
 	}
-	start, end, ok := sectionRange(content, comment.Anchor, comment.Quote, comment.Line)
+	start, end, ok := anchor.SectionRange(content, comment.Anchor, comment.Quote, comment.Line)
 	if !ok {
 		return "", false
 	}
 	return strings.TrimRight(content[start:end], "\r\n"), true
-}
-
-func replaceSection(content, current, target string, line int) (string, bool) {
-	if current == "" {
-		return content, false
-	}
-	positions := make([]int, 0, 1)
-	offset := 0
-	for {
-		index := strings.Index(content[offset:], current)
-		if index < 0 {
-			break
-		}
-		positions = append(positions, offset+index)
-		offset += index + len(current)
-	}
-	if len(positions) == 0 {
-		return content, false
-	}
-	chosen := positions[0]
-	if line > 0 && len(positions) > 1 {
-		bestDistance := int(^uint(0) >> 1)
-		for _, position := range positions {
-			distance := strings.Count(content[:position], "\n") + 1 - line
-			if distance < 0 {
-				distance = -distance
-			}
-			if distance < bestDistance {
-				bestDistance = distance
-				chosen = position
-			}
-		}
-	}
-	return content[:chosen] + target + content[chosen+len(current):], true
 }
 
 func truncateForComment(value string) string {

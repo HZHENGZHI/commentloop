@@ -768,9 +768,9 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 		"X-Commentloop-Agent":         "1",
 		"X-Commentloop-Agent-Session": "session-analysis",
 	}
-	app.agentCaps.set("session-analysis", agentCapabilities{
+	app.agentCaps.setGrant("session-analysis", agentGrant{Capabilities: agentCapabilities{
 		WriteDocs: false, ReadCode: true, ReplyComments: true,
-	})
+	}})
 	rec := doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("analysis PUT status=%d body=%s", rec.Code, rec.Body)
@@ -783,16 +783,16 @@ func TestAgentAnalysisCapabilityBlocksWrites(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("analysis DELETE status=%d body=%s", rec.Code, rec.Body)
 	}
-	app.agentCaps.set("session-analysis", agentCapabilities{
+	app.agentCaps.setGrant("session-analysis", agentGrant{Capabilities: agentCapabilities{
 		WriteDocs: false, ReadCode: false, ReplyComments: true,
-	})
+	}})
 	rec = doJSONHeaders(t, app, http.MethodGet, "/api/code/repos", nil, headers)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("analysis code read status=%d body=%s", rec.Code, rec.Body)
 	}
-	app.agentCaps.set("session-analysis", agentCapabilities{
+	app.agentCaps.setGrant("session-analysis", agentGrant{Capabilities: agentCapabilities{
 		WriteDocs: true, ReadCode: true, ReplyComments: true,
-	})
+	}})
 	rec = doJSONHeaders(t, app, http.MethodPut, "/api/doc", saveRequest{Path: path, Content: "# changed"}, headers)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("edit PUT status=%d body=%s", rec.Code, rec.Body)

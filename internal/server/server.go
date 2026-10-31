@@ -188,13 +188,13 @@ func New(opts Options) (*Server, error) {
 	return s, nil
 }
 
-// Close stops background work.
 // SetAgentBaseURL tells automatically spawned agents which commentloop instance to
 // connect to through COMMENTLOOP_URL, even when multiple instances are running.
 func (s *Server) SetAgentBaseURL(baseURL string) {
 	s.agentBaseURL = strings.TrimSpace(baseURL)
 }
 
+// Close stops background work.
 func (s *Server) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
@@ -348,6 +348,16 @@ func (s *Server) resolveDocRef(canonical string) (*root, string, error) {
 		return nil, "", err
 	}
 	return ro, rel, nil
+}
+
+// canonicalDoc validates a document path and returns its canonical
+// "<rootID>/<relative-path>" form.
+func (s *Server) canonicalDoc(path string) (string, error) {
+	ro, rel, err := s.resolveDocRef(path)
+	if err != nil {
+		return "", err
+	}
+	return ro.ID + "/" + rel, nil
 }
 
 func localFile(ro *root, rel string) (string, error) {
