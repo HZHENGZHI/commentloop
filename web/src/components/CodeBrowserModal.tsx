@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  fetchCodeFile,
-  fetchCodeFiles,
   fetchCodeRepoBranches,
   lspDefinition,
   switchCodeRepoBranch,
 } from "../api";
+import { codeFileQuery, codeFilesQuery } from "../queries";
 import type {
   CodeFileEntry,
-  CodeFileList,
   CodeRepo,
   LSPLocation,
   Theme,
@@ -25,6 +24,8 @@ import {
   IconX,
 } from "./Icons";
 import { CodeViewer } from "./CodeViewer";
+
+const NO_FILES: CodeFileEntry[] = [];
 
 interface CodeBrowserModalProps {
   docPath: string;
@@ -189,13 +190,8 @@ export function CodeBrowserModal({
 }: CodeBrowserModalProps) {
   const { t } = useTranslation();
   const [repoID, setRepoID] = useState(() => repos[0]?.id ?? "");
-  const [files, setFiles] = useState<CodeFileEntry[]>([]);
-  const [fileListMeta, setFileListMeta] = useState<CodeFileList | null>(null);
-  const [filesLoading, setFilesLoading] = useState(false);
   const [filter, setFilter] = useState("");
   const [selectedFile, setSelectedFile] = useState("");
-  const [content, setContent] = useState("");
-  const [codeLoading, setCodeLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(
     () => new Set(),
   );
@@ -215,6 +211,15 @@ export function CodeBrowserModal({
   const [branchError, setBranchError] = useState("");
 
   const repo = repos.find((item) => item.id === repoID) ?? repos[0];
+  const filesResult = useQuery(codeFilesQuery(repo?.id ?? "", repo?.branch ?? ""));
+  const fileListMeta = filesResult.data ?? null;
+  const files = fileListMeta?.files ?? NO_FILES;
+  const filesLoading = filesResult.isLoading;
+  const fileResult = useQuery(
+    codeFileQuery(repo?.id ?? "", repo?.branch ?? "", selectedFile),
+  );
+  const content = fileResult.data?.content ?? "";
+  const codeLoading = fileResult.isLoading;
 
   useEffect(() => {
     if (repos.length === 0) {
@@ -227,10 +232,7 @@ export function CodeBrowserModal({
   }, [repos, repoID]);
 
   useEffect(() => {
-    setFiles([]);
-    setFileListMeta(null);
     setSelectedFile("");
-    setContent("");
     setTarget(null);
     setPending(null);
     setMessage("");
@@ -241,63 +243,29 @@ export function CodeBrowserModal({
   }, [repoID, repo?.branch]);
 
   useEffect(() => {
-    if (!repo) return;
-    let alive = true;
-    setFilesLoading(true);
-    setMessage("");
-    fetchCodeFiles(repo.id, "", 5000)
-      .then((result) => {
-        if (!alive) return;
-        setFiles(result.files ?? []);
-        setFileListMeta(result);
-        setSelectedFile((current) =>
-          result.files.some((file) => file.path === current)
-            ? current
-            : preferredFile(result.files ?? []),
-        );
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setMessage(
-          err instanceof Error ? err.message : t("读取代码文件列表失败"),
-        );
-      })
-      .finally(() => {
-        if (alive) setFilesLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [repo?.id, repo?.branch]);
+    if (!filesResult.data) return;
+    const next = filesResult.data.files ?? [];
+    setSelectedFile((current) =>
+      next.some((file) => file.path === current) ? current : preferredFile(next),
+    );
+  }, [filesResult.data]);
 
   useEffect(() => {
-    if (!repo || !selectedFile) {
-      setContent("");
-      return;
-    }
-    let alive = true;
-    setCodeLoading(true);
-    setPending(null);
     setCursor(null);
-    fetchCodeFile(repo.id, selectedFile)
-      .then((result) => {
-        if (alive) setContent(result.content ?? "");
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setContent("");
-        setMessage(err instanceof Error ? err.message : t("读取代码文件失败"));
-      })
-      .finally(() => {
-        if (alive) setCodeLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
   }, [repo?.id, selectedFile]);
 
+  const loadError = filesResult.error ?? fileResult.error;
   useEffect(() => {
-    if (!pending || pending.path !== selectedFile || !content) return;
+    if (!loadError) return;
+    setMessage(
+      loadError.message ||
+        (filesResult.error ? t("读取代码文件列表失败") : t("读取代码文件失败")),
+    );
+  }, [loadError]);
+
+  useEffect(() => {
+    // Wait for the revalidation too: cached text may predate the file on disk.
+    if (!pending || pending.path !== selectedFile || !fileResult.data || fileResult.isFetching) return;
     setTarget({
       line: pending.line,
       character: pending.character,
@@ -305,7 +273,7 @@ export function CodeBrowserModal({
     });
     setMessage(t("已跳转到 {{path}}:{{line}}", { path: pending.path, line: pending.line }));
     setPending(null);
-  }, [pending, selectedFile, content]);
+  }, [pending, selectedFile, fileResult.data, fileResult.isFetching]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -353,7 +321,6 @@ export function CodeBrowserModal({
       await switchCodeRepoBranch(repo.id, branch);
       setBranchOpen(false);
       setSelectedFile("");
-      setContent("");
       setTarget(null);
       setPending(null);
       setMessage(t("已切换到分支 {{branch}}", { branch }));
@@ -589,6 +556,7 @@ export function CodeBrowserModal({
                   }
                   onSelect={(path) => {
                     setSelectedFile(path);
+                    setPending(null);
                     setMessage("");
                   }}
                 />
