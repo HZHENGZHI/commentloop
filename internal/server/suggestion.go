@@ -120,17 +120,24 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 	}
 	var next string
 	if comment.Suggestion.Mode == "append" {
-		at := end
-		if idx := strings.Index(content[at:], "\n\n"); idx >= 0 {
-			at += idx
-		} else if idx := strings.IndexByte(content[at:], '\n'); idx >= 0 {
-			// No later blank line: append after the quote's line instead of
-			// jumping to the end of the whole document.
-			at += idx + 1
-		} else {
-			at = len(content)
+		sep := "\n"
+		if strings.Contains(content, "\r\n") {
+			sep = "\r\n"
 		}
-		next = content[:at] + "\n\n" + text + content[at:]
+		blank := sep + sep
+		at := end
+		if idx := strings.Index(content[at:], blank); idx >= 0 {
+			// After the current block, before the blank line that follows it.
+			at += idx
+			next = content[:at] + blank + text + content[at:]
+		} else if idx := strings.Index(content[at:], sep); idx >= 0 {
+			// No later blank line: insert after this line instead of jumping
+			// to the end of the document, keeping the following line separate.
+			at += idx
+			next = content[:at] + blank + text + sep + content[at:]
+		} else {
+			next = content + blank + text + sep
+		}
 	} else {
 		next = content[:start] + text + content[end:]
 	}
