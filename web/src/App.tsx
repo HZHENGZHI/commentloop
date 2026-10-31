@@ -196,7 +196,7 @@ export default function App() {
   const discussions =
     useQuery(discussionsQuery(docKey)).data?.discussions ?? NO_DISCUSSIONS;
   const promptTemplates =
-    useQuery(promptTemplatesQuery).data?.templates ?? NO_PROMPT_TEMPLATES;
+    useQuery(promptTemplatesQuery(i18nHook.language)).data?.templates ?? NO_PROMPT_TEMPLATES;
   const agentSessionsData = useQuery(agentSessionsQuery(docKey)).data;
   const agentSessions = agentSessionsData?.sessions ?? NO_AGENT_SESSIONS;
   const activeAgentSessionId = agentSessionsData?.activeId ?? "";
@@ -666,7 +666,6 @@ export default function App() {
 
   const handleCodeRepoChanged = useCallback(
     (message: string) => {
-      void invalidate("docCodeRepos");
       toast(message, "success");
     },
     [toast],
@@ -1758,7 +1757,6 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void handleSettingsSaved()}
-          onPromptsChanged={() => void invalidate("promptTemplates")}
         />
       ) : null}
 
@@ -1783,6 +1781,7 @@ export default function App() {
           onManageRepos={() => setCodeRepoModalOpen(true)}
           onBranchChanged={() => {
             void invalidate("docCodeRepos");
+            void invalidate("codeRepos");
             toast(t("已切换分支"), "success");
           }}
         />

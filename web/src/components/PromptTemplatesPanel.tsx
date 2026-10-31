@@ -1,19 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   createPromptTemplate,
   deletePromptTemplate,
-  fetchPromptTemplates,
   optimizePromptTemplate,
   resetPromptTemplate,
   updatePromptTemplate,
 } from "../api";
+import { invalidate, promptTemplatesQuery } from "../queries";
 import type { PromptTemplate } from "../types";
 import { IconPlus, IconRefresh, IconSparkles, IconTrash } from "./Icons";
-
-interface PromptTemplatesPanelProps {
-  onChanged: () => void;
-}
 
 const VARIABLES = [
   "doc_path",
@@ -26,9 +23,16 @@ const VARIABLES = [
   "code_repos",
 ];
 
-export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
-  const { t } = useTranslation();
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+const NO_TEMPLATES: PromptTemplate[] = [];
+
+export function PromptTemplatesPanel() {
+  const { t, i18n } = useTranslation();
+  // Pin the language the panel opened with: switching languages mid-edit must
+  // not swap the list (and reset the form) underneath unsaved changes.
+  const [language] = useState(i18n.language);
+  const query = useQuery(promptTemplatesQuery(language));
+  const templates = query.data?.templates ?? NO_TEMPLATES;
+  const loading = query.isPending;
   const [selected, setSelected] = useState<PromptTemplate | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,36 +40,26 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
   const [allowDocumentEdit, setAllowDocumentEdit] = useState(true);
   const [allowCodeRead, setAllowCodeRead] = useState(true);
   const [allowCommentReply, setAllowCommentReply] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizedOriginal, setOptimizedOriginal] = useState("");
   const [optimizeNote, setOptimizeNote] = useState("");
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchPromptTemplates();
-      const items = result.templates ?? [];
-      setTemplates(items);
-      setSelected((current) => {
-        const next = current
-          ? items.find((item) => item.id === current.id) ?? items[0]
-          : items[0] ?? null;
-        return next ?? null;
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("读取提示词模板失败"));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    setSelected((current) =>
+      (current && templates.find((item) => item.id === current.id)) ??
+      templates[0] ??
+      null,
+    );
+  }, [templates]);
+
+  const load = () => invalidate("promptTemplates");
+  // Block writes while the list revalidates so the form cannot save stale text.
+  const busy = saving || query.isFetching;
+  const loadError = query.error
+    ? query.error.message || t("读取提示词模板失败")
+    : "";
 
   useEffect(() => {
     if (!selected) return;
@@ -109,7 +103,6 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
       setSelected(saved);
       setOptimizedOriginal("");
       setOptimizeNote("");
-      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("保存提示词模板失败"));
     } finally {
@@ -126,7 +119,6 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
       await deletePromptTemplate(selected.id);
       setSelected(null);
       await load();
-      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("删除模板失败"));
     } finally {
@@ -172,7 +164,6 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
       const item = await resetPromptTemplate(selected.id);
       setSelected(item);
       await load();
-      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("恢复默认失败"));
     } finally {
@@ -294,14 +285,14 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
           <p className="settings-note prompt-template-vars">
             {t("可用变量：")}{VARIABLES.map((item) => `{{${item}}}`).join(" ")}
           </p>
-          {error ? <p className="modal-error">{error}</p> : null}
+          {error || loadError ? <p className="modal-error">{error || loadError}</p> : null}
           <div className="prompt-template-actions">
             {selected?.builtin ? (
               <button
                 type="button"
                 className="btn ghost small-btn"
                 onClick={() => void reset()}
-                disabled={saving}
+                disabled={busy}
               >
                 <IconRefresh size={12} /> {t("恢复默认")}
               </button>
@@ -311,7 +302,7 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
                 type="button"
                 className="btn ghost small-btn danger-text"
                 onClick={() => void remove()}
-                disabled={saving}
+                disabled={busy}
               >
                 <IconTrash size={12} /> {t("删除")}
               </button>
@@ -320,7 +311,7 @@ export function PromptTemplatesPanel({ onChanged }: PromptTemplatesPanelProps) {
               type="button"
               className="btn primary small-btn"
               onClick={() => void save()}
-              disabled={saving || !name.trim() || !body.trim()}
+              disabled={busy || !name.trim() || !body.trim()}
             >
               {saving ? t("保存中…") : t("保存模板")}
             </button>

@@ -1,6 +1,7 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import {
   fetchAgentSessions,
+  fetchCodeRepos,
   fetchComments,
   fetchDocCodeRepos,
   fetchDocDiscussions,
@@ -23,6 +24,7 @@ export const queryClient = new QueryClient({
 
 type QueryRoot =
   | "comments"
+  | "codeRepos"
   | "docCodeRepos"
   | "discussions"
   | "promptTemplates"
@@ -40,6 +42,11 @@ export const commentsQuery = (path: string) =>
     enabled: path !== "",
   });
 
+export const codeReposQuery = queryOptions({
+  queryKey: ["codeRepos"],
+  queryFn: fetchCodeRepos,
+});
+
 export const docCodeReposQuery = (path: string) =>
   queryOptions({
     queryKey: ["docCodeRepos", path],
@@ -54,10 +61,14 @@ export const discussionsQuery = (path: string) =>
     enabled: path !== "",
   });
 
-export const promptTemplatesQuery = queryOptions({
-  queryKey: ["promptTemplates"],
-  queryFn: fetchPromptTemplates,
-});
+// Built-in templates are localized by Accept-Language, so the UI language is
+// part of the key: a cached entry from another language must never reach the
+// editor.
+export const promptTemplatesQuery = (language: string) =>
+  queryOptions({
+    queryKey: ["promptTemplates", language],
+    queryFn: () => fetchPromptTemplates(language),
+  });
 
 export const agentSessionsQuery = (path: string) =>
   queryOptions({
