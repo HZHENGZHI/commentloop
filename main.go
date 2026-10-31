@@ -282,9 +282,13 @@ func runServer(args []string) {
 	}
 
 	if !*noOpen {
-		if err := browser.OpenURL(browseURL); err != nil {
-			slog.Warn("could not open the browser", "err", err)
-		}
+		// Do not let a slow browser opener hold up Serve: some platforms keep
+		// xdg-open running for as long as the browser process does.
+		go func() {
+			if err := browser.OpenURL(browseURL); err != nil {
+				slog.Warn("could not open the browser", "err", err)
+			}
+		}()
 	}
 
 	stop := make(chan os.Signal, 1)
