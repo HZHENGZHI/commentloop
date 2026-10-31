@@ -95,14 +95,21 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       .finally(() => {
         if (alive) setLoading(false);
       });
+    return () => {
+      alive = false;
+    };
+    // Load once when the modal opens. The parent passes a new onClose closure
+    // on every render; depending on it would refetch and overwrite unsaved
+    // edits whenever a toast or WebSocket update re-renders the app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => {
-      alive = false;
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   const updateAgent = (patch: Partial<CodeAgentSetting>) => {

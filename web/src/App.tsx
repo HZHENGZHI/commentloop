@@ -356,7 +356,10 @@ export default function App() {
       statusRef.current = "saving";
       try {
         const result = await saveDoc(path, content);
-        if (seq !== saveSeqRef.current) return;
+        // A slow save may finish after the user switched documents; applying
+        // its stats/content baseline to the new document would show a wrong
+        // dirty state.
+        if (seq !== saveSeqRef.current || currentPathRef.current !== path) return;
         savedContentRef.current = content;
         void invalidate("comments");
         setMeta({ size: result.size, modTime: result.modTime });
@@ -370,7 +373,7 @@ export default function App() {
           statusRef.current = "dirty";
         }
       } catch (error) {
-        if (seq !== saveSeqRef.current) return;
+        if (seq !== saveSeqRef.current || currentPathRef.current !== path) return;
         setStatus("dirty");
         statusRef.current = "dirty";
         toast(i18n.t("保存失败：{{error}}", { error: errorMessage(error) }), "error");
@@ -492,6 +495,9 @@ export default function App() {
         window.history.replaceState(null, "", url);
         window.setTimeout(() => {
           if (previewRef.current) previewRef.current.scrollTop = 0;
+          // A new document must start at the top; Editor preserves its scroll
+          // position across content updates so same-document edits stay put.
+          editorRef.current?.scrollToRatio(0);
         }, 0);
       } catch (error) {
         if (seq !== openSeqRef.current) return;
@@ -970,10 +976,14 @@ export default function App() {
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("blur", up);
       document.body.classList.remove("dragging-split");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("blur", up);
     document.body.classList.add("dragging-split");
   };
 

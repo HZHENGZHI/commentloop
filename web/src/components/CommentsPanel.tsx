@@ -199,7 +199,7 @@ export function CommentsPanel({
               expanded.has(comment.id) || replyTo === comment.id;
             const lastAuthor =
               lastMessage?.author === "agent"
-                ? "Code Agent"
+                ? agentName
                 : lastMessage?.author === "system"
                   ? t("版本回滚")
                   : t("你");
