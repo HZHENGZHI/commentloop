@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { localizeServerMessage } from "../i18n/serverMessages";
 import {
   deleteDiscussion,
-  fetchAvailableDiscussionSessions,
   importDiscussionSession,
   refreshConsensus,
 } from "../api";
@@ -25,7 +24,15 @@ import {
   IconTrash,
   IconX,
 } from "./Icons";
-import { discussionsQuery, invalidate, queryClient } from "../queries";
+import {
+  discussionSessionsQuery,
+  discussionsQuery,
+  invalidate,
+  queryClient,
+} from "../queries";
+
+const NO_SESSIONS: DiscussionSession[] = [];
+const NO_AGENTS: DetectedAgent[] = [];
 
 interface DiscussionModalProps {
   docPath: string;
@@ -106,31 +113,21 @@ export function DiscussionModal({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"refresh" | "import" | string>("");
   const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [sessions, setSessions] = useState<DiscussionSession[]>([]);
-  const [agents, setAgents] = useState<DetectedAgent[]>([]);
   const [agentFilter, setAgentFilter] = useState("");
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionsError, setSessionsError] = useState("");
-  const sessionsSeq = useRef(0);
+  const sessionsQuery = useQuery({
+    ...discussionSessionsQuery(docPath),
+    enabled: sessionsOpen && docPath !== "",
+  });
+  const sessions = sessionsQuery.data?.sessions ?? NO_SESSIONS;
+  const agents = sessionsQuery.data?.agents ?? NO_AGENTS;
+  const sessionsLoading = sessionsQuery.isLoading;
+  const sessionsError = sessionsQuery.error
+    ? sessionsQuery.error.message || t("读取会话失败")
+    : "";
 
   const load = () => invalidate("discussions");
 
-  const loadSessions = useCallback(async () => {
-    const seq = ++sessionsSeq.current;
-    setSessionsLoading(true);
-    setSessionsError("");
-    try {
-      const result = await fetchAvailableDiscussionSessions(docPath);
-      if (seq !== sessionsSeq.current) return;
-      setSessions(result.sessions ?? []);
-      setAgents(result.agents ?? []);
-    } catch (err) {
-      if (seq !== sessionsSeq.current) return;
-      setSessionsError(err instanceof Error ? err.message : t("读取会话失败"));
-    } finally {
-      if (seq === sessionsSeq.current) setSessionsLoading(false);
-    }
-  }, [docPath]);
+  const loadSessions = () => invalidate("discussionSessions");
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -143,7 +140,6 @@ export function DiscussionModal({
   const openSessions = () => {
     const next = !sessionsOpen;
     setSessionsOpen(next);
-    if (next) void loadSessions();
   };
 
   const doRefresh = async () => {
@@ -170,10 +166,13 @@ export function DiscussionModal({
           current ? { ...current, consensus: result.consensus } : current,
         );
       }
-      setSessions((current) =>
-        current.map((item) =>
-          item.path === session.path ? { ...item, imported: true } : item,
-        ),
+      queryClient.setQueryData(discussionSessionsQuery(docPath).queryKey, (current) =>
+        current && {
+          ...current,
+          sessions: current.sessions.map((item) =>
+            item.path === session.path ? { ...item, imported: true } : item,
+          ),
+        },
       );
       await load();
       if (result.consensusError) {

@@ -1,6 +1,7 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import {
   fetchAgentSessions,
+  fetchAvailableDiscussionSessions,
   fetchCodeFile,
   fetchCodeFiles,
   fetchCodeRepos,
@@ -34,6 +35,7 @@ type QueryRoot =
   | "codeRepos"
   | "docCodeRepos"
   | "discussions"
+  | "discussionSessions"
   | "promptTemplates"
   | "agentSessions";
 
@@ -112,4 +114,11 @@ export const codeFileQuery = (repoId: string, branch: string, path: string) =>
     queryKey: ["codeFile", repoId, branch, path],
     queryFn: () => fetchCodeFile(repoId, path),
     enabled: repoId !== "" && path !== "",
+  });
+
+export const discussionSessionsQuery = (path: string) =>
+  queryOptions({
+    queryKey: ["discussionSessions", path],
+    queryFn: () => fetchAvailableDiscussionSessions(path),
+    enabled: path !== "",
   });
