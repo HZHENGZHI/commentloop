@@ -427,9 +427,16 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 }
 
 func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, error) {
+	sum := sha256.Sum256([]byte(content))
+	hash := hex.EncodeToString(sum[:])
+	var existing docVersionRow
+	if err := tx.Select("id").Take(&existing, "path = ? AND hash = ?", path, hash).Error; err == nil {
+		return existing.ID, nil
+	} else if err != gorm.ErrRecordNotFound {
+		return "", err
+	}
 	// Keep rollback history bounded. Older snapshots (and rollback links on
-	// their messages) are pruned first so a re-created identical snapshot gets
-	// a fresh row.
+	// their messages) are pruned before adding a genuinely new snapshot.
 	newest := tx.Model(&docVersionRow{}).Select("id").Where("path = ?", path).
 		Order("created_at DESC, rowid DESC").Limit(maxDocVersionsPerPath - 1)
 	if err := tx.Where("path = ? AND id NOT IN (?)", path, newest).Delete(&docVersionRow{}).Error; err != nil {
@@ -442,8 +449,6 @@ func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, e
 			return "", err
 		}
 	}
-	sum := sha256.Sum256([]byte(content))
-	hash := hex.EncodeToString(sum[:])
 	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&docVersionRow{
 		ID: "ver_" + commentID(), Path: path, Hash: hash, Content: content, CreatedAt: formatTime(now),
 	}).Error; err != nil {
@@ -494,6 +499,19 @@ func (s *commentStore) version(id string) (docVersion, bool) {
 		return docVersion{}, false
 	}
 	return docVersion{ID: row.ID, Path: row.Path, Content: row.Content, CreatedAt: parseTime(row.CreatedAt)}, true
+}
+
+func (s *commentStore) listVersions(path string) ([]docVersionInfo, error) {
+	var rows []docVersionRow
+	if err := s.db.Select("id", "content", "created_at").Where("path = ?", path).
+		Order("created_at DESC, rowid DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]docVersionInfo, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, docVersionInfo{ID: row.ID, CreatedAt: parseTime(row.CreatedAt), Size: int64(len(row.Content))})
+	}
+	return out, nil
 }
 
 func (s *commentStore) resolve(path, id string, resolved bool) (*Comment, error) {
