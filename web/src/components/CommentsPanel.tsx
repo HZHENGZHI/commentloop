@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   Comment,
@@ -96,6 +96,19 @@ export function CommentsPanel({
   const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "agent">(
     "all",
   );
+  // If the discussion list finishes loading while a reply form is open, seed
+  // its selection from the thread's stored references so the checkboxes match
+  // what the server will keep.
+  useEffect(() => {
+    if (!replyTo || replyDiscussionsReady || !discussionsLoaded) return;
+    const target = comments.find((comment) => comment.id === replyTo);
+    if (!target) return;
+    const available = new Set(discussions.map((item) => item.id));
+    setReplyDiscussions(
+      (target.discussionIds ?? []).filter((id) => available.has(id)),
+    );
+    setReplyDiscussionsReady(true);
+  }, [comments, discussions, discussionsLoaded, replyDiscussionsReady, replyTo]);
   const lastCommentAuthor = (comment: Comment) =>
     comment.messages[comment.messages.length - 1]?.author;
   const awaitingCount = comments.filter(
