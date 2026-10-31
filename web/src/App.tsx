@@ -1122,6 +1122,16 @@ export default function App() {
           }
           break;
         }
+        if (message.origin === "suggestion") {
+          if (incomingContent !== contentRef.current && dirty) {
+            toast(
+              i18n.t("已接受建议，未保存的本地改动已被覆盖"),
+              "warn",
+            );
+          }
+          applySavedDoc(incomingContent, incomingHtml);
+          break;
+        }
         if (message.origin === "rollback") {
           if (incomingContent !== contentRef.current && dirty) {
             toast(i18n.t("评论段落已局部回滚，未保存的本地改动已被覆盖"), "warn");
