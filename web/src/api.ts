@@ -110,6 +110,17 @@ export function setDocReview(
   });
 }
 
+export function resolveSuggestion(
+  path: string,
+  id: string,
+  accept: boolean,
+): Promise<Comment> {
+  return request<Comment>("/api/comments/suggestion", {
+    method: "POST",
+    body: JSON.stringify({ path, id, accept }),
+  });
+}
+
 export function requestDocReview(path: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>("/api/doc/review/request", {
     method: "POST",

@@ -49,6 +49,7 @@ interface CommentsPanelProps {
   review?: DocReview;
   reviewing?: boolean;
   onRequestReview: () => void;
+  onSuggestion: (comment: Comment, accept: boolean) => void;
   agentName?: string;
 }
 
@@ -79,6 +80,7 @@ export function CommentsPanel({
   review,
   reviewing = false,
   onRequestReview,
+  onSuggestion,
   agentName = "Code Agent",
 }: CommentsPanelProps) {
   const { t, i18n } = useTranslation();
@@ -392,6 +394,59 @@ export function CommentsPanel({
               >
                 {comment.quote}
               </blockquote>
+
+              {comment.suggestion ? (
+                <div className={`comment-suggestion ${comment.suggestion.status}`}>
+                  <div className="comment-suggestion-head">
+                    <span>
+                      {comment.suggestion.mode === "append"
+                        ? t("建议追加")
+                        : t("建议修改")}
+                    </span>
+                    {comment.suggestion.status === "pending" ? null : (
+                      <span className="comment-suggestion-status">
+                        {comment.suggestion.status === "accepted"
+                          ? t("已接受")
+                          : t("已拒绝")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="comment-suggestion-diff">
+                    {comment.suggestion.mode === "replace" ? (
+                      <div className="suggestion-line removed">
+                        <span>−</span>
+                        {comment.suggestion.quote}
+                      </div>
+                    ) : (
+                      <div className="suggestion-line context">
+                        {comment.suggestion.quote}
+                      </div>
+                    )}
+                    <div className="suggestion-line added">
+                      <span>+</span>
+                      {comment.suggestion.text}
+                    </div>
+                  </div>
+                  {comment.suggestion.status === "pending" ? (
+                    <div className="comment-suggestion-actions">
+                      <button
+                        type="button"
+                        className="btn primary suggestion-accept"
+                        onClick={() => onSuggestion(comment, true)}
+                      >
+                        {t("接受建议")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost suggestion-reject"
+                        onClick={() => onSuggestion(comment, false)}
+                      >
+                        {t("拒绝")}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {isExpanded && members.length > 0 ? (
                 <div className="comment-related">

@@ -60,6 +60,13 @@ export type ReviewSeverity =
   | "nit"
   | "question";
 
+export interface CommentSuggestion {
+  quote: string;
+  text: string;
+  mode: "replace" | "append";
+  status: "pending" | "accepted" | "rejected";
+}
+
 export interface InboxDoc {
   path: string;
   name: string;
@@ -358,6 +365,7 @@ export interface Comment {
   discussionIds?: string[];
   promptTemplateId?: string;
   severity?: ReviewSeverity;
+  suggestion?: CommentSuggestion;
   messages: CommentMessage[];
 }
 

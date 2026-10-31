@@ -123,7 +123,7 @@ func (s *Server) buildDocReviewPrompt(path, language string) (string, agentCapab
 	}
 	if caps.ReplyComments {
 		b.WriteString("4. Create up to 8 inline comments with create_comment. Quote the shortest unique text, explain the issue concisely, and set severity to blocking, should_fix, nit, or question. Skip pure style preferences.\n")
-		b.WriteString("5. After the comments, call write_review_summary with a concise summary: main issues, suggested order, and items that can be ignored. If there are no issues, say so in the summary.\n")
+		b.WriteString("5. When a concrete rewrite is clear, use propose_change with an exact quote and replacement instead of only describing the problem. After the comments, call write_review_summary with a concise summary: main issues, suggested order, and items that can be ignored. If there are no issues, say so in the summary.\n")
 		b.WriteString("6. Do not call write_file or reply_comment with edits. If you cannot proceed, write a summary explaining the blocker.\n")
 	} else {
 		return "", agentCapabilities{}, nil, fmt.Errorf("审阅模板不允许创建评论")

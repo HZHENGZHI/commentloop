@@ -11,24 +11,32 @@ import (
 // Comment domain types: threads, messages, doc versions and their API payloads.
 
 type Comment struct {
-	ID               string           `json:"id"`
-	Path             string           `json:"path"`
-	Quote            string           `json:"quote"`
-	Anchor           string           `json:"anchor,omitempty"`
-	GroupID          string           `json:"groupId,omitempty"`
-	Prefix           string           `json:"prefix,omitempty"`
-	Suffix           string           `json:"suffix,omitempty"`
-	Line             int              `json:"line"`
-	Start            int              `json:"start"`
-	End              int              `json:"end"`
-	Resolved         bool             `json:"resolved"`
-	Orphaned         bool             `json:"orphaned"`
-	CreatedAt        time.Time        `json:"createdAt"`
-	UpdatedAt        time.Time        `json:"updatedAt"`
-	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
-	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
-	Severity         string           `json:"severity,omitempty"`
-	Messages         []CommentMessage `json:"messages"`
+	ID               string             `json:"id"`
+	Path             string             `json:"path"`
+	Quote            string             `json:"quote"`
+	Anchor           string             `json:"anchor,omitempty"`
+	GroupID          string             `json:"groupId,omitempty"`
+	Prefix           string             `json:"prefix,omitempty"`
+	Suffix           string             `json:"suffix,omitempty"`
+	Line             int                `json:"line"`
+	Start            int                `json:"start"`
+	End              int                `json:"end"`
+	Resolved         bool               `json:"resolved"`
+	Orphaned         bool               `json:"orphaned"`
+	CreatedAt        time.Time          `json:"createdAt"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+	DiscussionIDs    []string           `json:"discussionIds,omitempty"`
+	PromptTemplateID string             `json:"promptTemplateId,omitempty"`
+	Severity         string             `json:"severity,omitempty"`
+	Suggestion       *CommentSuggestion `json:"suggestion,omitempty"`
+	Messages         []CommentMessage   `json:"messages"`
+}
+
+type CommentSuggestion struct {
+	Quote  string `json:"quote"`
+	Text   string `json:"text"`
+	Mode   string `json:"mode"`
+	Status string `json:"status"`
 }
 
 var commentSeverities = map[string]bool{
