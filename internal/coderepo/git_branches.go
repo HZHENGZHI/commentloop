@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -11,7 +12,9 @@ import (
 
 func localGitRun(ctx context.Context, path string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", path}, args...)...)
-	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
+	// Keep the caller's environment (PATH, HOME, global git config); appending
+	// to a nil Env would run git with only the prompt setting.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
