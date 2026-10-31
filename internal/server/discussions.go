@@ -90,8 +90,8 @@ func (s *discussionStore) importSession(docPath string, parsed parsedSession, so
 		ID: discussionID(docPath + "\x00" + sourcePath), DocPath: docPath,
 		Title: parsed.Title, SourcePath: sourcePath, SourceKind: sourceKind, Agent: agent,
 		Cwd: parsed.Cwd, SessionID: parsed.SessionID,
-		MessageCount: len(parsed.Messages),
-		CreatedAt:    parsed.CreatedAt, ImportedAt: now,
+		MessageCount: len(parsed.Messages), SourceMTime: mtime, SourceSize: size,
+		CreatedAt: parsed.CreatedAt, ImportedAt: now,
 	}
 	if item.CreatedAt.IsZero() {
 		item.CreatedAt = now

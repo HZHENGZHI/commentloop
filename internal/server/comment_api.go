@@ -139,9 +139,10 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	if author != "user" && author != "agent" {
 		author = "agent"
 	}
-	if author == "user" {
-		// A user replying with further feedback reopens the review thread.
-		_, _ = s.comments.resolve(canonical, req.ID, false)
+	if _, known := s.agentGrantForRequest(r); known {
+		// A managed agent must not impersonate the user: that would bypass the
+		// reply capability and reopen a resolved thread on its behalf.
+		author = "agent"
 	}
 	if author == "agent" && s.rejectAgentCommentReply(w, r) {
 		return
@@ -159,6 +160,11 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	if req.DiscussionIDs == nil {
+		// Older MCP/CLI clients omit the field: keep the thread's context
+		// instead of clearing it.
+		discussionIDs = nil
 	}
 	templateID, err := s.validatePromptTemplateID(req.PromptTemplateID, false)
 	if err != nil {

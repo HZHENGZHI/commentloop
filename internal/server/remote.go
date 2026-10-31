@@ -376,13 +376,27 @@ func (r *remoteFS) write(rel string, data []byte) error {
 	}
 	_ = r.sftp.Chmod(tmp, mode)
 	if err := r.sftp.PosixRename(tmp, full); err != nil {
-		if err := r.sftp.Rename(tmp, full); err != nil {
-			_ = r.sftp.Remove(full)
-			if err2 := r.sftp.Rename(tmp, full); err2 != nil {
+		// Servers without the posix-rename extension cannot replace an existing
+		// file. Move the old file aside first so a failed retry can never
+		// destroy the document, then restore it if the retry fails.
+		if _, statErr := r.sftp.Stat(full); statErr != nil {
+			if err := r.sftp.Rename(tmp, full); err != nil {
 				_ = r.sftp.Remove(tmp)
-				return r.opError(err2)
+				return r.opError(err)
 			}
+			return nil
 		}
+		backup := path.Join(dir, fmt.Sprintf(".commentloop-bak-%d", time.Now().UnixNano()))
+		if err := r.sftp.Rename(full, backup); err != nil {
+			_ = r.sftp.Remove(tmp)
+			return r.opError(err)
+		}
+		if err := r.sftp.Rename(tmp, full); err != nil {
+			_ = r.sftp.Rename(backup, full) // best-effort restore
+			_ = r.sftp.Remove(tmp)
+			return r.opError(err)
+		}
+		_ = r.sftp.Remove(backup)
 	}
 	return nil
 }

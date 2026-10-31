@@ -102,12 +102,36 @@ func localizePromptTemplate(item PromptTemplate, language string) PromptTemplate
 	if !item.Builtin || language != "en" {
 		return item
 	}
-	if translated, ok := builtinPromptTemplatesEN[item.ID]; ok {
+	translated, ok := builtinPromptTemplatesEN[item.ID]
+	if !ok {
+		return item
+	}
+	seeded, ok := seededBuiltinPromptTemplate(item.ID)
+	if !ok {
+		return item
+	}
+	// Only translate fields that still hold the seeded Chinese text. A user may
+	// edit a built-in template; replacing that edit with the English default
+	// would hide (and later overwrite) their customization.
+	if item.Name == seeded.Name {
 		item.Name = translated.Name
+	}
+	if item.Description == seeded.Description {
 		item.Description = translated.Description
+	}
+	if item.Body == seeded.Body {
 		item.Body = translated.Body
 	}
 	return item
+}
+
+func seededBuiltinPromptTemplate(id string) (PromptTemplate, bool) {
+	for _, candidate := range builtinPromptTemplates {
+		if candidate.ID == id {
+			return candidate, true
+		}
+	}
+	return PromptTemplate{}, false
 }
 
 func (s *promptTemplateStore) ensureDefaults() error {

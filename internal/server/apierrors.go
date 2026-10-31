@@ -189,6 +189,7 @@ var (
 	errExternalAgentJobFailed                = defineError("external_agent_job_failed", "外部 Agent 任务失败", "External agent job failed.")
 	errAgentJobTokenInvalidExpired           = defineError("agent_job_token_invalid_expired", "Agent 任务令牌无效或已过期", "Agent job token is invalid or expired.")
 	errCrossSiteRequestRejected              = defineError("cross_site_request_rejected", "跨站请求已被拒绝", "Cross-site request rejected.")
+	errUIActionAgentForbidden                = defineError("ui_action_agent_forbidden", "受管 Agent 任务不能执行此操作", "Managed agent jobs cannot perform this action.")
 	errTaskCannotAccessCodeRepository        = defineError("task_cannot_access_code_repository", "当前任务不能访问这个代码仓库", "This task cannot access this code repository.")
 	errTaskCannotEditDocument                = defineError("task_cannot_edit_document", "当前任务模板不允许修改文档", "This task template does not allow document edits.")
 	errTaskCannotReplyComments               = defineError("task_cannot_reply_comments", "当前任务模板不允许回复评论", "This task template does not allow comment replies.")

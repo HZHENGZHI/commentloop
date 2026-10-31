@@ -307,8 +307,11 @@ func startPiRPC(command string, args []string, cwd, baseURL, agentSessionID stri
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	// Always inherit the server environment; a nil Env would otherwise leave
+	// the agent process with only the variables appended below.
+	cmd.Env = os.Environ()
 	if baseURL != "" {
-		cmd.Env = append(os.Environ(), "COMMENTLOOP_URL="+baseURL)
+		cmd.Env = append(cmd.Env, "COMMENTLOOP_URL="+baseURL)
 	}
 	if agentSessionID != "" {
 		cmd.Env = append(cmd.Env, "COMMENTLOOP_AGENT_SESSION="+agentSessionID)

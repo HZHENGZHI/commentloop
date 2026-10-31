@@ -252,7 +252,7 @@ export function CommentsPanel({
               expanded.has(comment.id) || replyTo === comment.id;
             const lastAuthor =
               lastMessage?.author === "agent"
-                ? "Code Agent"
+                ? agentName
                 : lastMessage?.author === "system"
                   ? t("版本回滚")
                   : t("你");
@@ -620,12 +620,22 @@ export function CommentsPanel({
                     setReplyTo(comment.id);
                     setReplyText("");
                     setReplyError(null);
-                    setReplyDiscussions([]);
+                    // Start from the thread's current context: sending an empty
+                    // list would otherwise clear the linked discussions the
+                    // user never touched. Deleted discussions/templates are
+                    // dropped because the server rejects stale ids.
+                    const available = new Set(discussions.map((item) => item.id));
+                    setReplyDiscussions(
+                      (comment.discussionIds ?? []).filter((id) => available.has(id)),
+                    );
                     setReplyTemplateId(
-                      comment.promptTemplateId ||
-                        promptTemplates.find((item) => item.allowDocumentEdit)?.id ||
-                        promptTemplates[0]?.id ||
-                        "",
+                      promptTemplates.some(
+                        (item) => item.id === comment.promptTemplateId,
+                      )
+                        ? comment.promptTemplateId ?? ""
+                        : promptTemplates.find((item) => item.allowDocumentEdit)?.id ||
+                            promptTemplates[0]?.id ||
+                            "",
                     );
                   }}
                 >
