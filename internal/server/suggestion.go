@@ -123,16 +123,21 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 		// Put the new paragraph after the quote's paragraph. A blank line
 		// already separates the next paragraph: insert before it. Otherwise
 		// insert after the quote's line, keeping both sides separated so the
-		// following line is not glued to the appended text.
+		// following line is not glued to the appended text. Detect both LF
+		// and CRLF boundaries because a document can mix them.
 		rest := content[end:]
-		if idx := strings.Index(rest, "\n\n"); idx >= 0 {
+		if idx, sep, ok := nextParagraphBreak(rest); ok {
 			at := end + idx
-			next = content[:at] + "\n\n" + text + content[at:]
-		} else if idx := strings.IndexByte(rest, '\n'); idx >= 0 && end+idx+1 < len(content) {
-			at := end + idx + 1
-			next = content[:at] + "\n" + text + "\n\n" + content[at:]
+			next = content[:at] + sep + sep + text + content[at:]
+		} else if idx, sep, ok := nextLineBreak(rest); ok {
+			at := end + idx
+			next = content[:at] + sep + sep + text + sep + content[at:]
 		} else {
-			next = strings.TrimRight(content, "\r\n") + "\n\n" + text
+			sep := "\n"
+			if strings.Contains(content, "\r\n") {
+				sep = "\r\n"
+			}
+			next = strings.TrimRight(content, "\r\n") + sep + sep + text + sep
 		}
 	} else {
 		next = content[:start] + text + content[end:]
@@ -159,4 +164,31 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	writeJSON(w, http.StatusOK, updated)
+}
+
+// nextParagraphBreak finds the earliest blank-line boundary after rest and
+// returns the line ending used there.
+func nextParagraphBreak(rest string) (int, string, bool) {
+	lf := strings.Index(rest, "\n\n")
+	crlf := strings.Index(rest, "\r\n\r\n")
+	switch {
+	case lf >= 0 && (crlf < 0 || lf < crlf):
+		return lf, "\n", true
+	case crlf >= 0:
+		return crlf, "\r\n", true
+	}
+	return 0, "", false
+}
+
+// nextLineBreak finds the earliest line ending after rest.
+func nextLineBreak(rest string) (int, string, bool) {
+	lf := strings.Index(rest, "\n")
+	crlf := strings.Index(rest, "\r\n")
+	switch {
+	case crlf >= 0 && (lf < 0 || crlf <= lf):
+		return crlf, "\r\n", true
+	case lf >= 0:
+		return lf, "\n", true
+	}
+	return 0, "", false
 }

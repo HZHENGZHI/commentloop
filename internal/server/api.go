@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -232,6 +233,15 @@ func (s *Server) persistDocument(ro *root, rel, canonical, content, origin strin
 	if err := s.writeRootFile(ro, rel, []byte(content)); err != nil {
 		return docResponse{}, err
 	}
+	if !existed {
+		// A path can be re-created after its document was deleted. Clearing a
+		// stale review row only after a successful write closes the window
+		// where a failed delete cleanup would hand the old status to the new
+		// document, without erasing metadata if the write fails.
+		if err := s.reviews.clear(canonical); err != nil {
+			slog.Warn("failed to clear review status for new document", "path", canonical, "err", err)
+		}
+	}
 	res := s.renderer.Render([]byte(content), canonical)
 	s.mu.Lock()
 	previousRevision := s.diskHash[canonical]
@@ -296,6 +306,9 @@ func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	if ro.Kind == rootKindRemote {
 		s.removeRemoteTreeEntry(ro, rel)
+	}
+	if err := s.reviews.clear(canonical); err != nil {
+		slog.Warn("failed to clear review status for deleted document", "path", canonical, "err", err)
 	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	s.hub.broadcastPath(canonical, outMessage{Type: "gone", Path: canonical})

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   Comment,
@@ -32,10 +32,11 @@ interface CommentsPanelProps {
   onReply: (
     comment: Comment,
     body: string,
-    discussionIds: string[],
+    discussionIds: string[] | undefined,
     promptTemplateId: string,
   ) => Promise<void>;
   discussions?: Discussion[];
+  discussionsLoaded?: boolean;
   promptTemplates?: PromptTemplate[];
   onGroup: (comment: Comment, memberIds: string[]) => Promise<void>;
   onRollback: (
@@ -71,6 +72,7 @@ export function CommentsPanel({
   onDelete,
   onReply,
   discussions = [],
+  discussionsLoaded = false,
   promptTemplates = [],
   onGroup,
   onRollback,
@@ -88,11 +90,25 @@ export function CommentsPanel({
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
   const [replyDiscussions, setReplyDiscussions] = useState<string[]>([]);
+  const [replyDiscussionsReady, setReplyDiscussionsReady] = useState(false);
   const [replyTemplateId, setReplyTemplateId] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "agent">(
     "all",
   );
+  // If the discussion list finishes loading while a reply form is open, seed
+  // its selection from the thread's stored references so the checkboxes match
+  // what the server will keep.
+  useEffect(() => {
+    if (!replyTo || replyDiscussionsReady || !discussionsLoaded) return;
+    const target = comments.find((comment) => comment.id === replyTo);
+    if (!target) return;
+    const available = new Set(discussions.map((item) => item.id));
+    setReplyDiscussions(
+      (target.discussionIds ?? []).filter((id) => available.has(id)),
+    );
+    setReplyDiscussionsReady(true);
+  }, [comments, discussions, discussionsLoaded, replyDiscussionsReady, replyTo]);
   const lastCommentAuthor = (comment: Comment) =>
     comment.messages[comment.messages.length - 1]?.author;
   const awaitingCount = comments.filter(
@@ -183,7 +199,12 @@ export function CommentsPanel({
     setReplyBusy(true);
     setReplyError(null);
     try {
-      await onReply(comment, replyText.trim(), replyDiscussions, replyTemplateId);
+      await onReply(
+        comment,
+        replyText.trim(),
+        replyDiscussionsReady ? replyDiscussions : undefined,
+        replyTemplateId,
+      );
       setReplyTo(null);
       setReplyText("");
       setReplyDiscussions([]);
@@ -679,7 +700,12 @@ export function CommentsPanel({
                   <DiscussionRefPicker
                     discussions={discussions}
                     selected={replyDiscussions}
-                    onChange={setReplyDiscussions}
+                    onChange={(ids) => {
+                      setReplyDiscussions(ids);
+                      // Once the user edits the picker, send the explicit
+                      // selection even if the list loaded after the form opened.
+                      setReplyDiscussionsReady(true);
+                    }}
                   />
                   {replyError ? (
                     <p className="comment-reply-error">{replyError}</p>
@@ -722,8 +748,11 @@ export function CommentsPanel({
                     // dropped because the server rejects stale ids.
                     const available = new Set(discussions.map((item) => item.id));
                     setReplyDiscussions(
-                      (comment.discussionIds ?? []).filter((id) => available.has(id)),
+                      discussionsLoaded
+                        ? (comment.discussionIds ?? []).filter((id) => available.has(id))
+                        : [],
                     );
+                    setReplyDiscussionsReady(discussionsLoaded);
                     const commentTemplate = promptTemplates.find(
                       (item) => item.id === comment.promptTemplateId,
                     );

@@ -3,11 +3,54 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestMigrateLegacySummaryDrafts(t *testing.T) {
+	db, err := openStateDB("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeStateDB(db)
+	if err := db.Where("key = ?", "review_summary_draft_v1").Delete(&metaRow{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	now := formatTime(time.Now())
+	later := formatTime(time.Now().Add(time.Second))
+	if err := db.Create(&docReviewRow{
+		DocPath: "legacy.md", Status: reviewStatusDraft, Summary: "old",
+		UpdatedAt: now, SummaryUpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&docReviewRow{
+		DocPath: "explicit.md", Status: reviewStatusDraft, Summary: "old",
+		UpdatedAt: later, SummaryUpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateLegacySummaryDrafts(db); err != nil {
+		t.Fatal(err)
+	}
+	var legacy docReviewRow
+	if err := db.Take(&legacy, "doc_path = ?", "legacy.md").Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Status != "" {
+		t.Fatalf("legacy summary draft kept status %q", legacy.Status)
+	}
+	var explicit docReviewRow
+	if err := db.Take(&explicit, "doc_path = ?", "explicit.md").Error; err != nil {
+		t.Fatal(err)
+	}
+	if explicit.Status != reviewStatusDraft {
+		t.Fatalf("explicit draft was changed to %q", explicit.Status)
+	}
+}
 
 func TestReviewStatusTracksReviewLoop(t *testing.T) {
 	db, err := openStateDB("")
@@ -438,6 +481,86 @@ func TestRemotePollDoesNotRevokeApprovalAfterSave(t *testing.T) {
 	review, ok := app.reviews.get(canonical)
 	if !ok || review.Status != reviewStatusApproved {
 		t.Fatalf("status after remote save poll = %+v, %v", review, ok)
+	}
+}
+
+func TestDeleteDocumentClearsReviewStatus(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/recreated.md"
+	const content = "# New document\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review", map[string]string{"path": docPath, "status": reviewStatusApproved}); rec.Code != http.StatusOK {
+		t.Fatalf("approve: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodDelete, "/api/doc?path="+url.QueryEscape(docPath), nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := app.reviews.get(docPath); ok {
+		t.Fatal("review status survived deleting the document")
+	}
+	// Simulate a failed cleanup: the delete succeeded but the old review row
+	// remained. Re-creating the path must still start from a clean status.
+	if _, err := app.reviews.set(docPath, reviewStatusApproved); err != nil {
+		t.Fatal(err)
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("recreate: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("recreated document status = %+v, %v", review, err)
+	}
+}
+
+func TestExplicitDraftSurvivesFirstComment(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/explicit-draft.md"
+	const content = "# Draft\n\nbody\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review", map[string]string{"path": docPath, "status": reviewStatusDraft}); rec.Code != http.StatusOK {
+		t.Fatalf("draft: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: docPath, Quote: "body", Body: "note",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("comment: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("explicit draft changed: %+v, %v", review, err)
+	}
+}
+
+func TestSummaryDoesNotFreezeDraftStatus(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/summary.md"
+	const content = "# Summary\n\nbody\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review/summary", setReviewSummaryRequest{
+		Path: docPath, Summary: "No findings yet.",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("summary: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("status after summary = %+v, %v", review, err)
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: docPath, Quote: "body", Body: "needs a look",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("comment: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusInReview {
+		t.Fatalf("status after first comment = %+v, %v", review, err)
 	}
 }
 

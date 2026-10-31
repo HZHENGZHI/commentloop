@@ -145,7 +145,7 @@ func (s *Server) buildInbox() (inboxResponse, error) {
 	for docPath, doc := range docs {
 		review, ok := reviews[docPath]
 		switch {
-		case ok:
+		case ok && review.Status != "":
 			doc.Status = review.Status
 		case doc.Comments > 0:
 			doc.Status = reviewStatusInReview

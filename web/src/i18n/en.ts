@@ -566,6 +566,7 @@ const en: Record<string, string> = {
   "建议修改": "Suggested edit",
   "已接受": "Accepted",
   "已拒绝": "Rejected",
+  "拒绝": "Reject",
   "接受建议": "Accept",
   "建议已应用": "Suggestion applied.",
   "已接受建议，未保存的本地改动已被覆盖": "Suggestion applied; unsaved local changes were overwritten.",
