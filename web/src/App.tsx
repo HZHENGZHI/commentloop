@@ -216,6 +216,7 @@ export default function App() {
   const inboxResult = useQuery(inboxQuery);
   const inboxDocs = inboxResult.data?.docs ?? NO_INBOX_DOCS;
   const inboxCounts = inboxResult.data?.counts ?? EMPTY_INBOX_COUNTS;
+  const inboxError = inboxResult.isError;
   const docReview = useQuery(docReviewQuery(docKey)).data;
   const reviewStatus: ReviewStatus = docReview?.status ?? "draft";
   const inboxByPath = useMemo(
@@ -1836,6 +1837,7 @@ export default function App() {
         <InboxModal
           docs={inboxDocs}
           counts={inboxCounts}
+          error={inboxError}
           onClose={() => setInboxOpen(false)}
           onOpen={(path) => {
             setInboxOpen(false);

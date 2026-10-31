@@ -42,21 +42,39 @@ type inboxResponse struct {
 	Counts inboxCounts `json:"counts"`
 }
 
-func (s *Server) handleInbox(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.buildInbox())
+func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
+	// The inbox is a workspace-wide UI surface. Managed Agent tasks only have
+	// access to their granted document, so they must not enumerate the rest.
+	if _, known := s.agentGrantForRequest(r); known {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "当前任务不能读取收件箱"})
+		return
+	}
+	resp, err := s.buildInbox()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errInternalServer)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) buildInbox() inboxResponse {
+func (s *Server) buildInbox() (inboxResponse, error) {
 	docs := make(map[string]*inboxDoc)
-	reviews, _ := s.reviews.all()
+	reviews, err := s.reviews.all()
+	if err != nil {
+		return inboxResponse{}, err
+	}
 
 	var commentRows []commentRow
-	_ = s.db.Select("id", "path", "resolved", "orphaned", "created_at", "updated_at").Find(&commentRows).Error
+	if err := s.db.Select("id", "path", "resolved", "orphaned", "created_at", "updated_at").Find(&commentRows).Error; err != nil {
+		return inboxResponse{}, err
+	}
 
 	lastAuthor := make(map[string]string, len(commentRows))
 	lastMessageAt := make(map[string]time.Time, len(commentRows))
 	var messageRows []commentMessageRow
-	_ = s.db.Select("comment_id", "author", "created_at").Order("created_at, id").Find(&messageRows).Error
+	if err := s.db.Select("comment_id", "author", "created_at").Order("created_at, id").Find(&messageRows).Error; err != nil {
+		return inboxResponse{}, err
+	}
 	for _, row := range messageRows {
 		lastAuthor[row.CommentID] = row.Author
 		lastMessageAt[row.CommentID] = parseTime(row.CreatedAt)
@@ -64,7 +82,9 @@ func (s *Server) buildInbox() inboxResponse {
 
 	workingComments := make(map[string]bool)
 	var jobRows []agentJobRow
-	_ = s.db.Select("comment_id").Where("status IN ?", []string{"queued", "running"}).Find(&jobRows).Error
+	if err := s.db.Select("comment_id").Where("status IN ?", []string{"queued", "running"}).Find(&jobRows).Error; err != nil {
+		return inboxResponse{}, err
+	}
 	for _, row := range jobRows {
 		if row.CommentID != "" {
 			workingComments[row.CommentID] = true
@@ -91,13 +111,18 @@ func (s *Server) buildInbox() inboxResponse {
 		if row.Orphaned != 0 {
 			doc.Orphaned++
 		}
-		switch {
-		case workingComments[row.ID]:
+		if workingComments[row.ID] {
 			doc.AgentWorking++
-		case lastAuthor[row.ID] == "agent" || lastAuthor[row.ID] == "system":
+		}
+		// Keep the latest-message classification aligned with the comment
+		// panel: a running Agent job is additional state, not a fifth status.
+		switch lastAuthor[row.ID] {
+		case "agent", "system":
 			doc.Awaiting++
-		case lastAuthor[row.ID] == "user":
-			doc.PendingAgent++
+		case "user":
+			if !workingComments[row.ID] {
+				doc.PendingAgent++
+			}
 		}
 	}
 
@@ -111,6 +136,7 @@ func (s *Server) buildInbox() inboxResponse {
 		}
 	}
 
+	remoteTrees := make(map[string]map[string]bool)
 	list := make([]inboxDoc, 0, len(docs))
 	for docPath, doc := range docs {
 		review, ok := reviews[docPath]
@@ -126,8 +152,20 @@ func (s *Server) buildInbox() inboxResponse {
 		if ro == nil {
 			continue
 		}
-		if ro.Kind == rootKindLocal && !pathExists(filepath.Join(ro.Path, filepath.FromSlash(doc.RelPath))) {
-			continue
+		switch ro.Kind {
+		case rootKindLocal:
+			if !pathExists(filepath.Join(ro.Path, filepath.FromSlash(doc.RelPath))) {
+				continue
+			}
+		case rootKindRemote:
+			known, ok := remoteTrees[ro.ID]
+			if !ok {
+				known = remoteTreePaths(s, ro)
+				remoteTrees[ro.ID] = known
+			}
+			if known != nil && !known[doc.RelPath] {
+				continue
+			}
 		}
 		doc.RootName = ro.Name
 		list = append(list, *doc)
@@ -154,7 +192,22 @@ func (s *Server) buildInbox() inboxResponse {
 		counts.PendingAgent += doc.PendingAgent
 		counts.AgentWorking += doc.AgentWorking
 	}
-	return inboxResponse{Docs: list, Counts: counts}
+	return inboxResponse{Docs: list, Counts: counts}, nil
+}
+
+// remoteTreePaths returns the cached set of existing remote files. A nil set
+// means the cache is not complete yet (or truncated); callers keep entries in
+// that case instead of hiding documents that may still exist.
+func remoteTreePaths(s *Server, ro *root) map[string]bool {
+	files, truncated, loaded := s.cachedRemoteTree(ro.ID)
+	if !loaded || truncated {
+		return nil
+	}
+	out := make(map[string]bool, len(files))
+	for _, file := range files {
+		out[file.RelPath] = true
+	}
+	return out
 }
 
 // ensureInboxDoc resolves the canonical path to its root metadata. Unknown

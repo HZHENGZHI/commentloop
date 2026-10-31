@@ -144,7 +144,11 @@ func (s *Server) handleGetDocReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
-	review, err := s.reviews.effective(ro.ID + "/" + rel)
+	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档") {
+		return
+	}
+	review, err := s.reviews.effective(canonical)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, errInternalServer)
 		return

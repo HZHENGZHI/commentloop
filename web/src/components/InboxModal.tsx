@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { InboxCounts, InboxDoc } from "../types";
-import { IconChevronRight, IconInbox, IconX } from "./Icons";
+import { IconAlert, IconChevronRight, IconInbox, IconX } from "./Icons";
 import { ReviewStatusBadge, ReviewStatusDot } from "./ReviewStatus";
 
 type InboxTab = "awaiting" | "agent" | "all";
@@ -9,6 +9,7 @@ type InboxTab = "awaiting" | "agent" | "all";
 interface InboxModalProps {
   docs: InboxDoc[];
   counts: InboxCounts;
+  error?: boolean;
   onClose: () => void;
   onOpen: (path: string) => void;
 }
@@ -31,6 +32,7 @@ function byActivity(a: InboxDoc, b: InboxDoc): number {
 export function InboxModal({
   docs,
   counts,
+  error = false,
   onClose,
   onOpen,
 }: InboxModalProps) {
@@ -132,7 +134,13 @@ export function InboxModal({
         </div>
 
         <div className="inbox-list">
-          {visibleDocs.length === 0 ? (
+          {error ? (
+            <div className="inbox-empty inbox-error">
+              <IconAlert size={24} />
+              <div>{t("收件箱加载失败")}</div>
+              <span>{t("请重试。")}</span>
+            </div>
+          ) : visibleDocs.length === 0 ? (
             <div className="inbox-empty">
               <IconInbox size={24} />
               <div>{t("没有需要处理的审阅")}</div>

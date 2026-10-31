@@ -762,6 +762,9 @@ func (s *Server) pollRemoteRoot(ro *root) {
 				}
 				changed = true
 				canonical := ro.ID + "/" + rel
+				// A remote edit invalidates a previous approval even when
+				// nobody is watching the document.
+				s.noteReviewDocChanged(canonical)
 				if len(s.hub.viewers(canonical)) == 0 {
 					continue
 				}

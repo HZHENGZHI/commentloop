@@ -545,6 +545,8 @@ const en: Record<string, string> = {
   "{{count}} 条处理中": "{{count}} in progress",
   "{{count}} 条等 Agent": "{{count}} waiting on agent",
   "没有需要处理的审阅": "No reviews need attention",
+  "收件箱加载失败": "Failed to load the inbox.",
+  "请重试。": "Try again.",
   "有评论或审阅状态后，这里会按文档聚合待办。": "Documents with comments or a review status are grouped here.",
   "只显示有评论或审阅状态的文档": "Only documents with comments or a review status are shown.",
 };
