@@ -80,6 +80,13 @@ func (s *reviewStore) set(path, status string) (docReview, error) {
 	return docReview{Path: path, Status: status, UpdatedAt: now}, nil
 }
 
+// clear removes the explicit review status of one document. It is used when
+// the document itself is deleted, so a later document created at the same
+// path does not inherit a stale approval.
+func (s *reviewStore) clear(path string) error {
+	return s.db.Where("doc_path = ?", path).Delete(&docReviewRow{}).Error
+}
+
 // noteCommentAdded records that a human added review feedback. An approval
 // stops being current as soon as the reviewer asks for more work.
 func (s *reviewStore) noteCommentAdded(path string) (docReview, bool, error) {

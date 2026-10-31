@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -294,6 +295,9 @@ func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	if ro.Kind == rootKindRemote {
 		s.removeRemoteTreeEntry(ro, rel)
+	}
+	if err := s.reviews.clear(canonical); err != nil {
+		slog.Warn("failed to clear review status for deleted document", "path", canonical, "err", err)
 	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	s.hub.broadcastPath(canonical, outMessage{Type: "gone", Path: canonical})

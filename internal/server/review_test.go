@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -437,5 +438,31 @@ func TestRemotePollDoesNotRevokeApprovalAfterSave(t *testing.T) {
 	review, ok := app.reviews.get(canonical)
 	if !ok || review.Status != reviewStatusApproved {
 		t.Fatalf("status after remote save poll = %+v, %v", review, ok)
+	}
+}
+
+func TestDeleteDocumentClearsReviewStatus(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/recreated.md"
+	const content = "# New document\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review", map[string]string{"path": docPath, "status": reviewStatusApproved}); rec.Code != http.StatusOK {
+		t.Fatalf("approve: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodDelete, "/api/doc?path="+url.QueryEscape(docPath), nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := app.reviews.get(docPath); ok {
+		t.Fatal("review status survived deleting the document")
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("recreate: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("recreated document status = %+v, %v", review, err)
 	}
 }
