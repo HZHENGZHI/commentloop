@@ -12,11 +12,9 @@ import {
   createComment,
   deleteComment,
   deleteDoc,
-  fetchConfig,
   createAgentSession,
   setActiveAgentSession,
   fetchDoc,
-  fetchTree,
   removeRoot,
   renderPreview,
   replyComment,
@@ -66,11 +64,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   agentSessionsQuery,
   commentsQuery,
+  configQuery,
   discussionsQuery,
   docCodeReposQuery,
   invalidate,
   promptTemplatesQuery,
   queryClient,
+  treeQuery,
 } from "./queries";
 import type {
   AddRemoteRootRequest,
@@ -162,9 +162,10 @@ function suffixedName(name: string, n: number): string {
 
 export default function App() {
   const { t, i18n: i18nHook } = useTranslation();
-  const [config, setConfig] = useState<ConfigResponse | null>(null);
-  const [configLoaded, setConfigLoaded] = useState(false);
-  const [tree, setTree] = useState<TreeResponse | null>(null);
+  const configResult = useQuery(configQuery);
+  const config = configResult.data ?? null;
+  const configLoaded = !configResult.isPending;
+  const tree = useQuery(treeQuery).data ?? null;
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [doc, setDoc] = useState<EditorDocument>({ content: "", version: 0 });
   const [html, setHtml] = useState("");
@@ -290,9 +291,7 @@ export default function App() {
 
   const refreshTree = useCallback(async (): Promise<TreeResponse | null> => {
     try {
-      const next = await fetchTree();
-      setTree(next);
-      return next;
+      return await queryClient.fetchQuery({ ...treeQuery, staleTime: 0 });
     } catch (error) {
       toast(i18n.t("读取文件列表失败：{{error}}", { error: errorMessage(error) }), "error");
       return null;
@@ -655,12 +654,8 @@ export default function App() {
 
   const handleSettingsSaved = useCallback(async () => {
     setSettingsOpen(false);
-    try {
-      const next = await fetchConfig();
-      setConfig(next);
-    } catch {
-      // Keep the last known config; the next page load will refresh it.
-    }
+    // A failed refetch keeps the last known config.
+    await invalidate("config");
     toast(i18n.t("设置已保存"), "success");
   }, [toast]);
 
@@ -1134,22 +1129,15 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    let alive = true;
-    fetchConfig()
-      .then((next) => {
-        if (alive) setConfig(next);
-      })
-      .catch((error) => {
-        if (alive) toast(i18n.t("无法读取配置：{{error}}", { error: errorMessage(error) }), "error");
-      })
-      .finally(() => {
-        if (alive) setConfigLoaded(true);
-      });
     void refreshTree();
-    return () => {
-      alive = false;
-    };
-  }, [refreshTree, toast]);
+  }, [refreshTree]);
+
+  const configError = configResult.data ? null : configResult.error;
+  useEffect(() => {
+    if (configError) {
+      toast(i18n.t("无法读取配置：{{error}}", { error: errorMessage(configError) }), "error");
+    }
+  }, [configError, toast]);
 
   useEffect(() => {
     if (config?.debug && !config.hotReload) {

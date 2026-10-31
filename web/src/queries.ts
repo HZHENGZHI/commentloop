@@ -3,9 +3,11 @@ import {
   fetchAgentSessions,
   fetchCodeRepos,
   fetchComments,
+  fetchConfig,
   fetchDocCodeRepos,
   fetchDocDiscussions,
   fetchPromptTemplates,
+  fetchTree,
 } from "./api";
 
 export const queryClient = new QueryClient({
@@ -24,6 +26,7 @@ export const queryClient = new QueryClient({
 
 type QueryRoot =
   | "comments"
+  | "config"
   | "codeRepos"
   | "docCodeRepos"
   | "discussions"
@@ -34,6 +37,20 @@ type QueryRoot =
 export function invalidate(root: QueryRoot, options?: { cancelRefetch?: boolean }) {
   return queryClient.invalidateQueries({ queryKey: [root] }, options);
 }
+
+export const configQuery = queryOptions({
+  queryKey: ["config"],
+  queryFn: fetchConfig,
+  staleTime: Infinity,
+});
+
+// Refreshed imperatively (debounced watcher events, after file operations), so
+// observers only read the cache; see refreshTree in App.
+export const treeQuery = queryOptions({
+  queryKey: ["tree"],
+  queryFn: fetchTree,
+  enabled: false,
+});
 
 export const commentsQuery = (path: string) =>
   queryOptions({
