@@ -40,6 +40,49 @@ export interface DocResponse {
   size: number;
 }
 
+export type ReviewStatus =
+  | "draft"
+  | "in_review"
+  | "changes_requested"
+  | "approved";
+
+export interface DocReview {
+  path: string;
+  status: ReviewStatus;
+  updatedAt?: string;
+}
+
+export interface InboxDoc {
+  path: string;
+  name: string;
+  relPath: string;
+  rootId: string;
+  rootName: string;
+  status: ReviewStatus;
+  comments: number;
+  unresolved: number;
+  awaiting: number;
+  pendingAgent: number;
+  agentWorking: number;
+  orphaned: number;
+  lastActivity: string;
+}
+
+export interface InboxCounts {
+  awaiting: number;
+  pendingAgent: number;
+  agentWorking: number;
+  draft: number;
+  inReview: number;
+  changesRequested: number;
+  approved: number;
+}
+
+export interface InboxResponse {
+  docs: InboxDoc[];
+  counts: InboxCounts;
+}
+
 export interface ConfigResponse {
   root: string;
   rootName: string;
@@ -124,6 +167,7 @@ export type WsServerMessage =
     }
   | { type: "tree" }
   | { type: "comments"; path: string }
+  | { type: "reviews"; path: string; status?: ReviewStatus }
   | { type: "discussions"; path: string }
   | {
       type: "consensus";

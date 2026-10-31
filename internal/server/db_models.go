@@ -87,6 +87,14 @@ type docCodeRepoRow struct {
 
 func (docCodeRepoRow) TableName() string { return "doc_code_repos" }
 
+type docReviewRow struct {
+	DocPath   string `gorm:"type:text;primaryKey"`
+	Status    string `gorm:"type:text;not null;default:''"`
+	UpdatedAt string `gorm:"type:text;not null"`
+}
+
+func (docReviewRow) TableName() string { return "doc_reviews" }
+
 type metaRow struct {
 	Key   string `gorm:"type:text;primaryKey"`
 	Value string `gorm:"type:text;not null"`
@@ -216,5 +224,5 @@ var stateModels = []any{
 	&codeRepoRow{}, &docCodeRepoRow{}, &metaRow{}, &settingRow{},
 	&agentSessionRow{}, &docAgentActiveRow{}, &docDiscussionRow{},
 	&discussionMessageRow{}, &promptTemplateRow{}, &agentJobRow{},
-	&agentAuditRow{}, &docConsensusRow{},
+	&agentAuditRow{}, &docConsensusRow{}, &docReviewRow{},
 }

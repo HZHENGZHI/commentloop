@@ -247,6 +247,7 @@ func (s *Server) persistDocument(ro *root, rel, canonical, content, origin strin
 		Type: "doc", Path: canonical, Content: content,
 		HTML: res.HTML, Revision: res.Revision, Origin: origin,
 	})
+	s.noteReviewDocChanged(canonical)
 
 	info, err := s.statRootFile(ro, rel)
 	if err != nil {

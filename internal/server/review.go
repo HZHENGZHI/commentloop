@@ -1,0 +1,184 @@
+package server
+
+import (
+	"errors"
+	"net/http"
+	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+// Review status describes where a document sits in the human/agent review
+// loop. It is metadata about the document, not a property of its comments.
+const (
+	reviewStatusDraft            = "draft"
+	reviewStatusInReview         = "in_review"
+	reviewStatusChangesRequested = "changes_requested"
+	reviewStatusApproved         = "approved"
+)
+
+var reviewStatuses = map[string]bool{
+	reviewStatusDraft:            true,
+	reviewStatusInReview:         true,
+	reviewStatusChangesRequested: true,
+	reviewStatusApproved:         true,
+}
+
+type docReview struct {
+	Path      string    `json:"path"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type reviewStore struct {
+	db *gorm.DB
+}
+
+func newReviewStore(db *gorm.DB) *reviewStore {
+	return &reviewStore{db: db}
+}
+
+func (s *reviewStore) get(path string) (docReview, bool) {
+	var row docReviewRow
+	if err := s.db.Take(&row, "doc_path = ?", path).Error; err != nil {
+		return docReview{}, false
+	}
+	return docReview{Path: row.DocPath, Status: row.Status, UpdatedAt: parseTime(row.UpdatedAt)}, true
+}
+
+// effective returns the explicit status when the user has set one. Documents
+// with review activity but no explicit status are considered in review;
+// everything else is still a draft.
+func (s *reviewStore) effective(path string) (docReview, error) {
+	if review, ok := s.get(path); ok {
+		return review, nil
+	}
+	var comments int64
+	if err := s.db.Model(&commentRow{}).Where("path = ?", path).Count(&comments).Error; err != nil {
+		return docReview{}, err
+	}
+	status := reviewStatusDraft
+	if comments > 0 {
+		status = reviewStatusInReview
+	}
+	return docReview{Path: path, Status: status}, nil
+}
+
+func (s *reviewStore) set(path, status string) (docReview, error) {
+	if !reviewStatuses[status] {
+		return docReview{}, errors.New("无效的审阅状态")
+	}
+	now := time.Now()
+	row := docReviewRow{DocPath: path, Status: status, UpdatedAt: formatTime(now)}
+	if err := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "doc_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"status", "updated_at"}),
+	}).Create(&row).Error; err != nil {
+		return docReview{}, err
+	}
+	return docReview{Path: path, Status: status, UpdatedAt: now}, nil
+}
+
+// noteCommentAdded records that a human added review feedback. An approval
+// stops being current as soon as the reviewer asks for more work.
+func (s *reviewStore) noteCommentAdded(path string) (docReview, bool, error) {
+	review, ok := s.get(path)
+	if !ok || review.Status != reviewStatusApproved {
+		return docReview{}, false, nil
+	}
+	updated, err := s.set(path, reviewStatusChangesRequested)
+	return updated, err == nil, err
+}
+
+// noteDocChanged records that the document changed. A previous approval or a
+// change request is no longer current until the reviewer looks again.
+func (s *reviewStore) noteDocChanged(path string) (docReview, bool, error) {
+	review, ok := s.get(path)
+	if !ok || (review.Status != reviewStatusApproved && review.Status != reviewStatusChangesRequested) {
+		return docReview{}, false, nil
+	}
+	updated, err := s.set(path, reviewStatusInReview)
+	return updated, err == nil, err
+}
+
+// noteReviewCommentAdded broadcasts a status change caused by new human
+// feedback, so every open inbox reflects the new state without a reload.
+func (s *Server) noteReviewCommentAdded(path string) {
+	review, changed, err := s.reviews.noteCommentAdded(path)
+	if err == nil && changed {
+		s.hub.broadcast(outMessage{Type: "reviews", Path: path, Status: review.Status})
+	}
+}
+
+// noteReviewDocChanged invalidates an approval once the document is edited.
+func (s *Server) noteReviewDocChanged(path string) {
+	review, changed, err := s.reviews.noteDocChanged(path)
+	if err == nil && changed {
+		s.hub.broadcast(outMessage{Type: "reviews", Path: path, Status: review.Status})
+	}
+}
+
+func (s *reviewStore) all() (map[string]docReview, error) {
+	var rows []docReviewRow
+	if err := s.db.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]docReview, len(rows))
+	for _, row := range rows {
+		out[row.DocPath] = docReview{
+			Path: row.DocPath, Status: row.Status, UpdatedAt: parseTime(row.UpdatedAt),
+		}
+	}
+	return out, nil
+}
+
+type setReviewRequest struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+}
+
+func (s *Server) handleGetDocReview(w http.ResponseWriter, r *http.Request) {
+	ro, rel, err := s.resolveDocRef(r.URL.Query().Get("path"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
+		return
+	}
+	review, err := s.reviews.effective(ro.ID + "/" + rel)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errInternalServer)
+		return
+	}
+	writeJSON(w, http.StatusOK, review)
+}
+
+func (s *Server) handleSetDocReview(w http.ResponseWriter, r *http.Request) {
+	if s.rejectAgentWrite(w, r) {
+		return
+	}
+	if _, known := s.agentGrantForRequest(r); known {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "审阅状态只能由用户设置"})
+		return
+	}
+	var req setReviewRequest
+	if !bindJSON(w, r, 16*1024, &req) {
+		return
+	}
+	if !reviewStatuses[req.Status] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效的审阅状态"})
+		return
+	}
+	ro, rel, err := s.resolveDocRef(req.Path)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
+		return
+	}
+	canonical := ro.ID + "/" + rel
+	review, err := s.reviews.set(canonical, req.Status)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errInternalServer)
+		return
+	}
+	s.hub.broadcast(outMessage{Type: "reviews", Path: canonical, Status: review.Status})
+	writeJSON(w, http.StatusOK, review)
+}

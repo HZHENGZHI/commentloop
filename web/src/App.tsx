@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -23,6 +24,7 @@ import {
   resolveComment,
   triggerCommentAgent,
   saveDoc,
+  setDocReview,
   ApiError,
 } from "./api";
 import { Editor, type EditorDocument, type EditorHandle } from "./components/Editor";
@@ -33,6 +35,8 @@ import { CodeRepoModal } from "./components/CodeRepoModal";
 import { CodeBrowserModal } from "./components/CodeBrowserModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { DiscussionModal } from "./components/DiscussionModal";
+import { InboxModal } from "./components/InboxModal";
+import { ReviewStatusSelect } from "./components/ReviewStatus";
 import { AgentSessionPicker } from "./components/AgentSessionPicker";
 import { Sidebar } from "./components/Sidebar";
 import { NewDocModal } from "./components/NewDocModal";
@@ -47,6 +51,7 @@ import {
   IconFolder,
   IconFolderPlus,
   IconGitBranch,
+  IconInbox,
   IconMessage,
   IconMoon,
   IconPanelLeft,
@@ -67,6 +72,8 @@ import {
   configQuery,
   discussionsQuery,
   docCodeReposQuery,
+  docReviewQuery,
+  inboxQuery,
   invalidate,
   promptTemplatesQuery,
   queryClient,
@@ -82,7 +89,10 @@ import type {
   ConsensusActivity,
   Discussion,
   DocStats,
+  InboxCounts,
+  InboxDoc,
   PromptTemplate,
+  ReviewStatus,
   RootInfo,
   SaveStatus,
   Theme,
@@ -115,6 +125,16 @@ const NO_CODE_REPOS: CodeRepo[] = [];
 const NO_DISCUSSIONS: Discussion[] = [];
 const NO_PROMPT_TEMPLATES: PromptTemplate[] = [];
 const NO_AGENT_SESSIONS: AgentSession[] = [];
+const NO_INBOX_DOCS: InboxDoc[] = [];
+const EMPTY_INBOX_COUNTS: InboxCounts = {
+  awaiting: 0,
+  pendingAgent: 0,
+  agentWorking: 0,
+  draft: 0,
+  inReview: 0,
+  changesRequested: 0,
+  approved: 0,
+};
 
 const VIEW_OPTIONS = [
   { value: "split" as const, label: "分栏", icon: <IconColumns size={15} /> },
@@ -179,6 +199,7 @@ export default function App() {
   const [addRootOpen, setAddRootOpen] = useState(false);
   const [removingRoot, setRemovingRoot] = useState<{ id: string; name: string } | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [commentQuote, setCommentQuote] = useState<string | null>(null);
   const [codeRepoModalOpen, setCodeRepoModalOpen] = useState(false);
   const [codeBrowserOpen, setCodeBrowserOpen] = useState(false);
@@ -192,6 +213,16 @@ export default function App() {
   } | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const docKey = currentPath ?? "";
+  const inboxResult = useQuery(inboxQuery);
+  const inboxDocs = inboxResult.data?.docs ?? NO_INBOX_DOCS;
+  const inboxCounts = inboxResult.data?.counts ?? EMPTY_INBOX_COUNTS;
+  const docReview = useQuery(docReviewQuery(docKey)).data;
+  const reviewStatus: ReviewStatus = docReview?.status ?? "draft";
+  const inboxByPath = useMemo(
+    () => new Map(inboxDocs.map((doc) => [doc.path, doc])),
+    [inboxDocs],
+  );
+  const inboxAttention = inboxDocs.filter((doc) => doc.awaiting > 0).length;
   const comments = useQuery(commentsQuery(docKey)).data?.comments ?? NO_COMMENTS;
   const codeRepos = useQuery(docCodeReposQuery(docKey)).data?.repos ?? NO_CODE_REPOS;
   const discussions =
@@ -527,6 +558,8 @@ export default function App() {
       setCommentQuote(null);
       setCommentsOpen(true);
       void invalidate("comments");
+      void invalidate("review");
+      void invalidate("inbox");
       toast(i18n.t("评论已添加"), "success");
     },
     [commentQuote, toast],
@@ -546,6 +579,25 @@ export default function App() {
     [toast],
   );
 
+  const handleSetReviewStatus = useCallback(
+    async (next: ReviewStatus) => {
+      const path = currentPathRef.current;
+      if (!path) return;
+      try {
+        const review = await setDocReview(path, next);
+        queryClient.setQueryData(["review", path], review);
+        void invalidate("inbox");
+        toast(i18n.t("审阅状态已更新"), "success");
+      } catch (error) {
+        toast(
+          i18n.t("更新审阅状态失败：{{error}}", { error: errorMessage(error) }),
+          "error",
+        );
+      }
+    },
+    [toast],
+  );
+
   const handleReplyComment = useCallback(
     async (comment: Comment, body: string, discussionIds: string[] = [], promptTemplateId = "") => {
       const path = currentPathRef.current;
@@ -556,6 +608,8 @@ export default function App() {
         promptTemplateId,
       });
       void invalidate("comments");
+      void invalidate("review");
+      void invalidate("inbox");
       toast(i18n.t("已回复，等待 Code Agent 继续修改"), "success");
     },
     [toast],
@@ -606,6 +660,8 @@ export default function App() {
           setMeta({ size: result.doc.size, modTime: result.doc.modTime });
         }
         void invalidate("comments");
+        void invalidate("review");
+        void invalidate("inbox");
         toast(
           i18n.t("已局部回滚到第 {{round}} 次修改{{side}}的段落，等待你的确认", {
             round: result.round,
@@ -1056,9 +1112,21 @@ export default function App() {
       }
       case "tree":
         scheduleTreeRefresh();
+        void invalidate("inbox");
         break;
       case "comments":
         void invalidate("comments");
+        void invalidate("review");
+        void invalidate("inbox");
+        break;
+      case "reviews":
+        if (message.status) {
+          queryClient.setQueryData(["review", message.path], {
+            path: message.path,
+            status: message.status,
+          });
+        }
+        void invalidate("inbox");
         break;
       case "discussions":
         void invalidate("discussions");
@@ -1080,6 +1148,7 @@ export default function App() {
         }
         break;
       case "agent":
+        void invalidate("inbox");
         if (!message.path || message.path === currentPathRef.current) {
           const status =
             message.status === "error"
@@ -1111,6 +1180,7 @@ export default function App() {
           clearCurrent();
           void refreshTree().finally(() => {
             initialPickRef.current = false;
+            void invalidate("inbox");
           });
         }
         break;
@@ -1374,6 +1444,10 @@ export default function App() {
               </span>
               <span className="doc-subline">
                 <span className="doc-parent">{currentLocation}</span>
+                <ReviewStatusSelect
+                  value={reviewStatus}
+                  onChange={(next) => void handleSetReviewStatus(next)}
+                />
                 <AgentSessionPicker
                   sessions={agentSessions}
                   activeId={activeAgentSessionId}
@@ -1408,6 +1482,21 @@ export default function App() {
               ))}
             </div>
           ) : null}
+          <button
+            type="button"
+            className={`icon-btn inbox-btn${inboxOpen ? " active" : ""}`}
+            onClick={() => {
+              setInboxOpen(true);
+              void inboxResult.refetch();
+            }}
+            title={t("收件箱")}
+            aria-label={t("收件箱")}
+          >
+            <IconInbox size={17} />
+            {inboxAttention > 0 ? (
+              <span className="inbox-badge">{inboxAttention}</span>
+            ) : null}
+          </button>
           <button
             type="button"
             className="icon-btn"
@@ -1473,6 +1562,7 @@ export default function App() {
           onImport={handleSidebarImport}
           onAddRoot={openAddRoot}
           onRemoveRoot={handleSidebarRemoveRoot}
+          reviewByPath={inboxByPath}
         />
 
         <main className="main">
@@ -1628,6 +1718,7 @@ export default function App() {
                 />
                 {commentsOpen ? (
                   <CommentsPanel
+                    key={currentPath ?? ""}
                     comments={comments}
                     onClose={() => setCommentsOpen(false)}
                     onJump={handleJumpToComment}
@@ -1738,6 +1829,18 @@ export default function App() {
           promptTemplates={promptTemplates}
           onClose={() => setCommentQuote(null)}
           onSubmit={handleCreateComment}
+        />
+      ) : null}
+
+      {inboxOpen ? (
+        <InboxModal
+          docs={inboxDocs}
+          counts={inboxCounts}
+          onClose={() => setInboxOpen(false)}
+          onOpen={(path) => {
+            setInboxOpen(false);
+            void openDoc(path);
+          }}
         />
       ) : null}
 

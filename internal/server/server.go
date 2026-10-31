@@ -77,6 +77,7 @@ type Server struct {
 	db             *gorm.DB
 	persistedRoots []stateRoot
 	comments       *commentStore
+	reviews        *reviewStore
 	prompts        *promptTemplateStore
 	discussions    *discussionStore
 	discussionSync *discussionSyncService
@@ -139,6 +140,7 @@ func New(opts Options) (*Server, error) {
 	s := &Server{
 		db:                  db,
 		comments:            newCommentStore(db),
+		reviews:             newReviewStore(db),
 		prompts:             prompts,
 		discussions:         newDiscussionStore(db),
 		agentCaps:           newAgentCapabilityStore(),
@@ -406,6 +408,7 @@ func (s *Server) onFSChange(ro *root, ev watcher.Event) {
 		Type: "doc", Path: canonical, Content: string(data),
 		HTML: res.HTML, Revision: res.Revision, Origin: "external",
 	})
+	s.noteReviewDocChanged(canonical)
 	s.hub.broadcast(outMessage{Type: "tree"})
 }
 
