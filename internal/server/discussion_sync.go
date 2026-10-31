@@ -3,18 +3,10 @@ package server
 import (
 	"log/slog"
 	"os"
-	"sync"
 	"time"
 )
 
 const discussionSyncInterval = 5 * time.Second
-
-type discussionSyncService struct {
-	srv  *Server
-	stop chan struct{}
-	done chan struct{}
-	once sync.Once
-}
 
 func newDiscussionSyncService(srv *Server) *discussionSyncService {
 	s := &discussionSyncService{

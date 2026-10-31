@@ -13,20 +13,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type agentSession struct {
-	ID          string    `json:"id"`
-	DocPath     string    `json:"docPath"`
-	PiSessionID string    `json:"-"`
-	Title       string    `json:"title"`
-	Active      bool      `json:"active,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
-
-type agentSessionStore struct {
-	db *gorm.DB
-}
-
 func newAgentSessionStore(db *gorm.DB) *agentSessionStore {
 	return &agentSessionStore{db: db}
 }
@@ -164,12 +150,6 @@ func (s *agentSessionStore) rename(id, title string) error {
 		return os.ErrNotExist
 	}
 	return nil
-}
-
-type agentSessionRequest struct {
-	Path  string `json:"path"`
-	ID    string `json:"id"`
-	Title string `json:"title"`
 }
 
 func (s *Server) resolveDocCanonical(path string) (string, error) {

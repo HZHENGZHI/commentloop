@@ -5,28 +5,6 @@ import (
 	"strings"
 )
 
-type agentClaimResponse struct {
-	AgentJob
-	Token string `json:"token"`
-}
-
-type agentRunnerClaimRequest struct {
-	RunnerID  string `json:"runnerId"`
-	AgentType string `json:"agentType"`
-}
-
-type agentRunnerFinishRequest struct {
-	RunnerID string `json:"runnerId"`
-	ID       string `json:"id"`
-	Success  bool   `json:"success"`
-	Error    string `json:"error"`
-}
-
-type agentRunnerHeartbeatRequest struct {
-	RunnerID string `json:"runnerId"`
-	ID       string `json:"id"`
-}
-
 func (s *Server) handleAgentRunnerClaim(w http.ResponseWriter, r *http.Request) {
 	var req agentRunnerClaimRequest
 	if !bindJSON(w, r, defaultJSONBodyLimit, &req) {

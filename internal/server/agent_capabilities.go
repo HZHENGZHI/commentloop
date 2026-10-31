@@ -3,31 +3,7 @@ package server
 import (
 	"net/http"
 	"strings"
-	"sync"
 )
-
-// agentCapabilityStore ties write permission to the currently running
-// comment task for an agent session. A prompt can ask an analysis-only task
-// not to write, but the server must enforce it for requests that carry the
-// managed agent session header.
-type agentCapabilities struct {
-	WriteDocs     bool
-	ReadCode      bool
-	ReplyComments bool
-}
-
-type agentGrant struct {
-	Capabilities agentCapabilities
-	DocPath      string
-	RepoIDs      []string
-	JobID        string
-}
-
-type agentCapabilityStore struct {
-	mu     sync.RWMutex
-	byTask map[string]agentGrant
-	tokens map[string]agentGrant
-}
 
 func newAgentCapabilityStore() *agentCapabilityStore {
 	return &agentCapabilityStore{

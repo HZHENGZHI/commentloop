@@ -5,34 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 )
 
 const remoteSessionTTL = 15 * time.Minute
-
-type remoteBrowseSession struct {
-	fs       *remoteFS
-	home     string
-	lastUsed time.Time
-}
-
-type remoteSessionRequest struct {
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	User    string `json:"user"`
-	KeyPath string `json:"keyPath"`
-}
-
-type remoteSessionResponse struct {
-	Session string `json:"session"`
-	Home    string `json:"home"`
-}
-
-type remoteSessionStore struct {
-	mu       sync.Mutex
-	sessions map[string]*remoteBrowseSession
-}
 
 func newRemoteSessionStore() *remoteSessionStore {
 	return &remoteSessionStore{sessions: make(map[string]*remoteBrowseSession)}

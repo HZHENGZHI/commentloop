@@ -11,14 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// hijackTracker records whether the handler took over the connection, which
-// is how a successful WebSocket upgrade shows up: the 101 is written to the
-// raw conn, so Gin's writer still reports 200.
-type hijackTracker struct {
-	gin.ResponseWriter
-	hijacked bool
-}
-
 func (h *hijackTracker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	conn, rw, err := h.ResponseWriter.Hijack()
 	if err == nil {

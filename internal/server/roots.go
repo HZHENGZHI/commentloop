@@ -12,15 +12,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/watcher"
 )
 
 var errTooManyRoots = errors.New("too many roots")
-
-type tooManyRootsError struct{ limit int }
 
 func (e tooManyRootsError) Error() string        { return errTooManyRoots.Error() }
 func (e tooManyRootsError) Is(target error) bool { return target == errTooManyRoots }
@@ -30,68 +27,12 @@ const (
 	rootKindRemote = "remote"
 )
 
-// root is one directory (local or remote) added to the workspace.
-type root struct {
-	ID      string
-	Kind    string
-	Path    string // local absolute path or remote absolute path
-	Name    string
-	Primary bool
-	Remote  *remoteConfig
-	Offline string
-
-	remoteFS *remoteFS
-	lister   *remoteFS
-
-	pollStop chan struct{}
-	pollOnce sync.Once
-	pollWG   sync.WaitGroup
-}
-
 func (ro *root) stopPoll() {
 	if ro.pollStop == nil {
 		return
 	}
 	ro.pollOnce.Do(func() { close(ro.pollStop) })
 	ro.pollWG.Wait()
-}
-
-type rootInfo struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Remote  string `json:"remote,omitempty"`
-	Primary bool   `json:"primary"`
-	Offline string `json:"offline,omitempty"`
-}
-
-type addRootRequest struct {
-	Path string `json:"path"`
-}
-
-type addRemoteRootRequest struct {
-	Name    string `json:"name"`
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	User    string `json:"user"`
-	KeyPath string `json:"keyPath"`
-	Path    string `json:"path"`
-}
-
-type addRootResponse struct {
-	Root    rootInfo `json:"root"`
-	Warning string   `json:"warning,omitempty"`
-}
-
-type stateRoot struct {
-	Kind    string `json:"kind"`
-	Path    string `json:"path"`
-	Name    string `json:"name,omitempty"`
-	Host    string `json:"host,omitempty"`
-	Port    int    `json:"port,omitempty"`
-	User    string `json:"user,omitempty"`
-	KeyPath string `json:"keyPath,omitempty"`
 }
 
 // initRoots loads the primary root, CLI extras and the persisted workspace,
@@ -654,11 +595,6 @@ func uniqueRootID(key string, existing map[string]*root) string {
 			return id
 		}
 	}
-}
-
-type remoteSig struct {
-	size int64
-	mod  int64
 }
 
 func remoteEntryFiles(ro *root, files []remoteFile) []fileEntry {

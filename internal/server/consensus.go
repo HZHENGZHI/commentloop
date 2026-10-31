@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
@@ -17,16 +16,6 @@ const (
 	maxTranscriptChars = 40000
 	maxCommentChars    = 10000
 )
-
-type consensusScheduler struct {
-	srv     *Server
-	ctx     context.Context
-	cancel  context.CancelFunc
-	mu      sync.Mutex
-	running map[string]bool
-	pending map[string]bool // true = regenerate without the old consensus
-	wg      sync.WaitGroup
-}
 
 func newConsensusScheduler(srv *Server) *consensusScheduler {
 	ctx, cancel := context.WithCancel(context.Background())

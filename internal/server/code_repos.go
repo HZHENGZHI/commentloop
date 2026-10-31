@@ -16,26 +16,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type codeRepoRecord struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Path         string    `json:"path"`
-	Kind         string    `json:"kind,omitempty"`
-	RemoteURL    string    `json:"remoteUrl,omitempty"`
-	RemoteBranch string    `json:"remoteBranch,omitempty"`
-	Branch       string    `json:"branch,omitempty"`
-	Head         string    `json:"head,omitempty"`
-	Dirty        bool      `json:"dirty,omitempty"`
-	Changed      []string  `json:"changed,omitempty"`
-	Linked       bool      `json:"linked,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-}
-
-type codeRepoStore struct {
-	db        *gorm.DB
-	cacheRoot string
-}
-
 func newCodeRepoStore(db *gorm.DB, stateDir string) *codeRepoStore {
 	cacheRoot := ""
 	if strings.TrimSpace(stateDir) != "" {
@@ -158,14 +138,6 @@ func (s *codeRepoStore) enriched(item codeRepoRecord, linked bool) codeRepoRecor
 	item.Changed = info.Changed
 	item.Linked = linked
 	return item
-}
-
-type docCodeRepoRequest struct {
-	DocPath      string `json:"docPath"`
-	RepoID       string `json:"repoId"`
-	RepoPath     string `json:"repoPath"`
-	RemoteURL    string `json:"remoteUrl"`
-	RemoteBranch string `json:"remoteBranch"`
 }
 
 func (s *Server) codeRepoForID(id string) (codeRepoRecord, bool) {
@@ -493,11 +465,6 @@ func (s *codeRepoStore) switchBranch(ctx context.Context, id, branch string) (co
 		return codeRepoRecord{}, err
 	}
 	return item, nil
-}
-
-type switchBranchRequest struct {
-	ID     string `json:"id"`
-	Branch string `json:"branch"`
 }
 
 func (s *Server) handleCodeRepoBranches(w http.ResponseWriter, r *http.Request) {

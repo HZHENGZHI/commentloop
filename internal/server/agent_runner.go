@@ -5,39 +5,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
-
-type reviewAgentJob struct {
-	Path         string
-	CommentID    string
-	Prompt       string
-	Capabilities agentCapabilities
-	RepoIDs      []string
-}
-
-type sessionAgentWorker struct {
-	srv     *Server
-	session agentSession
-
-	mu      sync.Mutex
-	queue   []reviewAgentJob
-	wake    chan struct{}
-	stop    chan struct{}
-	closed  bool
-	proc    *piRPC
-	procSig string
-	wg      sync.WaitGroup
-}
 
 func newSessionAgentWorker(srv *Server, session agentSession) *sessionAgentWorker {
 	r := &sessionAgentWorker{
@@ -219,14 +195,6 @@ func removeModeArg(args []string) []string {
 	return out
 }
 
-type agentRunner struct {
-	srv *Server
-
-	mu      sync.Mutex
-	workers map[string]*sessionAgentWorker
-	closed  bool
-}
-
 func newAgentRunner(srv *Server) *agentRunner {
 	return &agentRunner{srv: srv, workers: make(map[string]*sessionAgentWorker)}
 }
@@ -292,25 +260,6 @@ func hasArg(args []string, name string) bool {
 	return false
 }
 
-type piRecord struct {
-	Type    string `json:"type"`
-	ID      string `json:"id"`
-	Method  string `json:"method"`
-	Command string `json:"command"`
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
-	Data    struct {
-		Disposition string `json:"disposition"`
-	} `json:"data"`
-	Aborted  bool            `json:"aborted"`
-	ToolName string          `json:"toolName"`
-	Args     json.RawMessage `json:"args"`
-	IsError  bool            `json:"isError"`
-	Message  struct {
-		Role string `json:"role"`
-	} `json:"message"`
-}
-
 func progressForTool(record piRecord) string {
 	name := strings.ToLower(record.ToolName)
 	if index := strings.LastIndex(name, "__"); index >= 0 {
@@ -360,18 +309,6 @@ func progressForTool(record piRecord) string {
 		}
 		return "正在调用 " + tool + "…"
 	}
-}
-
-type piRPC struct {
-	cmd      *exec.Cmd
-	stdin    io.WriteCloser
-	reader   *bufio.Reader
-	events   chan piRecord
-	closed   chan struct{}
-	closeOne sync.Once
-	writeMu  sync.Mutex
-	promptID int
-	stderr   logBuffer
 }
 
 func startPiRPC(command string, args []string, cwd, baseURL, agentSessionID string) (*piRPC, error) {
@@ -541,11 +478,6 @@ func (p *piRPC) close() {
 		}
 		_ = p.cmd.Wait()
 	})
-}
-
-type logBuffer struct {
-	mu   sync.Mutex
-	data []byte
 }
 
 func (b *logBuffer) Write(p []byte) (int, error) {

@@ -10,13 +10,6 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 )
 
-type lspDefinitionRequest struct {
-	Repo      string `json:"repo"`
-	Path      string `json:"path"`
-	Line      int    `json:"line"`
-	Character int    `json:"character"`
-}
-
 func (s *Server) handleLSPDefinition(w http.ResponseWriter, r *http.Request) {
 	var req lspDefinitionRequest
 	if !bindJSON(w, r, 64*1024, &req) {

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/ignore"
 )
@@ -21,49 +20,6 @@ const (
 )
 
 var errBadPath = errors.New("invalid path")
-
-type docResponse struct {
-	Path     string    `json:"path"`
-	Content  string    `json:"content"`
-	HTML     string    `json:"html"`
-	Revision string    `json:"revision"`
-	ModTime  time.Time `json:"modTime"`
-	Size     int64     `json:"size"`
-}
-
-type fileEntry struct {
-	Path     string    `json:"path"`    // canonical: <rootID>/<relative-path>
-	RelPath  string    `json:"relPath"` // path inside its directory
-	Name     string    `json:"name"`
-	Dir      string    `json:"dir"`
-	RootID   string    `json:"rootId"`
-	RootName string    `json:"rootName"`
-	Size     int64     `json:"size"`
-	ModTime  time.Time `json:"modTime"`
-}
-
-type treeRoot struct {
-	ID      string      `json:"id"`
-	Kind    string      `json:"kind"`
-	Name    string      `json:"name"`
-	Path    string      `json:"path"`
-	Remote  string      `json:"remote,omitempty"`
-	Primary bool        `json:"primary"`
-	Offline string      `json:"offline,omitempty"`
-	Loading bool        `json:"loading,omitempty"`
-	Files   []fileEntry `json:"files"`
-}
-
-type treeResponse struct {
-	Roots     []treeRoot  `json:"roots"`
-	Files     []fileEntry `json:"files"`
-	Truncated bool        `json:"truncated"`
-}
-
-type saveRequest struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": s.version})
