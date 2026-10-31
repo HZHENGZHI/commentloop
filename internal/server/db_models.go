@@ -36,6 +36,10 @@ type commentRow struct {
 	DiscussionIDs    string `gorm:"column:discussion_ids;type:text;not null;default:'[]'"`
 	PromptTemplateID string `gorm:"type:text;not null;default:''"`
 	Severity         string `gorm:"type:text;not null;default:''"`
+	SuggestionQuote  string `gorm:"type:text;not null;default:''"`
+	SuggestionText   string `gorm:"type:text;not null;default:''"`
+	SuggestionMode   string `gorm:"type:text;not null;default:''"`
+	SuggestionStatus string `gorm:"type:text;not null;default:''"`
 }
 
 func (commentRow) TableName() string { return "comments" }

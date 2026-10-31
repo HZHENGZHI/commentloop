@@ -24,6 +24,7 @@ import {
   resolveComment,
   triggerCommentAgent,
   requestDocReview,
+  resolveSuggestion,
   saveDoc,
   setDocReview,
   ApiError,
@@ -625,6 +626,26 @@ export default function App() {
       );
     }
   }, [toast]);
+
+  const handleResolveSuggestion = useCallback(
+    async (comment: Comment, accept: boolean) => {
+      const path = currentPathRef.current;
+      if (!path) return;
+      try {
+        await resolveSuggestion(path, comment.id, accept);
+        void invalidate("comments");
+        void invalidate("review");
+        void invalidate("inbox");
+        toast(accept ? i18n.t("建议已应用") : i18n.t("建议已拒绝"), "success");
+      } catch (error) {
+        toast(
+          i18n.t("处理建议失败：{{error}}", { error: errorMessage(error) }),
+          "error",
+        );
+      }
+    },
+    [toast],
+  );
 
   const handleReplyComment = useCallback(
     async (comment: Comment, body: string, discussionIds: string[] = [], promptTemplateId = "") => {
@@ -1767,6 +1788,9 @@ export default function App() {
                     review={docReview}
                     reviewing={reviewRequestPath === currentPath}
                     onRequestReview={() => void handleRequestReview()}
+                    onSuggestion={(comment, accept) =>
+                      void handleResolveSuggestion(comment, accept)
+                    }
                     onClose={() => setCommentsOpen(false)}
                     onJump={handleJumpToComment}
                     onResolve={(comment, resolved) =>

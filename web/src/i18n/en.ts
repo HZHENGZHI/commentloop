@@ -561,6 +561,16 @@ const en: Record<string, string> = {
   "应修": "Should fix",
   "小问题": "Nit",
   "疑问": "Question",
+  // Structured suggestions
+  "建议追加": "Suggested addition",
+  "建议修改": "Suggested edit",
+  "已接受": "Accepted",
+  "已拒绝": "Rejected",
+  "接受建议": "Accept",
+  "建议已应用": "Suggestion applied.",
+  "建议已拒绝": "Suggestion rejected.",
+  "处理建议失败：{{error}}": "Failed to handle suggestion: {{error}}",
+
 
 };
 
