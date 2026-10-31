@@ -28,7 +28,7 @@ func TestReviewStatusTracksReviewLoop(t *testing.T) {
 		t.Fatalf("status without comments = %q, want draft", review.Status)
 	}
 
-	if _, err := comments.create(docPath, "Alpha", "", "", "fix", content, nil, ""); err != nil {
+	if _, err := comments.createAs("user", docPath, "Alpha", "", "", "fix", "", content, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	review, err = reviews.effective(docPath)
@@ -74,14 +74,14 @@ func TestInboxAggregatesReviewState(t *testing.T) {
 	docPath := rootID + "/hello.md"
 	content := "# Hello\n\n- [x] done\n"
 
-	first, err := app.comments.create(docPath, "Hello", "", "", "please fix", content, nil, "")
+	first, err := app.comments.createAs("user", docPath, "Hello", "", "", "please fix", "", content, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := app.comments.reply(docPath, first.ID, "agent", "done", "", "Hello2", "", content, false, nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	second, err := app.comments.create(docPath, "done", "", "", "also this", content, nil, "")
+	second, err := app.comments.createAs("user", docPath, "done", "", "", "also this", "", content, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestInboxKeepsAwaitingWhileAgentRetries(t *testing.T) {
 	docPath := rootID + "/hello.md"
 	content := "# Hello\n\n- [x] done\n"
 
-	comment, err := app.comments.create(docPath, "Hello", "", "", "please fix", content, nil, "")
+	comment, err := app.comments.createAs("user", docPath, "Hello", "", "", "please fix", "", content, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

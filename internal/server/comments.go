@@ -56,10 +56,6 @@ func normalizeDiscussionIDs(ids []string) []string {
 	return out
 }
 
-func (s *commentStore) create(path, quote, prefix, suffix, body, content string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
-	return s.createAs("user", path, quote, prefix, suffix, body, "", content, discussionIDs, promptTemplateID)
-}
-
 func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, severity, content string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
 	quote = strings.TrimSpace(quote)
 	body = strings.TrimSpace(body)
