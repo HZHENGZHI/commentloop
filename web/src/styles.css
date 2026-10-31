@@ -6037,3 +6037,13 @@ body.mermaid-modal-open {
 .mermaid-block.is-expanded .mermaid-diagram {
   transform: none !important;
 }
+
+/* Keep the session menu inside the viewport when the mobile header lays the
+   document identity out from the left edge. */
+@media (max-width: 600px) {
+  .agent-session-menu {
+    left: 0;
+    transform: none;
+    width: min(270px, calc(100vw - 28px));
+  }
+}
