@@ -230,6 +230,14 @@ func (s *Server) handleSaveDoc(w http.ResponseWriter, r *http.Request) {
 // save, then broadcasts the rendered document. Rollback uses it with a
 // different origin so the client treats the disk content as authoritative.
 func (s *Server) persistDocument(ro *root, rel, canonical, content, origin string, existed bool) (docResponse, error) {
+	if !existed {
+		// A path can be re-created after its document was deleted. Clearing
+		// any stale review row here closes the window where a failed delete
+		// cleanup would hand the old status to the new document.
+		if err := s.reviews.clear(canonical); err != nil {
+			slog.Warn("failed to clear review status for new document", "path", canonical, "err", err)
+		}
+	}
 	if err := s.writeRootFile(ro, rel, []byte(content)); err != nil {
 		return docResponse{}, err
 	}

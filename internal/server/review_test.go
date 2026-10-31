@@ -460,11 +460,43 @@ func TestDeleteDocumentClearsReviewStatus(t *testing.T) {
 	if _, ok := app.reviews.get(docPath); ok {
 		t.Fatal("review status survived deleting the document")
 	}
+	// Simulate a failed cleanup: the delete succeeded but the old review row
+	// remained. Re-creating the path must still start from a clean status.
+	if _, err := app.reviews.set(docPath, reviewStatusApproved); err != nil {
+		t.Fatal(err)
+	}
 	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
 		t.Fatalf("recreate: %d %s", rec.Code, rec.Body.String())
 	}
 	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
 		t.Fatalf("recreated document status = %+v, %v", review, err)
+	}
+}
+
+func TestSummaryDoesNotFreezeDraftStatus(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/summary.md"
+	const content = "# Summary\n\nbody\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review/summary", setReviewSummaryRequest{
+		Path: docPath, Summary: "No findings yet.",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("summary: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("status after summary = %+v, %v", review, err)
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: docPath, Quote: "body", Body: "needs a look",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("comment: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusInReview {
+		t.Fatalf("status after first comment = %+v, %v", review, err)
 	}
 }
 
