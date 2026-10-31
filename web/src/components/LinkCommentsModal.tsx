@@ -141,10 +141,12 @@ export function LinkCommentsModal({
                 <div
                   key={item.id}
                   className={`link-comment-row${checked ? " checked" : ""}`}
+                  onClick={() => toggle(item)}
                 >
                   <Checkbox
                     checked={checked}
                     onChange={() => toggle(item)}
+                    onClick={(event) => event.stopPropagation()}
                   />
                   <span className="link-comment-line">
                     {item.line > 0 ? t("第 {{line}} 行", { line: item.line }) : t("未定位")}

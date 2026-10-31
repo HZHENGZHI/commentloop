@@ -34,10 +34,15 @@ export function DiscussionRefPicker({
       </summary>
       <div className="discussion-ref-list">
         {discussions.map((item) => (
-          <div key={item.id} className="discussion-ref-item">
+          <div
+            key={item.id}
+            className="discussion-ref-item"
+            onClick={() => toggle(item.id)}
+          >
             <Checkbox
               checked={selected.includes(item.id)}
               onChange={() => toggle(item.id)}
+              onClick={(event) => event.stopPropagation()}
             />
             <span className="discussion-ref-main">
               <span className="discussion-ref-title">{item.title}</span>

@@ -255,24 +255,36 @@ export function PromptTemplatesPanel() {
               <Checkbox checked disabled />
               <span>{t("读取文档")}<em>{t("必需：文件树、文档、评论和共识")}</em></span>
             </div>
-            <div className="settings-auto-run prompt-template-allow">
+            <div
+              className="settings-auto-run prompt-template-allow"
+              onClick={() => setAllowCodeRead((value) => !value)}
+            >
               <Checkbox
                 checked={allowCodeRead}
                 onChange={(event) => setAllowCodeRead(event.target.checked)}
+                onClick={(event) => event.stopPropagation()}
               />
               <span>{t("读取代码仓库")}<em>{t("代码列表、源码读取、代码搜索和 Git 信息")}</em></span>
             </div>
-            <div className="settings-auto-run prompt-template-allow">
+            <div
+              className="settings-auto-run prompt-template-allow"
+              onClick={() => setAllowCommentReply((value) => !value)}
+            >
               <Checkbox
                 checked={allowCommentReply}
                 onChange={(event) => setAllowCommentReply(event.target.checked)}
+                onClick={(event) => event.stopPropagation()}
               />
               <span>{t("回复评论")}<em>{t("通过 reply_comment 把分析或修改结果返回给用户")}</em></span>
             </div>
-            <div className="settings-auto-run prompt-template-allow">
+            <div
+              className="settings-auto-run prompt-template-allow"
+              onClick={() => setAllowDocumentEdit((value) => !value)}
+            >
               <Checkbox
                 checked={allowDocumentEdit}
                 onChange={(event) => setAllowDocumentEdit(event.target.checked)}
+                onClick={(event) => event.stopPropagation()}
               />
               <span>{t("修改文档")}<em>{t("关闭后 write_file / 新建 / 删除会被服务端拦截")}</em></span>
             </div>
