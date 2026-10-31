@@ -88,12 +88,20 @@ func startDaemon(args []string) error {
 				fmt.Printf("  Status    commentloop status\n")
 				if !hasFlag(args, "no-open") {
 					// The launcher can stay alive for as long as the browser
-					// does; do not block the CLI on it.
+					// does. Wait briefly so the common case still opens, then
+					// return without hanging the CLI.
+					opened := make(chan struct{})
 					go func() {
+						defer close(opened)
 						if err := browser.OpenURL(info.URL); err != nil {
 							slog.Warn("could not open the browser", "err", err)
 						}
 					}()
+					select {
+					case <-opened:
+					case <-time.After(2 * time.Second):
+						slog.Warn("browser opener is still running; continuing", "url", info.URL)
+					}
 				}
 				return nil
 			}
