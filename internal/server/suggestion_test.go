@@ -233,3 +233,71 @@ func TestAppendSuggestionSeparatesFollowingParagraph(t *testing.T) {
 		t.Fatalf("content = %q, want %q", snapshot.content, want)
 	}
 }
+
+func TestAppendSuggestionKeepsCRLFNextLine(t *testing.T) {
+	app, root := newTestApp(t)
+	mustWrite(t, filepath.Join(root, "append-crlf.md"), "# Heading\r\nbody\r\n")
+	docPath := canonical(app, "append-crlf.md")
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath: docPath, Capabilities: agentCapabilities{ReplyComments: true},
+	})
+	headers := map[string]string{"X-Commentloop-Agent-Token": "agent-token"}
+	rec := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/suggestion", proposeChangeRequest{
+		Path: docPath, Quote: "Heading", Text: "extra", Mode: "append", Body: "Add.",
+	}, headers)
+	if rec.Code != 200 {
+		t.Fatalf("propose: %d %s", rec.Code, rec.Body.String())
+	}
+	var comment Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+		t.Fatal(err)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/comments/suggestion", resolveSuggestionRequest{
+		Path: docPath, ID: comment.ID, Accept: true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
+	}
+	snapshot, err := app.snapshot(docPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(snapshot.content, "extrabody") || !strings.Contains(snapshot.content, "extra\r\n") {
+		t.Fatalf("CRLF append corrupted the next line: %q", snapshot.content)
+	}
+}
+
+func TestAppendSuggestionMixedLineEndings(t *testing.T) {
+	app, root := newTestApp(t)
+	mustWrite(t, filepath.Join(root, "append-mixed.md"), "# Heading\n\nbody\r\n")
+	docPath := canonical(app, "append-mixed.md")
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath: docPath, Capabilities: agentCapabilities{ReplyComments: true},
+	})
+	headers := map[string]string{"X-Commentloop-Agent-Token": "agent-token"}
+	rec := doJSONHeaders(t, app, http.MethodPost, "/api/doc/review/suggestion", proposeChangeRequest{
+		Path: docPath, Quote: "Heading", Text: "extra", Mode: "append", Body: "Add.",
+	}, headers)
+	if rec.Code != 200 {
+		t.Fatalf("propose: %d %s", rec.Code, rec.Body.String())
+	}
+	var comment Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+		t.Fatal(err)
+	}
+	rec = doJSON(t, app, http.MethodPost, "/api/comments/suggestion", resolveSuggestionRequest{
+		Path: docPath, ID: comment.ID, Accept: true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body.String())
+	}
+	snapshot, err := app.snapshot(docPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(snapshot.content, "extra") ||
+		strings.Index(snapshot.content, "extra") > strings.Index(snapshot.content, "body") ||
+		strings.Contains(snapshot.content, "extrabody") {
+		t.Fatalf("mixed-ending append landed in the wrong paragraph: %q", snapshot.content)
+	}
+}
