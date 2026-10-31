@@ -465,6 +465,15 @@ func (c *Client) CreateComment(path, quote, body, severity string) (Comment, err
 	return comment, err
 }
 
+func (c *Client) ProposeChange(path, quote, text, mode, body, severity string) (Comment, error) {
+	var comment Comment
+	err := c.postJSON("/api/doc/review/suggestion", map[string]any{
+		"path": path, "quote": quote, "text": text, "mode": mode,
+		"body": body, "severity": severity,
+	}, &comment)
+	return comment, err
+}
+
 func (c *Client) GetReview(path string) (Review, error) {
 	var review Review
 	err := c.getJSON("/api/doc/review?path="+url.QueryEscape(path), &review)

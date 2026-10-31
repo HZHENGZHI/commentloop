@@ -6613,3 +6613,82 @@ body.mermaid-modal-open {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
+
+
+/* ===== Structured suggestions ===== */
+.comment-suggestion {
+  margin-top: 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.comment-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.comment-suggestion-status {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.comment-suggestion.accepted .comment-suggestion-status {
+  color: var(--success);
+}
+
+.comment-suggestion.rejected {
+  opacity: 0.7;
+}
+
+.comment-suggestion-diff {
+  padding: 4px 7px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.suggestion-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.suggestion-line span {
+  display: inline-block;
+  width: 10px;
+  opacity: 0.8;
+}
+
+.suggestion-line.removed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.suggestion-line.added {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.suggestion-line.context {
+  color: var(--text-faint);
+}
+
+.comment-suggestion-actions {
+  display: flex;
+  gap: 5px;
+  padding: 5px 7px;
+  border-top: 1px solid var(--border);
+}
+
+.comment-suggestion-actions .btn {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 9px;
+}

@@ -112,6 +112,55 @@ func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, sever
 	return &comment, nil
 }
 
+func (s *commentStore) setSuggestion(path, id, quote, text, mode string) (Comment, error) {
+	quote = strings.TrimSpace(quote)
+	text = strings.TrimSpace(text)
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = "replace"
+	}
+	if quote == "" || text == "" {
+		return Comment{}, fmt.Errorf("建议内容不能为空")
+	}
+	if mode != "replace" && mode != "append" {
+		return Comment{}, fmt.Errorf("无效的建议类型")
+	}
+	if _, ok := s.get(path, id); !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	if err := s.db.Model(&commentRow{}).Where("id = ? AND path = ?", id, path).Updates(map[string]any{
+		"suggestion_quote": quote, "suggestion_text": text,
+		"suggestion_mode": mode, "suggestion_status": "pending",
+		"updated_at": formatTime(time.Now()),
+	}).Error; err != nil {
+		return Comment{}, err
+	}
+	comment, ok := s.get(path, id)
+	if !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	return comment, nil
+}
+
+func (s *commentStore) setSuggestionStatus(path, id, status string) (Comment, error) {
+	if status != "accepted" && status != "rejected" {
+		return Comment{}, fmt.Errorf("无效的建议状态")
+	}
+	if _, ok := s.get(path, id); !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	if err := s.db.Model(&commentRow{}).Where("id = ? AND path = ?", id, path).Updates(map[string]any{
+		"suggestion_status": status, "updated_at": formatTime(time.Now()),
+	}).Error; err != nil {
+		return Comment{}, err
+	}
+	comment, ok := s.get(path, id)
+	if !ok {
+		return Comment{}, os.ErrNotExist
+	}
+	return comment, nil
+}
+
 func (s *commentStore) list(path, content string) []Comment {
 	comments, err := s.query(path)
 	if err != nil {
@@ -235,6 +284,12 @@ func (r commentRow) comment() Comment {
 		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
 		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
 		PromptTemplateID: r.PromptTemplateID, Severity: r.Severity,
+	}
+	if r.SuggestionQuote != "" {
+		comment.Suggestion = &CommentSuggestion{
+			Quote: r.SuggestionQuote, Text: r.SuggestionText,
+			Mode: r.SuggestionMode, Status: r.SuggestionStatus,
+		}
 	}
 	if r.DiscussionIDs != "" && r.DiscussionIDs != "null" {
 		_ = json.Unmarshal([]byte(r.DiscussionIDs), &comment.DiscussionIDs)

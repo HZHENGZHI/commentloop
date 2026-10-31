@@ -213,6 +213,22 @@ func tools() []toolDef {
 			},
 		},
 		{
+			Name:        "propose_change",
+			Description: "Create an inline review comment with a concrete edit suggestion. mode=replace replaces the quoted text with text; mode=append adds text after the paragraph containing the quote. The user accepts or rejects it; this tool never edits the document.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":     map[string]any{"type": "string", "description": "document path"},
+					"quote":    map[string]any{"type": "string", "description": "exact text to replace or anchor the append"},
+					"text":     map[string]any{"type": "string", "description": "replacement text or appended text"},
+					"mode":     map[string]any{"type": "string", "enum": []string{"replace", "append"}, "description": "replace or append"},
+					"body":     map[string]any{"type": "string", "description": "why this change helps"},
+					"severity": map[string]any{"type": "string", "enum": []string{"blocking", "should_fix", "nit", "question"}, "description": "issue severity"},
+				},
+				"required": []string{"path", "quote", "text", "body"},
+			},
+		},
+		{
 			Name:        "get_review",
 			Description: "Read the document's current review status and the latest review summary.",
 			InputSchema: map[string]any{
@@ -517,6 +533,22 @@ func (s *server) callTool(params toolCallParams) toolResult {
 			return errorResult("path, quote and body are required")
 		}
 		comment, err := s.client.CreateComment(path, quote, body, severity)
+		if err != nil {
+			return errorResult(err.Error())
+		}
+		return jsonResult(comment)
+
+	case "propose_change":
+		path, _ := args["path"].(string)
+		quote, _ := args["quote"].(string)
+		text, _ := args["text"].(string)
+		mode, _ := args["mode"].(string)
+		body, _ := args["body"].(string)
+		severity, _ := args["severity"].(string)
+		if path == "" || quote == "" || text == "" || body == "" {
+			return errorResult("path, quote, text and body are required")
+		}
+		comment, err := s.client.ProposeChange(path, quote, text, mode, body, severity)
 		if err != nil {
 			return errorResult(err.Error())
 		}
