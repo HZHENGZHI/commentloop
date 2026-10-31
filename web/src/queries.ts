@@ -61,10 +61,14 @@ export const discussionsQuery = (path: string) =>
     enabled: path !== "",
   });
 
-export const promptTemplatesQuery = queryOptions({
-  queryKey: ["promptTemplates"],
-  queryFn: fetchPromptTemplates,
-});
+// Built-in templates are localized by Accept-Language, so the UI language is
+// part of the key: a cached entry from another language must never reach the
+// editor.
+export const promptTemplatesQuery = (language: string) =>
+  queryOptions({
+    queryKey: ["promptTemplates", language],
+    queryFn: fetchPromptTemplates,
+  });
 
 export const agentSessionsQuery = (path: string) =>
   queryOptions({

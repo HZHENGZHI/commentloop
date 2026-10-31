@@ -26,8 +26,8 @@ const VARIABLES = [
 const NO_TEMPLATES: PromptTemplate[] = [];
 
 export function PromptTemplatesPanel() {
-  const { t } = useTranslation();
-  const query = useQuery(promptTemplatesQuery);
+  const { t, i18n } = useTranslation();
+  const query = useQuery(promptTemplatesQuery(i18n.language));
   const templates = query.data?.templates ?? NO_TEMPLATES;
   const loading = query.isPending;
   const [selected, setSelected] = useState<PromptTemplate | null>(null);
@@ -52,6 +52,8 @@ export function PromptTemplatesPanel() {
   }, [templates]);
 
   const load = () => invalidate("promptTemplates");
+  // Block writes while the list revalidates so the form cannot save stale text.
+  const busy = saving || query.isFetching;
   const loadError = query.error
     ? query.error.message || t("读取提示词模板失败")
     : "";
@@ -287,7 +289,7 @@ export function PromptTemplatesPanel() {
                 type="button"
                 className="btn ghost small-btn"
                 onClick={() => void reset()}
-                disabled={saving}
+                disabled={busy}
               >
                 <IconRefresh size={12} /> {t("恢复默认")}
               </button>
@@ -297,7 +299,7 @@ export function PromptTemplatesPanel() {
                 type="button"
                 className="btn ghost small-btn danger-text"
                 onClick={() => void remove()}
-                disabled={saving}
+                disabled={busy}
               >
                 <IconTrash size={12} /> {t("删除")}
               </button>
@@ -306,7 +308,7 @@ export function PromptTemplatesPanel() {
               type="button"
               className="btn primary small-btn"
               onClick={() => void save()}
-              disabled={saving || !name.trim() || !body.trim()}
+              disabled={busy || !name.trim() || !body.trim()}
             >
               {saving ? t("保存中…") : t("保存模板")}
             </button>

@@ -196,7 +196,7 @@ export default function App() {
   const discussions =
     useQuery(discussionsQuery(docKey)).data?.discussions ?? NO_DISCUSSIONS;
   const promptTemplates =
-    useQuery(promptTemplatesQuery).data?.templates ?? NO_PROMPT_TEMPLATES;
+    useQuery(promptTemplatesQuery(i18nHook.language)).data?.templates ?? NO_PROMPT_TEMPLATES;
   const agentSessionsData = useQuery(agentSessionsQuery(docKey)).data;
   const agentSessions = agentSessionsData?.sessions ?? NO_AGENT_SESSIONS;
   const activeAgentSessionId = agentSessionsData?.activeId ?? "";
