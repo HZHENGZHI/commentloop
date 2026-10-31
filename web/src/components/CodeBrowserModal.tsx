@@ -264,7 +264,8 @@ export function CodeBrowserModal({
   }, [loadError]);
 
   useEffect(() => {
-    if (!pending || pending.path !== selectedFile || !fileResult.data) return;
+    // Wait for the revalidation too: cached text may predate the file on disk.
+    if (!pending || pending.path !== selectedFile || !fileResult.data || fileResult.isFetching) return;
     setTarget({
       line: pending.line,
       character: pending.character,
@@ -272,7 +273,7 @@ export function CodeBrowserModal({
     });
     setMessage(t("已跳转到 {{path}}:{{line}}", { path: pending.path, line: pending.line }));
     setPending(null);
-  }, [pending, selectedFile, fileResult.data]);
+  }, [pending, selectedFile, fileResult.data, fileResult.isFetching]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
