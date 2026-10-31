@@ -35,6 +35,7 @@ type commentRow struct {
 	UpdatedAt        string `gorm:"type:text;not null"`
 	DiscussionIDs    string `gorm:"column:discussion_ids;type:text;not null;default:'[]'"`
 	PromptTemplateID string `gorm:"type:text;not null;default:''"`
+	Severity         string `gorm:"type:text;not null;default:''"`
 }
 
 func (commentRow) TableName() string { return "comments" }
@@ -88,9 +89,11 @@ type docCodeRepoRow struct {
 func (docCodeRepoRow) TableName() string { return "doc_code_repos" }
 
 type docReviewRow struct {
-	DocPath   string `gorm:"type:text;primaryKey"`
-	Status    string `gorm:"type:text;not null;default:''"`
-	UpdatedAt string `gorm:"type:text;not null"`
+	DocPath          string `gorm:"type:text;primaryKey"`
+	Status           string `gorm:"type:text;not null;default:''"`
+	Summary          string `gorm:"type:text;not null;default:''"`
+	SummaryUpdatedAt string `gorm:"type:text;not null;default:''"`
+	UpdatedAt        string `gorm:"type:text;not null"`
 }
 
 func (docReviewRow) TableName() string { return "doc_reviews" }

@@ -49,8 +49,16 @@ export type ReviewStatus =
 export interface DocReview {
   path: string;
   status: ReviewStatus;
+  summary?: string;
+  summaryUpdatedAt?: string;
   updatedAt?: string;
 }
+
+export type ReviewSeverity =
+  | "blocking"
+  | "should_fix"
+  | "nit"
+  | "question";
 
 export interface InboxDoc {
   path: string;
@@ -349,6 +357,7 @@ export interface Comment {
   updatedAt: string;
   discussionIds?: string[];
   promptTemplateId?: string;
+  severity?: ReviewSeverity;
   messages: CommentMessage[];
 }
 

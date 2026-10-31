@@ -23,6 +23,7 @@ import {
   rollbackComment,
   resolveComment,
   triggerCommentAgent,
+  requestDocReview,
   saveDoc,
   setDocReview,
   ApiError,
@@ -88,6 +89,7 @@ import type {
   ConfigResponse,
   ConsensusActivity,
   Discussion,
+  DocReview,
   DocStats,
   InboxCounts,
   InboxDoc,
@@ -200,6 +202,7 @@ export default function App() {
   const [removingRoot, setRemovingRoot] = useState<{ id: string; name: string } | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [reviewRequestPath, setReviewRequestPath] = useState<string | null>(null);
   const [commentQuote, setCommentQuote] = useState<string | null>(null);
   const [codeRepoModalOpen, setCodeRepoModalOpen] = useState(false);
   const [codeBrowserOpen, setCodeBrowserOpen] = useState(false);
@@ -604,6 +607,24 @@ export default function App() {
     },
     [toast],
   );
+
+  const handleRequestReview = useCallback(async () => {
+    const path = currentPathRef.current;
+    if (!path) return;
+    setReviewRequestPath(path);
+    try {
+      await requestDocReview(path);
+      void invalidate("review");
+      void invalidate("inbox");
+      toast(i18n.t("已开始 Agent 审阅"), "success");
+    } catch (error) {
+      setReviewRequestPath(null);
+      toast(
+        i18n.t("发起审阅失败：{{error}}", { error: errorMessage(error) }),
+        "error",
+      );
+    }
+  }, [toast]);
 
   const handleReplyComment = useCallback(
     async (
@@ -1137,11 +1158,16 @@ export default function App() {
         break;
       case "reviews":
         if (message.status) {
-          queryClient.setQueryData(["review", message.path], {
-            path: message.path,
-            status: message.status,
-          });
+          queryClient.setQueryData(
+            ["review", message.path],
+            (current: DocReview | undefined) => ({
+              ...(current ?? { path: message.path }),
+              path: message.path,
+              status: message.status as DocReview["status"],
+            }),
+          );
         }
+        void invalidate("review");
         void invalidate("inbox");
         break;
       case "discussions":
@@ -1178,6 +1204,13 @@ export default function App() {
             status,
             message: localizeServerMessage(message.message || "", status as "queued" | "working" | "done" | "error") || i18n.t("后台 Agent 正在处理…"),
           });
+          if (status === "done" || status === "error") {
+            setReviewRequestPath((current) =>
+              current && (!message.path || message.path === current)
+                ? null
+                : current,
+            );
+          }
           if (status === "queued" || status === "done" || status === "error") {
             toast(
               localizeServerMessage(message.message || "", status as "queued" | "working" | "done" | "error") || i18n.t("后台 Agent 状态更新"),
@@ -1736,6 +1769,9 @@ export default function App() {
                   <CommentsPanel
                     key={currentPath ?? ""}
                     comments={comments}
+                    review={docReview}
+                    reviewing={reviewRequestPath === currentPath}
+                    onRequestReview={() => void handleRequestReview()}
                     onClose={() => setCommentsOpen(false)}
                     onJump={handleJumpToComment}
                     onResolve={(comment, resolved) =>

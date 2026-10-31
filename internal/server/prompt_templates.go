@@ -10,7 +10,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const defaultPromptTemplateID = "builtin-document-review"
+const (
+	defaultPromptTemplateID = "builtin-document-review"
+	reviewPromptTemplateID  = "builtin-first-review"
+)
 
 func newPromptTemplateStore(db *gorm.DB) *promptTemplateStore {
 	return &promptTemplateStore{db: db}
@@ -61,6 +64,15 @@ var builtinPromptTemplates = []PromptTemplate{
 		Body:              `根据当前评论和讨论共识修改文档。只改与评论相关的内容，保持无关内容不变；回复时说明修改理由和必要的修改前后对照。`,
 	},
 	{
+		ID: "builtin-first-review", Name: "首轮审阅",
+		Description:       "通读全文，按严重级别提出审阅意见并生成审阅摘要；不修改文档。",
+		AllowDocumentEdit: false,
+		AllowCodeRead:     true,
+		AllowCommentReply: true,
+		Builtin:           true,
+		Body:              `对整篇文档做一轮审阅，不要修改文档。重点检查：事实与引用、结构与逻辑、前后一致性、术语、遗漏的边界与风险、表达清晰度。最多给出 8 条评论，每条评论引用原文中最短且唯一的片段；按 blocking、should_fix、nit、question 标注严重级别。最后写一段审阅摘要：主要问题、建议处理顺序、可以忽略的项。`,
+	},
+	{
 		ID: "builtin-requirements", Name: "需求拆解",
 		Description:       "阅读讨论和文档，拆解目标、约束、验收标准和待确认问题。",
 		AllowDocumentEdit: false,
@@ -85,6 +97,11 @@ var builtinPromptTemplatesEN = map[string]PromptTemplate{
 		Name:        "Document review",
 		Description: "Edit the document according to the comment and document consensus while preserving unrelated content.",
 		Body:        "Edit the document according to the current comment and document consensus. Change only content related to the comment and keep unrelated content unchanged. In your reply, explain the reasoning and include the necessary before/after excerpts.",
+	},
+	"builtin-first-review": {
+		Name:        "First review",
+		Description: "Read the whole document, leave severity-ranked review comments and a review summary without editing it.",
+		Body:        "Review the whole document without editing it. Focus on facts and citations, structure and logic, consistency, terminology, missing edge cases and risks, and clarity. Leave at most 8 comments, each quoting the shortest unique passage; mark severity as blocking, should_fix, nit, or question. Finish with a review summary: main issues, suggested order, and items that can be ignored.",
 	},
 	"builtin-requirements": {
 		Name:        "Requirements breakdown",

@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { Comment, CommentMessage, Discussion, PromptTemplate } from "../types";
+import type {
+  Comment,
+  CommentMessage,
+  Discussion,
+  DocReview,
+  PromptTemplate,
+} from "../types";
 import { LinkCommentsModal } from "./LinkCommentsModal";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import {
@@ -11,9 +17,11 @@ import {
   IconLink,
   IconLocate,
   IconMessage,
+  IconSparkles,
   IconTrash,
   IconX,
 } from "./Icons";
+import { SeverityBadge } from "./ReviewStatus";
 
 interface CommentsPanelProps {
   comments: Comment[];
@@ -38,6 +46,9 @@ interface CommentsPanelProps {
     side: "before" | "after",
   ) => void;
   onTrigger: (comment: Comment) => Promise<void>;
+  review?: DocReview;
+  reviewing?: boolean;
+  onRequestReview: () => void;
   agentName?: string;
 }
 
@@ -65,6 +76,9 @@ export function CommentsPanel({
   onGroup,
   onRollback,
   onTrigger,
+  review,
+  reviewing = false,
+  onRequestReview,
   agentName = "Code Agent",
 }: CommentsPanelProps) {
   const { t, i18n } = useTranslation();
@@ -219,6 +233,30 @@ export function CommentsPanel({
           </button>
         </div>
       </div>
+      <div className="review-summary">
+        <div className="review-summary-head">
+          <span className="review-summary-title">
+            <IconSparkles size={13} />
+            {t("Agent 审阅")}
+          </span>
+          <button
+            type="button"
+            className="review-summary-request"
+            onClick={onRequestReview}
+            disabled={reviewing}
+          >
+            {reviewing ? <span className="spinner" /> : <IconSparkles size={12} />}
+            {reviewing ? t("审阅中…") : t("让 Agent 审一遍")}
+          </button>
+        </div>
+        {review?.summary ? (
+          <div className="review-summary-body">{review.summary}</div>
+        ) : (
+          <div className="review-summary-empty">
+            {t("让 Agent 通读全文，留下分级评论和审阅摘要。")}
+          </div>
+        )}
+      </div>
       <div className="comments-filter" role="tablist" aria-label={t("筛选评论")}>
         {(
           [
@@ -301,6 +339,9 @@ export function CommentsPanel({
                       <IconLink size={9} />
                       {t("{{count}} 条关联", { count: members.length + 1 })}
                     </span>
+                  ) : null}
+                  {comment.severity ? (
+                    <SeverityBadge severity={comment.severity} />
                   ) : null}
                 </div>
                 <div className="comment-actions">
@@ -644,15 +685,16 @@ export function CommentsPanel({
                         : [],
                     );
                     setReplyDiscussionsReady(discussionsLoaded);
-                    setReplyTemplateId(
-                      promptTemplates.some(
-                        (item) => item.id === comment.promptTemplateId,
-                      )
-                        ? comment.promptTemplateId ?? ""
-                        : promptTemplates.find((item) => item.allowDocumentEdit)?.id ||
-                            promptTemplates[0]?.id ||
-                            "",
+                    const commentTemplate = promptTemplates.find(
+                      (item) => item.id === comment.promptTemplateId,
                     );
+                    const preferredTemplate =
+                      commentTemplate?.allowDocumentEdit
+                        ? commentTemplate
+                        : promptTemplates.find((item) => item.allowDocumentEdit) ??
+                          commentTemplate ??
+                          promptTemplates[0];
+                    setReplyTemplateId(preferredTemplate?.id ?? "");
                   }}
                 >
                   <IconMessage size={12} />

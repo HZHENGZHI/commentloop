@@ -428,6 +428,7 @@ type Comment struct {
 	UpdatedAt        time.Time        `json:"updatedAt"`
 	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
 	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
+	Severity         string           `json:"severity,omitempty"`
 	Messages         []CommentMessage `json:"messages"`
 }
 
@@ -446,6 +447,36 @@ func (c *Client) ListComments(path string) ([]Comment, error) {
 		response.Comments = []Comment{}
 	}
 	return response.Comments, nil
+}
+
+type Review struct {
+	Path             string    `json:"path"`
+	Status           string    `json:"status"`
+	Summary          string    `json:"summary,omitempty"`
+	SummaryUpdatedAt time.Time `json:"summaryUpdatedAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+func (c *Client) CreateComment(path, quote, body, severity string) (Comment, error) {
+	var comment Comment
+	err := c.postJSON("/api/doc/review/comment", map[string]any{
+		"path": path, "quote": quote, "body": body, "severity": severity,
+	}, &comment)
+	return comment, err
+}
+
+func (c *Client) GetReview(path string) (Review, error) {
+	var review Review
+	err := c.getJSON("/api/doc/review?path="+url.QueryEscape(path), &review)
+	return review, err
+}
+
+func (c *Client) WriteReviewSummary(path, summary string) (Review, error) {
+	var review Review
+	err := c.postJSON("/api/doc/review/summary", map[string]any{
+		"path": path, "summary": summary,
+	}, &review)
+	return review, err
 }
 
 func (c *Client) ReplyComment(path, id, body, before, after, beforeSnapshot, snapshot string) (Comment, error) {
