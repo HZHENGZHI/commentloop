@@ -18,7 +18,6 @@ import { PromptTemplatesPanel } from "./PromptTemplatesPanel";
 interface SettingsModalProps {
   onClose: () => void;
   onSaved: (settings: AppSettings) => void;
-  onPromptsChanged?: () => void;
 }
 
 const AGENT_PRESETS: {
@@ -73,7 +72,7 @@ function setLSP(
   };
 }
 
-export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsModalProps) {
+export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<"lsp" | "agent" | "prompts">("lsp");
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -315,7 +314,7 @@ export function SettingsModal({ onClose, onSaved, onPromptsChanged }: SettingsMo
             </div>
           </div>
         ) : tab === "prompts" ? (
-          <PromptTemplatesPanel onChanged={() => onPromptsChanged?.()} />
+          <PromptTemplatesPanel />
         ) : (
           <div className="settings-body settings-agent">
             <div className="settings-intro">

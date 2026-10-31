@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import {
   addDocCodeRepo,
   browseDirectories,
-  fetchCodeRepos,
-  fetchDocCodeRepos,
   removeDocCodeRepo,
 } from "../api";
+import { codeReposQuery, docCodeReposQuery, invalidate } from "../queries";
 import type { BrowseResponse, CodeRepo } from "../types";
 import {
   IconArrowUp,
@@ -24,6 +24,8 @@ interface CodeRepoModalProps {
   onClose: () => void;
   onChanged: (message: string) => void;
 }
+
+const NO_REPOS: CodeRepo[] = [];
 
 function repoMeta(repo: CodeRepo): string {
   const parts: string[] = [];
@@ -43,10 +45,20 @@ export function CodeRepoModal({
   onChanged,
 }: CodeRepoModalProps) {
   const { t } = useTranslation();
-  const [repos, setRepos] = useState<CodeRepo[]>([]);
-  const [linkedIDs, setLinkedIDs] = useState<Set<string>>(() => new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const reposQuery = useQuery(codeReposQuery);
+  const linkedQuery = useQuery(docCodeReposQuery(docPath));
+  const repos = reposQuery.data?.repos ?? NO_REPOS;
+  const linkedRepos = linkedQuery.data?.repos;
+  const linkedIDs = useMemo(
+    () => new Set((linkedRepos ?? []).map((repo) => repo.id)),
+    [linkedRepos],
+  );
+  const loading = reposQuery.isPending || linkedQuery.isPending;
+  const loadError = reposQuery.error ?? linkedQuery.error;
+  const [actionError, setError] = useState<string | null>(null);
+  const error =
+    actionError ??
+    (loadError ? loadError.message || t("读取代码仓库失败") : null);
   const [busyID, setBusyID] = useState<string | null>(null);
   const [tab, setTab] = useState<"local" | "github">("local");
   const [pathInput, setPathInput] = useState("");
@@ -62,31 +74,16 @@ export function CodeRepoModal({
   const [browseError, setBrowseError] = useState<string | null>(null);
   const browseSeq = useRef(0);
 
-  const load = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    setError(null);
-    try {
-      const [all, linked] = await Promise.all([
-        fetchCodeRepos(),
-        fetchDocCodeRepos(docPath),
-      ]);
-      setRepos(all.repos ?? []);
-      setLinkedIDs(new Set((linked.repos ?? []).map((repo) => repo.id)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("读取代码仓库失败"));
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [docPath]);
+  const load = () =>
+    Promise.all([invalidate("codeRepos"), invalidate("docCodeRepos")]);
 
   useEffect(() => {
-    void load(true);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [load, onClose]);
+  }, [onClose]);
 
   const loadBrowse = useCallback(async (path: string, hidden: boolean) => {
     const id = ++browseSeq.current;

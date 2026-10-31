@@ -1,6 +1,7 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import {
   fetchAgentSessions,
+  fetchCodeRepos,
   fetchComments,
   fetchDocCodeRepos,
   fetchDocDiscussions,
@@ -23,6 +24,7 @@ export const queryClient = new QueryClient({
 
 type QueryRoot =
   | "comments"
+  | "codeRepos"
   | "docCodeRepos"
   | "discussions"
   | "promptTemplates"
@@ -39,6 +41,11 @@ export const commentsQuery = (path: string) =>
     queryFn: () => fetchComments(path),
     enabled: path !== "",
   });
+
+export const codeReposQuery = queryOptions({
+  queryKey: ["codeRepos"],
+  queryFn: fetchCodeRepos,
+});
 
 export const docCodeReposQuery = (path: string) =>
   queryOptions({

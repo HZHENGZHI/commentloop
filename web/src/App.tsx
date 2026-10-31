@@ -666,7 +666,6 @@ export default function App() {
 
   const handleCodeRepoChanged = useCallback(
     (message: string) => {
-      void invalidate("docCodeRepos");
       toast(message, "success");
     },
     [toast],
@@ -1758,7 +1757,6 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => void handleSettingsSaved()}
-          onPromptsChanged={() => void invalidate("promptTemplates")}
         />
       ) : null}
 
@@ -1783,6 +1781,7 @@ export default function App() {
           onManageRepos={() => setCodeRepoModalOpen(true)}
           onBranchChanged={() => {
             void invalidate("docCodeRepos");
+            void invalidate("codeRepos");
             toast(t("已切换分支"), "success");
           }}
         />
