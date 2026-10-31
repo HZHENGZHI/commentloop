@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/renameio/v2/maybe"
+	"github.com/hzhengzhi/commentloop/internal/atomicfile"
 )
 
 type Info struct {
@@ -180,7 +180,7 @@ func writeInfo(path string, info Info) error {
 		return err
 	}
 	data = append(data, '\n')
-	return maybe.WriteFile(path, data, 0o600)
+	return atomicfile.WriteFile(path, data, 0o600)
 }
 
 func instanceFileName(pid int) string {

@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/google/renameio/v2/maybe"
+	"github.com/hzhengzhi/commentloop/internal/atomicfile"
 
 	"github.com/hzhengzhi/commentloop/internal/ignore"
 )
@@ -366,5 +366,5 @@ func writeFileAtomic(name string, data []byte) error {
 	if info, err := os.Stat(name); err == nil {
 		mode = info.Mode().Perm()
 	}
-	return maybe.WriteFile(name, data, mode)
+	return atomicfile.WriteFile(name, data, mode)
 }
