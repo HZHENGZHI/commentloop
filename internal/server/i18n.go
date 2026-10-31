@@ -1,23 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 )
-
-// apiErrorWriter buffers only error responses so the JSON `error` field can be
-// localized without touching every handler. Successful responses are streamed
-// through unchanged.
-type apiErrorWriter struct {
-	http.ResponseWriter
-	status  int
-	lang    string
-	capture bool
-	body    bytes.Buffer
-}
 
 func (w *apiErrorWriter) WriteHeader(status int) {
 	w.status = status

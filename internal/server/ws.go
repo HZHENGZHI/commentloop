@@ -17,23 +17,6 @@ const (
 	maxContentSize = maxDocSize
 )
 
-type inMessage struct {
-	Type    string `json:"type"`
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
-type outMessage struct {
-	Type     string `json:"type"`
-	Path     string `json:"path,omitempty"`
-	Content  string `json:"content"`
-	HTML     string `json:"html"`
-	Revision string `json:"revision,omitempty"`
-	Origin   string `json:"origin,omitempty"`
-	Message  string `json:"message,omitempty"`
-	Status   string `json:"status,omitempty"`
-}
-
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if !s.hostAllowed(r) {
 		http.Error(w, "forbidden host", http.StatusForbidden)

@@ -34,10 +34,6 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settings)
 }
 
-type checkCommandRequest struct {
-	Command string `json:"command"`
-}
-
 func (s *Server) handleCheckCommand(w http.ResponseWriter, r *http.Request) {
 	var req checkCommandRequest
 	if !bindJSON(w, r, 16*1024, &req) {

@@ -1,21 +1,5 @@
 package server
 
-import "sync"
-
-// localTreeCache memoizes the Markdown listing of local roots. Walking a large
-// directory on every /api/tree request is slow, especially on Windows; the
-// watcher and our own writes invalidate the cached listing instead.
-type localTreeCache struct {
-	mu      sync.Mutex
-	entries map[*root]localTreeEntry
-	gen     map[*root]uint64
-}
-
-type localTreeEntry struct {
-	files     []fileEntry
-	truncated bool
-}
-
 func (c *localTreeCache) get(ro *root, list func(*root) ([]fileEntry, bool, error)) ([]fileEntry, bool, error) {
 	c.mu.Lock()
 	if entry, ok := c.entries[ro]; ok {

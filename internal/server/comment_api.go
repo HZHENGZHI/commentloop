@@ -7,60 +7,6 @@ import (
 	"strings"
 )
 
-type createCommentRequest struct {
-	Path             string   `json:"path"`
-	Quote            string   `json:"quote"`
-	Prefix           string   `json:"prefix"`
-	Suffix           string   `json:"suffix"`
-	Body             string   `json:"body"`
-	DiscussionIDs    []string `json:"discussionIds"`
-	PromptTemplateID string   `json:"promptTemplateId"`
-}
-
-type replyCommentRequest struct {
-	Path             string   `json:"path"`
-	ID               string   `json:"id"`
-	Author           string   `json:"author"`
-	Body             string   `json:"body"`
-	Before           string   `json:"before"`
-	After            string   `json:"after"`
-	BeforeSnapshot   string   `json:"beforeSnapshot"`
-	Snapshot         string   `json:"snapshot"`
-	Resolve          bool     `json:"resolve"`
-	DiscussionIDs    []string `json:"discussionIds"`
-	PromptTemplateID string   `json:"promptTemplateId"`
-}
-
-type resolveCommentRequest struct {
-	Path     string `json:"path"`
-	ID       string `json:"id"`
-	Resolved bool   `json:"resolved"`
-}
-
-type groupCommentRequest struct {
-	Path      string   `json:"path"`
-	ID        string   `json:"id"`
-	MemberIDs []string `json:"memberIds"`
-}
-
-type rollbackCommentRequest struct {
-	Path      string `json:"path"`
-	ID        string `json:"id"`
-	MessageID string `json:"messageId"`
-	Side      string `json:"side"`
-}
-
-type rollbackCommentResponse struct {
-	Round   int         `json:"round"`
-	Comment Comment     `json:"comment"`
-	Doc     docResponse `json:"doc"`
-}
-
-type commentsResponse struct {
-	Path     string    `json:"path"`
-	Comments []Comment `json:"comments"`
-}
-
 func (s *Server) commentDoc(path string) (canonical, content string, err error) {
 	ro, rel, err := s.resolveDocRef(path)
 	if err != nil {
@@ -231,11 +177,6 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)
-}
-
-type triggerCommentRequest struct {
-	Path string `json:"path"`
-	ID   string `json:"id"`
 }
 
 func (s *Server) handleTriggerCommentAgent(w http.ResponseWriter, r *http.Request) {

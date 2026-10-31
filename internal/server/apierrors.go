@@ -8,24 +8,6 @@ import (
 	"strings"
 )
 
-// apiError is a client-facing API error. Code is a stable identifier that
-// clients branch on and must not change once shipped; ZH and EN are display
-// text. Detail errors are followed by a runtime detail, e.g. "保存设置失败：" + err.
-// Templates with %d/%s verbs (same order in ZH and EN) are matched as patterns.
-type apiError struct {
-	Code   string
-	ZH     string
-	EN     string
-	detail bool
-	zhRe   *regexp.Regexp
-	enRe   *regexp.Regexp
-}
-
-type apiErrorPrefix struct {
-	prefix string
-	entry  *apiError
-}
-
 var (
 	apiErrorsByCode    = map[string]*apiError{}
 	apiErrorsByMessage = map[string]*apiError{} // exact ZH and EN text

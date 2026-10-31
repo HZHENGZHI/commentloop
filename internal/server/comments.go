@@ -17,47 +17,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type CommentMessage struct {
-	ID              string    `json:"id"`
-	Author          string    `json:"author"` // user | agent | system
-	Body            string    `json:"body"`
-	Before          string    `json:"before,omitempty"`
-	After           string    `json:"after,omitempty"`
-	VersionID       string    `json:"versionId,omitempty"`
-	BeforeVersionID string    `json:"beforeVersionId,omitempty"`
-	SectionStart    int       `json:"-"`
-	SectionEnd      int       `json:"-"`
-	CreatedAt       time.Time `json:"createdAt"`
-}
-
-type docVersion struct {
-	ID        string
-	Path      string
-	Content   string
-	CreatedAt time.Time
-}
-
 const maxDocVersionsPerPath = 30
-
-type Comment struct {
-	ID               string           `json:"id"`
-	Path             string           `json:"path"`
-	Quote            string           `json:"quote"`
-	Anchor           string           `json:"anchor,omitempty"`
-	GroupID          string           `json:"groupId,omitempty"`
-	Prefix           string           `json:"prefix,omitempty"`
-	Suffix           string           `json:"suffix,omitempty"`
-	Line             int              `json:"line"`
-	Start            int              `json:"start"`
-	End              int              `json:"end"`
-	Resolved         bool             `json:"resolved"`
-	Orphaned         bool             `json:"orphaned"`
-	CreatedAt        time.Time        `json:"createdAt"`
-	UpdatedAt        time.Time        `json:"updatedAt"`
-	DiscussionIDs    []string         `json:"discussionIds,omitempty"`
-	PromptTemplateID string           `json:"promptTemplateId,omitempty"`
-	Messages         []CommentMessage `json:"messages"`
-}
 
 var (
 	imageRE      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]*\)`)
@@ -65,10 +25,6 @@ var (
 	htmlTagRE    = regexp.MustCompile(`<[^>]+>`)
 	listMarkerRE = regexp.MustCompile(`^(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s*)?`)
 )
-
-type commentStore struct {
-	db *gorm.DB
-}
 
 func newCommentStore(db *gorm.DB) *commentStore {
 	return &commentStore{db: db}
@@ -404,12 +360,6 @@ func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, e
 		return "", err
 	}
 	return row.ID, nil
-}
-
-type versionTarget struct {
-	Comment Comment
-	Message CommentMessage
-	Round   int
 }
 
 // versionTargets returns one message per comment that has a rollback link to

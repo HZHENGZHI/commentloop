@@ -2,24 +2,9 @@ package server
 
 import (
 	"encoding/json"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
-
-// Client is one live browser connection.
-type Client struct {
-	hub  *Hub
-	srv  *Server
-	conn *websocket.Conn
-	send chan []byte
-
-	// path is guarded by hub.mu.
-	path string
-
-	done      chan struct{}
-	closeOnce sync.Once
-}
 
 func newClient(hub *Hub, srv *Server, conn *websocket.Conn) *Client {
 	return &Client{
@@ -36,12 +21,6 @@ func (c *Client) close() {
 		close(c.done)
 		_ = c.conn.Close()
 	})
-}
-
-// Hub tracks connected clients and routes messages by document path.
-type Hub struct {
-	mu      sync.RWMutex
-	clients map[*Client]struct{}
 }
 
 func newHub() *Hub {

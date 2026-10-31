@@ -6,32 +6,6 @@ import (
 	"strings"
 )
 
-type discussionListResponse struct {
-	Path        string       `json:"path"`
-	Consensus   *Consensus   `json:"consensus,omitempty"`
-	Discussions []Discussion `json:"discussions"`
-}
-
-type availableSessionsResponse struct {
-	Sessions []SessionCandidate `json:"sessions"`
-	Agents   []agentInfo        `json:"agents"`
-}
-
-type importDiscussionRequest struct {
-	Path        string `json:"path"`
-	SessionPath string `json:"sessionPath"`
-}
-
-type importDiscussionResponse struct {
-	Discussion     Discussion `json:"discussion"`
-	Consensus      *Consensus `json:"consensus,omitempty"`
-	ConsensusError string     `json:"consensusError,omitempty"`
-}
-
-type refreshConsensusRequest struct {
-	Path string `json:"path"`
-}
-
 func (s *Server) canonicalDoc(path string) (string, error) {
 	ro, rel, err := s.resolveDocRef(path)
 	if err != nil {

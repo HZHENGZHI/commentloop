@@ -5,26 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/hzhengzhi/commentloop/internal/lsp"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-type codeAgentSettings struct {
-	Type    string   `json:"type"`
-	Name    string   `json:"name"`
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
-	Runner  string   `json:"runner"`
-	AutoRun bool     `json:"autoRun"`
-}
-
-type appSettings struct {
-	LSPServers []lsp.ServerConfig `json:"lspServers"`
-	Agent      codeAgentSettings  `json:"agent"`
-}
 
 func defaultAppSettings() appSettings {
 	return appSettings{
@@ -34,10 +19,6 @@ func defaultAppSettings() appSettings {
 			Runner: "embedded", AutoRun: false,
 		},
 	}
-}
-
-type settingsStore struct {
-	db *gorm.DB
 }
 
 func newSettingsStore(db *gorm.DB) *settingsStore {
@@ -201,11 +182,6 @@ func validateSettings(settings appSettings) (appSettings, error) {
 		}
 	}
 	return settings, nil
-}
-
-type settingsSnapshot struct {
-	mu       sync.RWMutex
-	settings appSettings
 }
 
 func newSettingsSnapshot(settings appSettings) *settingsSnapshot {

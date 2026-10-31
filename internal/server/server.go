@@ -409,14 +409,6 @@ func (s *Server) onFSChange(ro *root, ev watcher.Event) {
 	s.hub.broadcast(outMessage{Type: "tree"})
 }
 
-type docSnapshot struct {
-	path    string
-	content string
-	result  render.Result
-	modTime time.Time
-	size    int64
-}
-
 func (s *Server) snapshot(canonical string) (docSnapshot, error) {
 	ro, rel, err := s.resolveDocRef(canonical)
 	if err != nil {

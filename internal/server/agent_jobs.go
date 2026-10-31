@@ -11,29 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type AgentJob struct {
-	ID               string            `json:"id"`
-	DocPath          string            `json:"docPath"`
-	CommentID        string            `json:"commentId"`
-	AgentType        string            `json:"agentType"`
-	Prompt           string            `json:"prompt"`
-	PromptTemplateID string            `json:"promptTemplateId,omitempty"`
-	Capabilities     agentCapabilities `json:"capabilities"`
-	RepoIDs          []string          `json:"repoIds,omitempty"`
-	Token            string            `json:"-"`
-	Status           string            `json:"status"`
-	RunnerID         string            `json:"runnerId,omitempty"`
-	LeaseUntil       time.Time         `json:"leaseUntil,omitempty"`
-	Error            string            `json:"error,omitempty"`
-	CreatedAt        time.Time         `json:"createdAt"`
-	StartedAt        time.Time         `json:"startedAt,omitempty"`
-	FinishedAt       time.Time         `json:"finishedAt,omitempty"`
-}
-
-type agentJobStore struct {
-	db *gorm.DB
-}
-
 func newAgentJobStore(db *gorm.DB) *agentJobStore { return &agentJobStore{db: db} }
 
 func newAgentToken() string {

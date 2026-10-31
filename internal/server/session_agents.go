@@ -14,27 +14,6 @@ import (
 	"time"
 )
 
-type agentInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Command   string `json:"command"`
-	Installed bool   `json:"installed"`
-	Supported bool   `json:"supported"`
-	Count     int    `json:"count"`
-}
-
-type sessionRoot struct {
-	Path       string
-	Agent      string
-	SourceKind string
-}
-
-type sessionLocation struct {
-	Path       string
-	Agent      string
-	SourceKind string
-}
-
 var sessionAgentCatalog = []struct {
 	ID        string
 	Name      string
@@ -153,11 +132,6 @@ var commandLookups = struct {
 	sync.Mutex
 	entries map[string]commandLookup
 }{entries: map[string]commandLookup{}}
-
-type commandLookup struct {
-	installed bool
-	checked   time.Time
-}
 
 func commandInstalled(command string) bool {
 	if command == "" {

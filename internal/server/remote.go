@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -29,33 +28,6 @@ const (
 	remoteMetaTimeout = 30 * time.Second
 	remoteIOTimeout   = 60 * time.Second
 )
-
-type remoteConfig struct {
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	User    string `json:"user"`
-	KeyPath string `json:"keyPath,omitempty"`
-	Path    string `json:"path"`
-	Name    string `json:"name,omitempty"`
-	// KnownHostsPath is only used by tests; production uses ~/.ssh/known_hosts.
-	KnownHostsPath string `json:"-"`
-}
-
-type remoteFS struct {
-	cfg       remoteConfig
-	conn      net.Conn
-	ssh       *ssh.Client
-	sftp      *sftp.Client
-	mu        sync.Mutex
-	closeOnce sync.Once
-}
-
-type remoteFile struct {
-	Rel     string
-	Name    string
-	Size    int64
-	ModTime time.Time
-}
 
 func newRemoteFS(cfg remoteConfig) (*remoteFS, error) {
 	cfg.Host = strings.TrimSpace(cfg.Host)

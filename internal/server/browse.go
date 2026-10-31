@@ -10,25 +10,6 @@ import (
 
 const maxBrowseEntries = 2000
 
-type browseEntry struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Hidden bool   `json:"hidden"`
-}
-
-type browseShortcut struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
-type browseResponse struct {
-	Path      string           `json:"path"`
-	Parent    string           `json:"parent"`
-	Entries   []browseEntry    `json:"entries"`
-	Shortcuts []browseShortcut `json:"shortcuts"`
-	Truncated bool             `json:"truncated"`
-}
-
 func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	dir, err := browseDirectory(r.URL.Query().Get("path"))
 	if err != nil {
@@ -165,8 +146,6 @@ func browseShortcuts() []browseShortcut {
 }
 
 var errNotDirectory = &browsePathError{message: "路径不是目录"}
-
-type browsePathError struct{ message string }
 
 func (e *browsePathError) Error() string { return e.message }
 

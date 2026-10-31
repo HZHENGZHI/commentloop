@@ -7,25 +7,6 @@ import (
 	"strings"
 )
 
-type promptTemplateRequest struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	Body              string `json:"body"`
-	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
-	AllowCodeRead     bool   `json:"allowCodeRead"`
-	AllowCommentReply bool   `json:"allowCommentReply"`
-}
-
-type optimizePromptRequest struct {
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	Body              string `json:"body"`
-	AllowDocumentEdit bool   `json:"allowDocumentEdit"`
-	AllowCodeRead     bool   `json:"allowCodeRead"`
-	AllowCommentReply bool   `json:"allowCommentReply"`
-}
-
 func promptLanguage(r *http.Request) string {
 	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Accept-Language"))), "en") {
 		return "en"
