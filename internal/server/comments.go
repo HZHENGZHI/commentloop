@@ -284,8 +284,13 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 		return nil, os.ErrNotExist
 	}
 	now := time.Now()
-	resolved := comment.Resolved || resolve
-	if author == "system" {
+	resolved := comment.Resolved
+	switch author {
+	case "user":
+		// A user reply reopens the review thread unless it explicitly resolves
+		// it in the same request.
+		resolved = resolve
+	case "system":
 		resolved = false
 	}
 	anchor := ""
@@ -322,6 +327,14 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 		changes := map[string]any{"updated_at": formatTime(now), "resolved": boolInt(resolved)}
 		if anchor != "" {
 			changes["anchor"] = anchor
+		}
+		if discussionIDs != nil {
+			// nil means the client omitted the field (keep the old context); an
+			// explicit empty list clears the thread's discussion references.
+			changes["discussion_ids"] = discussionIDsJSON(discussionIDs)
+		}
+		if promptTemplateID != "" {
+			changes["prompt_template_id"] = promptTemplateID
 		}
 		return tx.Model(&commentRow{}).Where("id = ?", id).Updates(changes).Error
 	})
