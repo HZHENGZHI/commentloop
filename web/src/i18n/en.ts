@@ -184,6 +184,7 @@ const en: Record<string, string> = {
   "已恢复版本，未保存的本地改动已被覆盖": "Version restored; unsaved local changes were overwritten.",
   "当前": "Current",
   "操作失败：{{error}}": "Action failed: {{error}}",
+  "审阅模式只读，无法恢复": "Review mode is read-only; restore is disabled.",
   "添加中…": "Adding…",
   "添加评论": "Add comment",
   "请输入评论内容": "Enter a comment.",

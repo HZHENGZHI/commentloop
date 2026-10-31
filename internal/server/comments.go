@@ -384,7 +384,7 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 		sectionStart, sectionEnd := 0, 0
 		var err error
 		if author == "agent" && strings.TrimSpace(snapshot) != "" {
-			versionID, err = saveDocVersion(tx, path, snapshot, now)
+			versionID, err = saveDocVersion(tx, path, snapshot, now, false, "comment")
 			if err != nil {
 				return err
 			}
@@ -393,7 +393,7 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 			}
 		}
 		if author == "agent" && strings.TrimSpace(beforeSnapshot) != "" {
-			beforeVersionID, err = saveDocVersion(tx, path, beforeSnapshot, now)
+			beforeVersionID, err = saveDocVersion(tx, path, beforeSnapshot, now, false, "comment")
 			if err != nil {
 				return err
 			}
@@ -426,11 +426,23 @@ func (s *commentStore) reply(path, id, author, body, before, after, beforeSnapsh
 	return &updated, nil
 }
 
-func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, error) {
+func saveDocVersion(tx *gorm.DB, path, content string, now time.Time, touch bool, source string) (string, error) {
 	sum := sha256.Sum256([]byte(content))
 	hash := hex.EncodeToString(sum[:])
 	var existing docVersionRow
-	if err := tx.Select("id").Take(&existing, "path = ? AND hash = ?", path, hash).Error; err == nil {
+	if err := tx.Select("id", "source").Take(&existing, "path = ? AND hash = ?", path, hash).Error; err == nil {
+		updates := map[string]any{}
+		if touch {
+			updates["created_at"] = formatTime(now)
+		}
+		if source == "doc" && existing.Source != "doc" {
+			updates["source"] = "doc"
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&docVersionRow{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+				return "", err
+			}
+		}
 		return existing.ID, nil
 	} else if err != gorm.ErrRecordNotFound {
 		return "", err
@@ -450,7 +462,7 @@ func saveDocVersion(tx *gorm.DB, path, content string, now time.Time) (string, e
 		}
 	}
 	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&docVersionRow{
-		ID: "ver_" + commentID(), Path: path, Hash: hash, Content: content, CreatedAt: formatTime(now),
+		ID: "ver_" + commentID(), Path: path, Hash: hash, Content: content, Source: source, CreatedAt: formatTime(now),
 	}).Error; err != nil {
 		return "", err
 	}
@@ -543,9 +555,10 @@ func (s *commentStore) delete(path, id string) error {
 		return os.ErrNotExist
 	}
 	s.cleanupGroup(path, comment.GroupID)
-	// Drop snapshots that only belonged to the deleted comment. Versions shared
-	// by other comments remain available.
-	_ = s.db.Where("path = ? AND id NOT IN (?) AND id NOT IN (?)", path,
+	// Drop snapshots that only belonged to the deleted comment and were never
+	// promoted to a normal document revision. Document history (source=doc)
+	// survives comment deletion.
+	_ = s.db.Where("path = ? AND source != ? AND id NOT IN (?) AND id NOT IN (?)", path, "doc",
 		s.db.Model(&commentMessageRow{}).Select("version_id").Where("version_id != ''"),
 		s.db.Model(&commentMessageRow{}).Select("before_version_id").Where("before_version_id != ''"),
 	).Delete(&docVersionRow{}).Error

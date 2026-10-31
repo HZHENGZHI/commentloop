@@ -68,4 +68,54 @@ func TestDocVersionHistoryAndRestore(t *testing.T) {
 	if !strings.Contains(doc.content, "# One") {
 		t.Fatalf("restored content = %q", doc.content)
 	}
+	// The restored revision is touched to the top of the timeline rather than
+	// reusing the old timestamp.
+	rec = doJSON(t, app, http.MethodGet, "/api/doc/versions?path="+url.QueryEscape(docPath), nil)
+	if rec.Code != 200 {
+		t.Fatalf("list after restore: %d %s", rec.Code, rec.Body.String())
+	}
+	list = struct {
+		Versions []docVersionInfo `json:"versions"`
+	}{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Versions) == 0 || list.Versions[0].ID != oldest.ID {
+		t.Fatalf("restored version not on top: %+v (oldest %s)", list.Versions, oldest.ID)
+	}
+}
+
+func TestEmptyDocumentVersionAndAgentScope(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/empty.md"
+	rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]any{
+		"path": docPath, "content": "",
+	})
+	if rec.Code != 200 {
+		t.Fatalf("create empty: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, app, http.MethodGet, "/api/doc/versions?path="+url.QueryEscape(docPath), nil)
+	if rec.Code != 200 {
+		t.Fatalf("list empty: %d %s", rec.Code, rec.Body.String())
+	}
+	var list struct {
+		Versions []docVersionInfo `json:"versions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Versions) != 1 || list.Versions[0].Size != 0 {
+		t.Fatalf("empty versions = %+v", list.Versions)
+	}
+
+	other := rootID + "/hello.md"
+	app.agentCaps.setToken("agent-token", agentGrant{
+		DocPath: docPath, Capabilities: agentCapabilities{ReadCode: true},
+	})
+	rec = doJSONHeaders(t, app, http.MethodGet, "/api/doc/versions?path="+url.QueryEscape(other), nil,
+		map[string]string{"X-Commentloop-Agent-Token": "agent-token"})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("unrelated history = %d %s", rec.Code, rec.Body.String())
+	}
 }

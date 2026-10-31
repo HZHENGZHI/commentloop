@@ -2068,6 +2068,7 @@ export default function App() {
         <HistoryModal
           path={currentPath}
           currentContent={doc.content}
+          canRestore={!previewOnly}
           onClose={() => setHistoryOpen(false)}
           onRestored={(restored) => {
             applySavedDoc(restored.content, restored.html);
