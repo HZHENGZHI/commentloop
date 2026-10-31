@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button, Checkbox, Input } from "antd";
 import { useTranslation } from "react-i18next";
 import {
   createPromptTemplate,
@@ -178,9 +179,14 @@ export function PromptTemplatesPanel() {
       </div>
       <div className="prompt-template-layout">
         <div className="prompt-template-sidebar">
-          <button type="button" className="btn primary small-btn" onClick={newTemplate}>
-            <IconPlus size={12} /> {t("新建模板")}
-          </button>
+          <Button
+            type="primary"
+            size="small"
+            onClick={newTemplate}
+            icon={<IconPlus size={12} />}
+          >
+            {t("新建模板")}
+          </Button>
           <div className="prompt-template-list">
             {loading ? (
               <div className="settings-loading">{t("正在读取…")}</div>
@@ -205,8 +211,7 @@ export function PromptTemplatesPanel() {
         <div className="prompt-template-editor">
           <label className="settings-field">
             <span>{t("名称")}</span>
-            <input
-              className="settings-input"
+            <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder={t("例如：接口评审")}
@@ -214,8 +219,7 @@ export function PromptTemplatesPanel() {
           </label>
           <label className="settings-field">
             <span>{t("说明")}</span>
-            <input
-              className="settings-input"
+            <Input
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={t("这个模板适合什么场景")}
@@ -224,18 +228,20 @@ export function PromptTemplatesPanel() {
           <label className="settings-field">
             <span className="prompt-template-label-row">
               {t("模板内容")}
-              <button
-                type="button"
+              <Button
+                size="small"
+                type="text"
                 className="prompt-optimize-btn"
                 onClick={() => void optimize()}
                 disabled={optimizing || saving || (!body.trim() && !description.trim())}
                 title={t("让配置的 pi Agent 把草稿优化成更清晰的任务提示词")}
+                loading={optimizing}
+                icon={<IconSparkles size={12} />}
               >
-                {optimizing ? <span className="spinner" /> : <IconSparkles size={12} />}
                 {optimizing ? t("AI 优化中…") : t("AI 优化")}
-              </button>
+              </Button>
             </span>
-            <textarea
+            <Input.TextArea
               className="prompt-template-textarea"
               value={body}
               onChange={(event) => setBody(event.target.value)}
@@ -245,41 +251,38 @@ export function PromptTemplatesPanel() {
           </label>
           <div className="prompt-template-tools">
             <span className="prompt-template-tools-title">{t("工具权限")}</span>
-            <label className="settings-auto-run prompt-template-allow">
-              <input type="checkbox" checked disabled />
+            <div className="settings-auto-run prompt-template-allow">
+              <Checkbox checked disabled />
               <span>{t("读取文档")}<em>{t("必需：文件树、文档、评论和共识")}</em></span>
-            </label>
-            <label className="settings-auto-run prompt-template-allow">
-              <input
-                type="checkbox"
+            </div>
+            <div className="settings-auto-run prompt-template-allow">
+              <Checkbox
                 checked={allowCodeRead}
                 onChange={(event) => setAllowCodeRead(event.target.checked)}
               />
               <span>{t("读取代码仓库")}<em>{t("代码列表、源码读取、代码搜索和 Git 信息")}</em></span>
-            </label>
-            <label className="settings-auto-run prompt-template-allow">
-              <input
-                type="checkbox"
+            </div>
+            <div className="settings-auto-run prompt-template-allow">
+              <Checkbox
                 checked={allowCommentReply}
                 onChange={(event) => setAllowCommentReply(event.target.checked)}
               />
               <span>{t("回复评论")}<em>{t("通过 reply_comment 把分析或修改结果返回给用户")}</em></span>
-            </label>
-            <label className="settings-auto-run prompt-template-allow">
-              <input
-                type="checkbox"
+            </div>
+            <div className="settings-auto-run prompt-template-allow">
+              <Checkbox
                 checked={allowDocumentEdit}
                 onChange={(event) => setAllowDocumentEdit(event.target.checked)}
               />
               <span>{t("修改文档")}<em>{t("关闭后 write_file / 新建 / 删除会被服务端拦截")}</em></span>
-            </label>
+            </div>
           </div>
           {optimizeNote ? (
             <div className="prompt-optimize-note">
               <span>{optimizeNote}</span>
-              <button type="button" className="settings-text-btn" onClick={undoOptimize}>
+              <Button size="small" type="link" onClick={undoOptimize}>
                 {t("撤销优化")}
-              </button>
+              </Button>
             </div>
           ) : null}
           <p className="settings-note prompt-template-vars">
@@ -288,33 +291,35 @@ export function PromptTemplatesPanel() {
           {error || loadError ? <p className="modal-error">{error || loadError}</p> : null}
           <div className="prompt-template-actions">
             {selected?.builtin ? (
-              <button
-                type="button"
-                className="btn ghost small-btn"
+              <Button
+                size="small"
                 onClick={() => void reset()}
                 disabled={busy}
+                icon={<IconRefresh size={12} />}
               >
-                <IconRefresh size={12} /> {t("恢复默认")}
-              </button>
+                {t("恢复默认")}
+              </Button>
             ) : null}
             {selected && !selected.builtin ? (
-              <button
-                type="button"
-                className="btn ghost small-btn danger-text"
+              <Button
+                size="small"
+                danger
                 onClick={() => void remove()}
                 disabled={busy}
+                icon={<IconTrash size={12} />}
               >
-                <IconTrash size={12} /> {t("删除")}
-              </button>
+                {t("删除")}
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className="btn primary small-btn"
+            <Button
+              type="primary"
+              size="small"
               onClick={() => void save()}
               disabled={busy || !name.trim() || !body.trim()}
+              loading={saving}
             >
               {saving ? t("保存中…") : t("保存模板")}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

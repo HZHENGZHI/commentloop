@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Comment } from "../types";
-import { IconLink, IconSearch, IconX } from "./Icons";
+import { Button, Checkbox, Empty, Input } from "antd";
+import { IconLink, IconSearch } from "./Icons";
+import { AppModal } from "./AppModal";
 
 interface LinkCommentsModalProps {
   comment: Comment;
@@ -27,7 +29,6 @@ export function LinkCommentsModal({
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     if (!comment.groupId) return initial;
@@ -38,15 +39,6 @@ export function LinkCommentsModal({
     }
     return initial;
   });
-
-  useEffect(() => {
-    searchRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const candidates = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -105,32 +97,17 @@ export function LinkCommentsModal({
   };
 
   return (
-    <div
-      className="modal-backdrop comment-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AppModal
+      title={
+        <span className="app-modal-title">
+          <IconLink size={17} />
+          {t("关联评论")}
+        </span>
+      }
+      width={560}
+      onClose={onClose}
+      className="link-comments-modal"
     >
-      <div
-        className="modal link-comments-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("关联评论")}
-      >
-        <div className="modal-head">
-          <div className="modal-title">
-            <IconLink size={17} />
-            {t("关联评论")}
-          </div>
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭")}
-          >
-            <IconX size={15} />
-          </button>
-        </div>
         <p className="link-comments-hint">
           {t("同组评论会作为一条关联需求交给 {{agent}}：它会一起阅读、一起修改，每一条都会收到本轮修改前后的记录。", { agent: agentName })}
         </p>
@@ -138,32 +115,34 @@ export function LinkCommentsModal({
           <span>{t("当前评论")}</span>
           <blockquote>{shortQuote(comment.quote)}</blockquote>
         </div>
-        <label className="link-comments-search">
-          <IconSearch size={13} />
-          <input
-            ref={searchRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t("搜索评论内容或行号")}
-          />
-        </label>
+        <Input
+          autoFocus
+          allowClear
+          prefix={<IconSearch size={13} />}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t("搜索评论内容或行号")}
+          style={{ marginBottom: 8 }}
+        />
         <div className="link-comments-list">
           {candidates.length === 0 ? (
-            <div className="link-comments-empty">
-              {comments.length <= 1
-                ? t("还没有其他评论可以关联")
-                : t("没有匹配的评论")}
-            </div>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                comments.length <= 1
+                  ? t("还没有其他评论可以关联")
+                  : t("没有匹配的评论")
+              }
+            />
           ) : (
             candidates.map((item) => {
               const checked = selected.has(item.id);
               return (
-                <label
+                <div
                   key={item.id}
                   className={`link-comment-row${checked ? " checked" : ""}`}
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={checked}
                     onChange={() => toggle(item)}
                   />
@@ -179,7 +158,7 @@ export function LinkCommentsModal({
                   {item.resolved ? (
                     <span className="link-comment-resolved">{t("已解决")}</span>
                   ) : null}
-                </label>
+                </div>
               );
             })
           )}
@@ -189,12 +168,10 @@ export function LinkCommentsModal({
           <span className="link-comments-count">
             {selected.size > 0 ? t("{{count}} 条评论同组", { count: selected.size + 1 }) : t("未关联")}
           </span>
-          <button type="button" className="btn ghost" onClick={onClose}>
-            {t("取消")}
-          </button>
-          <button
-            type="button"
-            className="btn primary"
+          <Button onClick={onClose}>{t("取消")}</Button>
+          <Button
+            type="primary"
+            loading={busy}
             disabled={busy || (selected.size === 0 && !comment.groupId)}
             onClick={() => void save()}
           >
@@ -203,9 +180,8 @@ export function LinkCommentsModal({
               : selected.size === 0
                 ? t("取消关联")
                 : t("保存关联")}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }

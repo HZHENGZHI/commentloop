@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Alert, Button, Empty, Space, Tag, Tooltip } from "antd";
 import i18n from "../i18n";
 import { localizeServerMessage } from "../i18n/serverMessages";
 import {
@@ -24,6 +25,7 @@ import {
   IconTrash,
   IconX,
 } from "./Icons";
+import { AppModal } from "./AppModal";
 import {
   discussionSessionsQuery,
   discussionsQuery,
@@ -129,14 +131,6 @@ export function DiscussionModal({
 
   const loadSessions = () => invalidate("discussionSessions");
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const openSessions = () => {
     const next = !sessionsOpen;
     setSessionsOpen(next);
@@ -229,274 +223,285 @@ export function DiscussionModal({
     effectiveActivity.status !== "error";
 
   return (
-    <div
-      className="modal-backdrop comment-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AppModal
+      title={
+        <span className="app-modal-title">
+          <IconMessage size={17} />
+          {t("讨论上下文")}
+        </span>
+      }
+      width={780}
+      onClose={onClose}
+      className="discussion-modal"
     >
-      <div
-        className="modal discussion-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("讨论上下文")}
-      >
-        <div className="modal-head">
-          <div className="modal-title">
-            <IconMessage size={17} />
-            {t("讨论上下文")}
-          </div>
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭")}
+      <p className="discussion-hint">
+        {t("导入之前与 Agent 的讨论，提炼成文档共识。之后评论修改会自动参考共识，你也可以在评论里额外选择具体讨论。")}
+      </p>
+
+      {error || query.error ? (
+        <Alert
+          type="error"
+          showIcon
+          className="modal-error"
+          title={
+            error ||
+            (query.error instanceof Error
+              ? query.error.message
+              : t("读取讨论上下文失败"))
+          }
+        />
+      ) : null}
+
+      <section className="discussion-section">
+        <div className="discussion-section-head">
+          <span>{t("文档共识")}</span>
+          <span className="discussion-section-meta">
+            {data?.consensus
+              ? `v${data.consensus.version} · ${formatDate(data.consensus.updatedAt, i18n.language)}`
+              : t("尚未生成")}
+          </span>
+          <Tooltip
+            title={
+              discussions.length === 0
+                ? t("先导入讨论会话")
+                : t("重新提炼共识")
+            }
           >
-            <IconX size={15} />
-          </button>
-        </div>
-        <p className="discussion-hint">
-          {t("导入之前与 Agent 的讨论，提炼成文档共识。之后评论修改会自动参考共识，你也可以在评论里额外选择具体讨论。")}
-        </p>
-
-        {error || query.error ? (
-          <p className="modal-error">
-            <IconAlert size={13} />{" "}
-            {error ||
-              (query.error instanceof Error ? query.error.message : t("读取讨论上下文失败"))}
-          </p>
-        ) : null}
-
-        <section className="discussion-section">
-          <div className="discussion-section-head">
-            <span>{t("文档共识")}</span>
-            <span className="discussion-section-meta">
-              {data?.consensus
-                ? `v${data.consensus.version} · ${formatDate(data.consensus.updatedAt, i18n.language)}`
-                : t("尚未生成")}
-            </span>
-            <button
-              type="button"
-              className="btn ghost discussion-refresh"
-              onClick={() => void doRefresh()}
+            <Button
+              size="small"
+              icon={<IconRefresh size={12} />}
+              loading={busy === "refresh"}
               disabled={Boolean(busy) || discussions.length === 0}
-              title={discussions.length === 0 ? t("先导入讨论会话") : t("重新提炼共识")}
+              onClick={() => void doRefresh()}
             >
-              {busy === "refresh" ? (
-                <span className="spinner" />
-              ) : (
-                <IconRefresh size={12} />
-              )}
               {t("刷新共识")}
-            </button>
-          </div>
-          {effectiveActivity ? (
-            <div
-              className={`consensus-progress ${effectiveActivity.status}`}
-              role="status"
-              aria-live="polite"
-            >
-              <div className="consensus-progress-head">
-                {working ? (
-                  <span className="spinner" />
-                ) : effectiveActivity.status === "done" ? (
-                  <IconCheck size={13} />
-                ) : (
-                  <IconAlert size={13} />
-                )}
-                <span>
-                  {localizeServerMessage(
-                    effectiveActivity.message || "",
-                    effectiveActivity.status,
-                  ) || consensusLabel(effectiveActivity.status)}
-                </span>
-              </div>
-              <div className="consensus-progress-bar">
+            </Button>
+          </Tooltip>
+        </div>
+        {effectiveActivity ? (
+          <div
+            className={`consensus-progress ${effectiveActivity.status}`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="consensus-progress-head">
+              {working ? (
+                <span className="spinner" />
+              ) : effectiveActivity.status === "done" ? (
+                <IconCheck size={13} />
+              ) : (
+                <IconAlert size={13} />
+              )}
+              <span>
+                {localizeServerMessage(
+                  effectiveActivity.message || "",
+                  effectiveActivity.status,
+                ) || consensusLabel(effectiveActivity.status)}
+              </span>
+            </div>
+            <div className="consensus-progress-bar">
+              <span
+                style={{ width: consensusWidth(effectiveActivity.status) }}
+              />
+            </div>
+            <div className="consensus-progress-steps">
+              {CONSENSUS_STEPS.map((label, index) => (
                 <span
-                  style={{ width: consensusWidth(effectiveActivity.status) }}
-                />
-              </div>
-              <div className="consensus-progress-steps">
-                {CONSENSUS_STEPS.map((label, index) => (
-                  <span
-                    key={label}
-                    className={
-                      effectiveActivity.status === "done" || index < stage
-                        ? "done"
-                        : index === stage
-                          ? "active"
-                          : ""
-                    }
-                  >
-                    {t(label)}
-                  </span>
-                ))}
-              </div>
+                  key={label}
+                  className={
+                    effectiveActivity.status === "done" || index < stage
+                      ? "done"
+                      : index === stage
+                        ? "active"
+                        : ""
+                  }
+                >
+                  {t(label)}
+                </span>
+              ))}
             </div>
-          ) : null}
-          {loading ? (
-            <div className="discussion-empty">{t("正在读取…")}</div>
-          ) : data?.consensus ? (
-            <pre className="discussion-consensus">{data.consensus.content}</pre>
-          ) : (
-            <div className="discussion-empty">
-              {t("导入讨论后会自动提炼目标、决策、约束和待确认事项。")}
-            </div>
-          )}
-        </section>
-
-        <section className="discussion-section">
-          <div className="discussion-section-head">
-            <span>{t("已导入讨论")}</span>
-            <span className="discussion-section-meta">
-              {t("{{count}} 个会话", { count: discussions.length })}
-            </span>
-            <button
-              type="button"
-              className="btn primary discussion-import-toggle"
-              onClick={openSessions}
-            >
-              <IconPlus size={12} />
-              {t("导入会话")}
-            </button>
           </div>
-          {discussions.length === 0 ? (
-            <div className="discussion-empty">{t("还没有导入讨论会话")}</div>
-          ) : (
-            <div className="discussion-list">
-              {discussions.map((item) => (
-                <div className="discussion-row" key={item.id}>
-                  <IconMessage size={14} />
-                  <div className="discussion-row-main">
-                    <div className="discussion-row-title">{item.title}</div>
-                    <div className="discussion-row-meta">
-                      {item.agentName || item.sourceKind} ·{" "}
-                      {t("{{count}} 条消息", { count: item.messageCount })} ·{" "}
-                      {t("导入于")}{" "}
-                      {formatDate(item.importedAt, i18n.language)}
-                    </div>
-                    <div className="discussion-row-path">{item.sourcePath}</div>
+        ) : null}
+        {loading ? (
+          <div className="discussion-empty">{t("正在读取…")}</div>
+        ) : data?.consensus ? (
+          <pre className="discussion-consensus">{data.consensus.content}</pre>
+        ) : (
+          <Empty
+            className="discussion-empty"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t("导入讨论后会自动提炼目标、决策、约束和待确认事项。")}
+          />
+        )}
+      </section>
+
+      <section className="discussion-section">
+        <div className="discussion-section-head">
+          <span>{t("已导入讨论")}</span>
+          <span className="discussion-section-meta">
+            {t("{{count}} 个会话", { count: discussions.length })}
+          </span>
+          <Button
+            size="small"
+            type="primary"
+            icon={<IconPlus size={12} />}
+            onClick={openSessions}
+          >
+            {t("导入会话")}
+          </Button>
+        </div>
+        {discussions.length === 0 ? (
+          <Empty
+            className="discussion-empty"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t("还没有导入讨论会话")}
+          />
+        ) : (
+          <div className="discussion-list">
+            {discussions.map((item) => (
+              <div className="discussion-row" key={item.id}>
+                <IconMessage size={14} />
+                <div className="discussion-row-main">
+                  <div className="discussion-row-title">{item.title}</div>
+                  <div className="discussion-row-meta">
+                    {item.agentName || item.sourceKind} ·{" "}
+                    {t("{{count}} 条消息", { count: item.messageCount })} ·{" "}
+                    {t("导入于")}{" "}
+                    {formatDate(item.importedAt, i18n.language)}
                   </div>
-                  <button
-                    type="button"
-                    className="icon-btn small"
-                    onClick={() => void doDelete(item.id)}
+                  <div className="discussion-row-path">{item.sourcePath}</div>
+                </div>
+                <Tooltip title={t("移除讨论")}>
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<IconTrash size={13} />}
+                    loading={busy === item.id}
                     disabled={busy === item.id}
-                    title={t("移除讨论")}
+                    onClick={() => void doDelete(item.id)}
                     aria-label={t("移除讨论")}
+                  />
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {sessionsOpen ? (
+        <section className="discussion-section discussion-sessions">
+          <div className="discussion-section-head">
+            <span>{t("检测到的 Agent")}</span>
+            <span className="discussion-section-meta">
+              {t("{{count}} 个 Agent", { count: agents.filter((item) => item.installed).length })} ·{" "}
+              {t("{{count}} 个会话", { count: sessions.length })}
+            </span>
+            <Tooltip title={t("收起会话列表")}>
+              <Button
+                type="text"
+                size="small"
+                icon={<IconX size={13} />}
+                onClick={() => setSessionsOpen(false)}
+                aria-label={t("收起会话列表")}
+              />
+            </Tooltip>
+          </div>
+          <Space wrap size={4} style={{ marginBottom: 7 }}>
+            <Button
+              size="small"
+              type={!agentFilter ? "primary" : "default"}
+              onClick={() => setAgentFilter("")}
+            >
+              {t("全部")}
+              <span style={{ marginInlineStart: 4, opacity: 0.7 }}>
+                {sessions.length}
+              </span>
+            </Button>
+            {agents.map((agent) => (
+              <Button
+                key={agent.id}
+                size="small"
+                type={agentFilter === agent.id ? "primary" : "default"}
+                onClick={() => setAgentFilter(agent.id)}
+                title={
+                  agent.supported
+                    ? t("已检测到 {{count}} 个 {{name}} 会话", { count: agent.count, name: agent.name })
+                    : t("已检测到这个 Agent，但暂未支持读取它的会话")
+                }
+              >
+                {agent.name}
+                <span style={{ marginInlineStart: 4, opacity: 0.7 }}>
+                  {agent.count}
+                </span>
+                {!agent.supported ? (
+                  <Tag
+                    color="warning"
+                    variant="filled"
+                    style={{ marginInlineStart: 4, marginInlineEnd: 0 }}
                   >
-                    {busy === item.id ? (
-                      <span className="spinner" />
-                    ) : (
-                      <IconTrash size={13} />
-                    )}
-                  </button>
+                    {t("暂未支持")}
+                  </Tag>
+                ) : null}
+              </Button>
+            ))}
+          </Space>
+          {sessionsLoading ? (
+            <div className="discussion-empty">{t("正在扫描会话…")}</div>
+          ) : sessionsError ? (
+            <Alert type="error" showIcon title={sessionsError} />
+          ) : visibleSessions.length === 0 ? (
+            <Empty
+              className="discussion-empty"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                selectedAgent && !selectedAgent.supported
+                  ? t("已检测到 {{name}}，但暂未支持读取它的会话", { name: selectedAgent.name })
+                  : t("没有可导入的会话")
+              }
+            />
+          ) : (
+            <div className="discussion-session-list">
+              {visibleSessions.map((session) => (
+                <div className="discussion-session-row" key={session.path}>
+                  <IconDownload size={13} />
+                  <div className="discussion-row-main">
+                    <div className="discussion-row-title">{session.title}</div>
+                    <div className="discussion-row-meta">
+                      {session.agentName || session.sourceKind} ·{" "}
+                      {t("{{count}} 条消息", { count: session.messageCount })} ·{" "}
+                      {formatDate(session.updatedAt, i18n.language)}
+                    </div>
+                    <div className="discussion-row-path">
+                      {session.cwd || session.path}
+                    </div>
+                  </div>
+                  <Button
+                    size="small"
+                    onClick={() => void doImport(session)}
+                    disabled={Boolean(busy) || session.imported}
+                  >
+                    {session.imported
+                      ? t("已导入")
+                      : busy === "import"
+                        ? t("提炼中…")
+                        : t("导入")}
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </section>
+      ) : null}
 
-        {sessionsOpen ? (
-          <section className="discussion-section discussion-sessions">
-            <div className="discussion-section-head">
-              <span>{t("检测到的 Agent")}</span>
-              <span className="discussion-section-meta">
-                {t("{{count}} 个 Agent", { count: agents.filter((item) => item.installed).length })} ·{" "}
-                {t("{{count}} 个会话", { count: sessions.length })}
-              </span>
-              <button
-                type="button"
-                className="icon-btn small"
-                onClick={() => setSessionsOpen(false)}
-                aria-label={t("收起会话列表")}
-              >
-                <IconX size={13} />
-              </button>
-            </div>
-            <div className="discussion-agent-tabs">
-              <button
-                type="button"
-                className={!agentFilter ? "active" : ""}
-                onClick={() => setAgentFilter("")}
-              >
-                {t("全部")}
-                <span>{sessions.length}</span>
-              </button>
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  className={agentFilter === agent.id ? "active" : ""}
-                  onClick={() => setAgentFilter(agent.id)}
-                  title={
-                    agent.supported
-                      ? t("已检测到 {{count}} 个 {{name}} 会话", { count: agent.count, name: agent.name })
-                      : t("已检测到这个 Agent，但暂未支持读取它的会话")
-                  }
-                >
-                  {agent.name}
-                  <span>{agent.count}</span>
-                  {!agent.supported ? <em>{t("暂未支持")}</em> : null}
-                </button>
-              ))}
-            </div>
-            {sessionsLoading ? (
-              <div className="discussion-empty">{t("正在扫描会话…")}</div>
-            ) : sessionsError ? (
-              <div className="discussion-empty error">{sessionsError}</div>
-            ) : visibleSessions.length === 0 ? (
-              <div className="discussion-empty">
-                {selectedAgent && !selectedAgent.supported
-                  ? t("已检测到 {{name}}，但暂未支持读取它的会话", { name: selectedAgent.name })
-                  : t("没有可导入的会话")}
-              </div>
-            ) : (
-              <div className="discussion-session-list">
-                {visibleSessions.map((session) => (
-                  <div className="discussion-session-row" key={session.path}>
-                    <IconDownload size={13} />
-                    <div className="discussion-row-main">
-                      <div className="discussion-row-title">{session.title}</div>
-                      <div className="discussion-row-meta">
-                        {session.agentName || session.sourceKind} ·{" "}
-                        {t("{{count}} 条消息", { count: session.messageCount })} ·{" "}
-                        {formatDate(session.updatedAt, i18n.language)}
-                      </div>
-                      <div className="discussion-row-path">
-                        {session.cwd || session.path}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn ghost small-btn"
-                      onClick={() => void doImport(session)}
-                      disabled={Boolean(busy) || session.imported}
-                    >
-                      {session.imported
-                        ? t("已导入")
-                        : busy === "import"
-                          ? t("提炼中…")
-                          : t("导入")}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+      <div className="modal-actions">
+        {data?.consensus ? (
+          <span className="discussion-saved">
+            <IconCheck size={12} /> {t("评论修改会自动参考这份共识")}
+          </span>
         ) : null}
-
-        <div className="modal-actions">
-          {data?.consensus ? (
-            <span className="discussion-saved">
-              <IconCheck size={12} /> {t("评论修改会自动参考这份共识")}
-            </span>
-          ) : null}
-          <button type="button" className="btn ghost" onClick={onClose}>
-            {t("关闭")}
-          </button>
-        </div>
+        <Button onClick={onClose}>{t("关闭")}</Button>
       </div>
-    </div>
+    </AppModal>
   );
 }

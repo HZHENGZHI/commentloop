@@ -7,6 +7,8 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { Button, Empty, Input, Tooltip } from "antd";
+import type { InputRef } from "antd";
 import { useTranslation } from "react-i18next";
 import type { FileEntry, InboxDoc, RootInfo, TreeResponse } from "../types";
 import {
@@ -118,7 +120,7 @@ export const Sidebar = memo(function Sidebar({
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const searchRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<InputRef>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   const roots = useMemo(() => tree?.roots ?? [], [tree]);
@@ -202,26 +204,27 @@ export const Sidebar = memo(function Sidebar({
           />
         ) : null}
         {active && dirty ? <span className="dirty-dot" title={t("未保存")} /> : null}
-        <button
-          type="button"
-          className="row-action"
-          title={t("删除 {{name}}", { name: file.name })}
-          aria-label={t("删除 {{name}}", { name: file.name })}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (
-              window.confirm(
-                t("确定删除 “{{name}}”？此操作不可撤销。", {
-                  name: displayFile(file),
-                }),
-              )
-            ) {
-              onDelete(file.path);
-            }
-          }}
-        >
-          <IconTrash size={13} />
-        </button>
+        <Tooltip title={t("删除 {{name}}", { name: file.name })}>
+          <Button
+            type="text"
+            size="small"
+            className="row-action"
+            aria-label={t("删除 {{name}}", { name: file.name })}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (
+                window.confirm(
+                  t("确定删除 “{{name}}”？此操作不可撤销。", {
+                    name: displayFile(file),
+                  }),
+                )
+              ) {
+                onDelete(file.path);
+              }
+            }}
+            icon={<IconTrash size={13} />}
+          />
+        </Tooltip>
       </div>
     );
   };
@@ -343,18 +346,25 @@ export const Sidebar = memo(function Sidebar({
             <span className="root-count">{root.files.length}</span>
           )}
           {!removing ? (
-            <button
-              type="button"
-              className="row-action root-remove"
-              title={t("移除目录 {{name}}（不会删除磁盘文件）", { name: root.name })}
-              aria-label={t("移除目录 {{name}}（不会删除磁盘文件）", { name: root.name })}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRemoveRoot(root);
-              }}
+            <Tooltip
+              title={t("移除目录 {{name}}（不会删除磁盘文件）", {
+                name: root.name,
+              })}
             >
-              <IconX size={13} />
-            </button>
+              <Button
+                type="text"
+                size="small"
+                className="row-action root-remove"
+                aria-label={t("移除目录 {{name}}（不会删除磁盘文件）", {
+                  name: root.name,
+                })}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemoveRoot(root);
+                }}
+                icon={<IconX size={13} />}
+              />
+            </Tooltip>
           ) : null}
         </div>
         {!isCollapsed ? (
@@ -399,24 +409,24 @@ export const Sidebar = memo(function Sidebar({
           </span>
         </div>
         <div className="sidebar-tools">
-          <button
-            type="button"
-            className="icon-btn small"
-            title={t("新建文档")}
-            aria-label={t("新建文档")}
-            onClick={onNew}
-          >
-            <IconPlus size={15} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn small"
-            title={t("导入 Markdown 文件")}
-            aria-label={t("导入 Markdown 文件")}
-            onClick={() => importRef.current?.click()}
-          >
-            <IconUpload size={15} />
-          </button>
+          <Tooltip title={t("新建文档")}>
+            <Button
+              type="text"
+              size="small"
+              aria-label={t("新建文档")}
+              onClick={onNew}
+              icon={<IconPlus size={15} />}
+            />
+          </Tooltip>
+          <Tooltip title={t("导入 Markdown 文件")}>
+            <Button
+              type="text"
+              size="small"
+              aria-label={t("导入 Markdown 文件")}
+              onClick={() => importRef.current?.click()}
+              icon={<IconUpload size={15} />}
+            />
+          </Tooltip>
           <input
             ref={importRef}
             type="file"
@@ -430,41 +440,30 @@ export const Sidebar = memo(function Sidebar({
               event.target.value = "";
             }}
           />
-          <button
-            type="button"
-            className="icon-btn small"
-            title={t("添加目录")}
-            aria-label={t("添加目录")}
-            onClick={onAddRoot}
-          >
-            <IconFolderPlus size={15} />
-          </button>
+          <Tooltip title={t("添加目录")}>
+            <Button
+              type="text"
+              size="small"
+              aria-label={t("添加目录")}
+              onClick={onAddRoot}
+              icon={<IconFolderPlus size={15} />}
+            />
+          </Tooltip>
         </div>
       </div>
 
-      <div className="sidebar-search">
-        <IconSearch size={14} />
-        <input
-          ref={searchRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("搜索文件")}
-          aria-label={t("搜索文件")}
-          spellCheck={false}
-        />
-        {query ? (
-          <button
-            type="button"
-            className="search-clear"
-            onClick={() => setQuery("")}
-            aria-label={t("清空搜索")}
-          >
-            ×
-          </button>
-        ) : (
-          <kbd>{modKey}</kbd>
-        )}
-      </div>
+      <Input
+        ref={searchRef}
+        className="sidebar-search-input"
+        allowClear
+        prefix={<IconSearch size={14} />}
+        suffix={!query ? <kbd>{modKey}</kbd> : undefined}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={t("搜索文件")}
+        aria-label={t("搜索文件")}
+        spellCheck={false}
+      />
 
       <div className="tree-scroll">
         {normalizedQuery ? (
@@ -503,10 +502,12 @@ export const Sidebar = memo(function Sidebar({
           )
         ) : noRoots ? (
           <div className="tree-empty-block">
-            <p>{t("还没有添加目录")}</p>
-            <button type="button" className="btn ghost" onClick={onAddRoot}>
-              {t("添加目录")}
-            </button>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t("还没有添加目录")}
+            >
+              <Button onClick={onAddRoot}>{t("添加目录")}</Button>
+            </Empty>
           </div>
         ) : (
           <div className="file-tree">{roots.map(renderRoot)}</div>

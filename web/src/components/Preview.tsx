@@ -1,3 +1,4 @@
+import { Button } from "antd";
 import {
   memo,
   useEffect,
@@ -251,8 +252,9 @@ export const Preview = memo(function Preview({
         </div>
       )}
       {selection ? (
-        <button
-          type="button"
+        <Button
+          type="primary"
+          size="small"
           className="selection-comment-btn"
           style={{ top: selection.top, left: selection.left }}
           onMouseDown={(event) => event.preventDefault()}
@@ -263,7 +265,7 @@ export const Preview = memo(function Preview({
           }}
         >
           {t("评论选中内容")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

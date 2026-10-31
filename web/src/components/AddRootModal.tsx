@@ -7,6 +7,15 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Button,
+  Checkbox,
+  Empty,
+  Input,
+  Tabs,
+  Tag,
+  type InputRef,
+} from "antd";
+import {
   browseDirectories,
   browseRemoteDirectories,
   closeRemoteSession,
@@ -24,8 +33,8 @@ import {
   IconFolder,
   IconFolderPlus,
   IconServer,
-  IconX,
 } from "./Icons";
+import { AppModal } from "./AppModal";
 
 interface AddRootModalProps {
   roots: RootInfo[];
@@ -35,6 +44,8 @@ interface AddRootModalProps {
   onAddRemote: (config: AddRemoteRootRequest) => Promise<void>;
 }
 
+type RootTab = "local" | "remote";
+
 export function AddRootModal({
   roots,
   initialPath,
@@ -43,7 +54,7 @@ export function AddRootModal({
   onAddRemote,
 }: AddRootModalProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"local" | "remote">("local");
+  const [tab, setTab] = useState<RootTab>("local");
   const [data, setData] = useState<BrowseResponse | null>(null);
   const [pathInput, setPathInput] = useState(initialPath);
   const [showHidden, setShowHidden] = useState(false);
@@ -51,8 +62,8 @@ export function AddRootModal({
   const [localBusy, setLocalBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
-  const pathRef = useRef<HTMLInputElement>(null);
-  const hostRef = useRef<HTMLInputElement>(null);
+  const pathRef = useRef<InputRef>(null);
+  const hostRef = useRef<InputRef>(null);
 
   const [remoteName, setRemoteName] = useState("");
   const [remoteHost, setRemoteHost] = useState("");
@@ -96,12 +107,7 @@ export function AddRootModal({
   useEffect(() => {
     void load(initialPath, false);
     pathRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [initialPath, load, onClose]);
+  }, [initialPath, load]);
 
   const endRemoteSession = useCallback(() => {
     const id = sessionRef.current;
@@ -156,7 +162,7 @@ export function AddRootModal({
     }
   };
 
-  const switchTab = (next: "local" | "remote") => {
+  const switchTab = (next: RootTab) => {
     if (remoteBrowsing && next !== "remote") {
       backToRemoteForm();
     }
@@ -255,7 +261,6 @@ export function AddRootModal({
     setRemoteBrowseError(null);
   };
 
-
   const addFromRemoteBrowser = async () => {
     if (!remoteData?.path) return;
     const port = Number(remotePort);
@@ -301,12 +306,11 @@ export function AddRootModal({
     void loadRemote(remoteData?.path ?? remoteBrowseInput, checked);
   };
 
-
-
   const renderEntry = (entry: BrowseEntry) => (
-    <button
+    <Button
       key={entry.path}
-      type="button"
+      type="text"
+      block
       className="browser-row"
       title={entry.path}
       onClick={() => navigate(entry.path)}
@@ -316,13 +320,14 @@ export function AddRootModal({
       </span>
       <span className="browser-row-name">{entry.name}</span>
       <IconChevronRight size={13} />
-    </button>
+    </Button>
   );
 
   const renderRemoteEntry = (entry: BrowseEntry) => (
-    <button
+    <Button
       key={entry.path}
-      type="button"
+      type="text"
+      block
       className="browser-row"
       title={entry.path}
       onClick={() => void loadRemote(entry.path, remoteShowHidden)}
@@ -332,440 +337,427 @@ export function AddRootModal({
       </span>
       <span className="browser-row-name">{entry.name}</span>
       <IconChevronRight size={13} />
-    </button>
+    </Button>
+  );
+
+  const localPanel = (
+    <>
+      <form className="browser-path-form" onSubmit={submitPath}>
+        <Button
+          className="browser-up"
+          icon={<IconArrowUp size={15} />}
+          onClick={() => navigate(data?.parent ?? "")}
+          disabled={!data?.parent}
+          title={t("上一级")}
+          aria-label={t("上一级")}
+        />
+        <div className="browser-path-wrap">
+          <IconFolder size={14} />
+          <Input
+            ref={pathRef}
+            variant="borderless"
+            value={pathInput}
+            onChange={(event) => setPathInput(event.target.value)}
+            placeholder={t("~/Documents/notes 或 /Volumes/notes")}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label={t("当前目录")}
+          />
+        </div>
+        <Button htmlType="submit">{t("转到")}</Button>
+      </form>
+
+      {data?.shortcuts.length ? (
+        <div className="browser-shortcuts">
+          {data.shortcuts.map((shortcut) => (
+            <Button
+              key={shortcut.path}
+              size="small"
+              className={`browser-shortcut${
+                shortcut.path === currentPath ? " active" : ""
+              }`}
+              title={shortcut.path}
+              icon={<IconFolder size={12} />}
+              onClick={() => navigate(shortcut.path)}
+            >
+              {t(shortcut.name)}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="browser-list" aria-live="polite">
+        {loading ? (
+          <div className="browser-loading">
+            <span className="spinner" />
+            {t("读取目录…")}
+          </div>
+        ) : data?.entries.length ? (
+          data.entries.map(renderEntry)
+        ) : (
+          <div className="browser-empty">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={error ? t("无法读取此目录") : t("这里没有子目录")}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="browser-list-foot">
+        <Checkbox
+          className="browser-hidden-toggle"
+          checked={showHidden}
+          onChange={(event) => toggleHidden(event.target.checked)}
+        >
+          {t("显示隐藏目录")}
+        </Checkbox>
+        <span>
+          {t("{{count}} 个子目录", { count: data?.entries.length ?? 0 })}
+          {data?.truncated ? t("（已截断）") : ""}
+        </span>
+      </div>
+
+      <p className="modal-hint browser-hint">
+        {t("选择目录后，Commentloop 会递归读取其中的 Markdown 并监听外部修改。")}
+        {t("当前工作区已有 {{count}} 个目录", { count: roots.length })}
+      </p>
+      {error ? <p className="modal-error">{error}</p> : null}
+
+      <div className="browser-selection">
+        <span>{t("当前目录")}</span>
+        <code title={currentPath}>{currentPath || t("选择中…")}</code>
+        {alreadyAdded ? (
+          <Tag
+            color="success"
+            className="browser-added"
+            style={{ marginInlineEnd: 0 }}
+          >
+            {t("已添加")}
+          </Tag>
+        ) : null}
+      </div>
+
+      <div className="modal-actions">
+        <Button onClick={onClose}>{t("取消")}</Button>
+        <Button
+          type="primary"
+          onClick={() => void addLocal()}
+          loading={localBusy}
+          disabled={!currentPath || loading || localBusy || alreadyAdded}
+        >
+          {localBusy ? t("添加中…") : t("添加此目录")}
+        </Button>
+      </div>
+    </>
+  );
+
+  const remotePanel = remoteConnecting ? (
+    <div className="remote-connecting" role="status" aria-live="polite">
+      <span className="spinner remote-spinner" />
+      <h3>{t("正在连接远程服务器…")}</h3>
+      <code>
+        {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
+      </code>
+      <p>{t("首次连接需要验证 SSH 密钥和主机指纹，可能需要几秒。")}</p>
+      <div className="remote-connecting-actions">
+        <Button type="primary" disabled>
+          {t("连接中…")}
+        </Button>
+        <Button onClick={cancelRemoteConnect}>{t("关闭")}</Button>
+      </div>
+    </div>
+  ) : remoteAdding ? (
+    <div className="remote-connecting" role="status" aria-live="polite">
+      <span className="spinner remote-spinner" />
+      <h3>{t("正在读取远程文件…")}</h3>
+      <code>
+        {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
+      </code>
+      <p>
+        {t("连接已建立，正在索引 Markdown 文件。目录较大时可能需要几秒，完成后文件会立即出现在侧栏。")}
+      </p>
+      <div className="remote-connecting-actions">
+        <Button onClick={onClose}>{t("关闭")}</Button>
+      </div>
+    </div>
+  ) : remoteBrowsing ? (
+    <>
+      <form className="browser-path-form" onSubmit={submitRemoteBrowsePath}>
+        <Button
+          className="browser-up"
+          icon={<IconArrowUp size={15} />}
+          onClick={() => {
+            if (remoteData?.parent) {
+              void loadRemote(remoteData.parent, remoteShowHidden);
+            }
+          }}
+          disabled={!remoteData?.parent}
+          title={t("上一级")}
+          aria-label={t("上一级")}
+        />
+        <div className="browser-path-wrap">
+          <IconServer size={14} />
+          <Input
+            variant="borderless"
+            value={remoteBrowseInput}
+            onChange={(event) => setRemoteBrowseInput(event.target.value)}
+            placeholder={t("远程目录路径")}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label={t("远程目录")}
+          />
+        </div>
+        <Button htmlType="submit">{t("转到")}</Button>
+      </form>
+
+      {remoteData?.shortcuts.length ? (
+        <div className="browser-shortcuts">
+          {remoteData.shortcuts.map((shortcut) => (
+            <Button
+              key={shortcut.path}
+              size="small"
+              className={`browser-shortcut${
+                shortcut.path === remoteData.path ? " active" : ""
+              }`}
+              title={shortcut.path}
+              icon={<IconFolder size={12} />}
+              onClick={() => void loadRemote(shortcut.path, remoteShowHidden)}
+            >
+              {t(shortcut.name)}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="browser-list" aria-live="polite">
+        {remoteLoading ? (
+          <div className="browser-loading">
+            <span className="spinner" />
+            {t("读取远程目录…")}
+          </div>
+        ) : remoteData?.entries.length ? (
+          remoteData.entries.map(renderRemoteEntry)
+        ) : (
+          <div className="browser-empty">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                remoteBrowseError ? t("无法读取此目录") : t("这里没有子目录")
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="browser-list-foot">
+        <Checkbox
+          className="browser-hidden-toggle"
+          checked={remoteShowHidden}
+          onChange={(event) => toggleRemoteHidden(event.target.checked)}
+        >
+          {t("显示隐藏目录")}
+        </Checkbox>
+        <span>
+          {t("{{count}} 个子目录", {
+            count: remoteData?.entries.length ?? 0,
+          })}
+          {remoteData?.truncated ? t("（已截断）") : ""}
+        </span>
+      </div>
+
+      <p className="modal-hint remote-hint">
+        {t(
+          "已连接 {{user}}@{{host}}:{{port}}。点击目录进入，选择要加入工作区的远程目录。",
+          { user: remoteUser, host: remoteHost, port: remotePort },
+        )}
+      </p>
+      {remoteBrowseError ? (
+        <p className="modal-error">{remoteBrowseError}</p>
+      ) : null}
+      <div className="browser-selection">
+        <span>{t("当前目录")}</span>
+        <code title={remoteData?.path ?? ""}>
+          {remoteData?.path || t("读取中…")}
+        </code>
+      </div>
+
+      <div className="modal-actions">
+        <Button onClick={backToRemoteForm}>{t("返回连接设置")}</Button>
+        <Button
+          type="primary"
+          onClick={() => void addFromRemoteBrowser()}
+          loading={remoteBusy}
+          disabled={!remoteData?.path || remoteLoading || remoteBusy}
+        >
+          {remoteBusy ? t("添加中…") : t("添加此目录")}
+        </Button>
+      </div>
+    </>
+  ) : (
+    <form
+      className="remote-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!remoteBusy) void startRemoteBrowse();
+      }}
+    >
+      <div className="remote-grid">
+        <label>
+          {t("名称（可选）")}
+          <Input
+            value={remoteName}
+            onChange={(event) => setRemoteName(event.target.value)}
+            placeholder={t("例如 dev-notes")}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          {t("主机")}
+          <Input
+            ref={hostRef}
+            value={remoteHost}
+            onChange={(event) => setRemoteHost(event.target.value)}
+            placeholder={t("192.168.1.10 或 example.com")}
+            spellCheck={false}
+            autoComplete="off"
+            required
+          />
+        </label>
+        <label>
+          {t("端口")}
+          <Input
+            type="number"
+            min={1}
+            max={65535}
+            value={remotePort}
+            onChange={(event) => setRemotePort(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          {t("用户名")}
+          <Input
+            value={remoteUser}
+            onChange={(event) => setRemoteUser(event.target.value)}
+            placeholder="root"
+            spellCheck={false}
+            autoComplete="username"
+            required
+          />
+        </label>
+        <label className="wide">
+          {t("私钥路径（可选）")}
+          <Input
+            value={remoteKeyPath}
+            onChange={(event) => setRemoteKeyPath(event.target.value)}
+            placeholder={t("~/.ssh/id_ed25519；留空则尝试 ssh-agent / 默认私钥")}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+        <label className="wide">
+          {t("远程目录")}
+          <div className="remote-path-line">
+            <Input
+              value={remotePath}
+              onChange={(event) => setRemotePath(event.target.value)}
+              placeholder={t("可留空；或填写浏览起点，如 /home/me/notes")}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </div>
+        </label>
+      </div>
+      <p className="modal-hint remote-hint">
+        {t("使用 SSH Agent 或本机私钥认证，不支持密码 / ProxyJump。")}
+        {t("首次连接前请先在终端执行一次")}{" "}
+        <code>
+          ssh
+          {Number(remotePort) && Number(remotePort) !== 22
+            ? ` -p ${remotePort}`
+            : ""}{" "}
+          {remoteUser || "user"}@{remoteHost || "host"}
+        </code>{" "}
+        {t("接受主机指纹。远程文件变更每 5 秒轮询同步。")}
+      </p>
+      {remoteError ? <p className="modal-error">{remoteError}</p> : null}
+      <div className="modal-actions">
+        <Button onClick={onClose}>{t("取消")}</Button>
+        <Button htmlType="submit" disabled={remoteBusy || remoteConnecting}>
+          {remoteBusy || remoteConnecting
+            ? t("连接中…")
+            : remoteError
+              ? t("重新连接")
+              : t("浏览远程目录")}
+        </Button>
+      </div>
+    </form>
   );
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <AppModal
+      title={
+        <span className="app-modal-title">
+          {tab === "local" ? (
+            <IconFolderPlus size={17} />
+          ) : (
+            <IconServer size={17} />
+          )}
+          {tab === "local"
+            ? t("添加本地目录")
+            : remoteBrowsing
+              ? t("浏览远程目录")
+              : t("添加远程服务器")}
+        </span>
+      }
+      width={680}
+      onClose={onClose}
+      className="browser-modal"
     >
-      <div
-        className="modal browser-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("添加目录或远程服务器")}
-      >
-        <div className="modal-head">
-          <div className="modal-title">
-            {tab === "local" ? (
-              <IconFolderPlus size={17} />
-            ) : (
-              <IconServer size={17} />
-            )}
-            {tab === "local"
-              ? t("添加本地目录")
-              : remoteBrowsing
-                ? t("浏览远程目录")
-                : t("添加远程服务器")}
-          </div>
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭")}
-          >
-            <IconX size={15} />
-          </button>
-        </div>
-
-        <div className="root-tabs" role="tablist" aria-label={t("目录类型")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "local"}
-            className={tab === "local" ? "active" : ""}
-            onClick={() => switchTab("local")}
-            disabled={remoteBusy}
-          >
-            <IconFolder size={14} />
-            {t("本地目录")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "remote"}
-            className={tab === "remote" ? "active" : ""}
-            onClick={() => switchTab("remote")}
-            disabled={remoteBusy}
-          >
-            <IconServer size={14} />
-            {t("远程服务器")}
-          </button>
-        </div>
-
-        {tab === "local" ? (
-          <>
-            <form className="browser-path-form" onSubmit={submitPath}>
-              <button
-                type="button"
-                className="browser-up"
-                onClick={() => navigate(data?.parent ?? "")}
-                disabled={!data?.parent}
-                title={t("上一级")}
-                aria-label={t("上一级")}
-              >
-                <IconArrowUp size={15} />
-              </button>
-              <div className="browser-path-wrap">
-                <IconFolder size={14} />
-                <input
-                  ref={pathRef}
-                  value={pathInput}
-                  onChange={(event) => setPathInput(event.target.value)}
-                  placeholder={t("~/Documents/notes 或 /Volumes/notes")}
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-label={t("当前目录")}
-                />
-              </div>
-              <button type="submit" className="btn ghost">
-                {t("转到")}
-              </button>
-            </form>
-
-            {data?.shortcuts.length ? (
-              <div className="browser-shortcuts">
-                {data.shortcuts.map((shortcut) => (
-                  <button
-                    key={shortcut.path}
-                    type="button"
-                    className={`browser-shortcut${
-                      shortcut.path === currentPath ? " active" : ""
-                    }`}
-                    title={shortcut.path}
-                    onClick={() => navigate(shortcut.path)}
-                  >
-                    <IconFolder size={12} />
-                    {t(shortcut.name)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="browser-list" aria-live="polite">
-              {loading ? (
-                <div className="browser-loading">
-                  <span className="spinner" />
-                  {t("读取目录…")}
-                </div>
-              ) : data?.entries.length ? (
-                data.entries.map(renderEntry)
-              ) : (
-                <div className="browser-empty">
-                  {error ? t("无法读取此目录") : t("这里没有子目录")}
-                </div>
-              )}
-            </div>
-
-            <div className="browser-list-foot">
-              <label className="browser-hidden-toggle">
-                <input
-                  type="checkbox"
-                  checked={showHidden}
-                  onChange={(event) => toggleHidden(event.target.checked)}
-                />
-                {t("显示隐藏目录")}
-              </label>
-              <span>
-                {t("{{count}} 个子目录", { count: data?.entries.length ?? 0 })}
-                {data?.truncated ? t("（已截断）") : ""}
-              </span>
-            </div>
-
-            <p className="modal-hint browser-hint">
-              {t("选择目录后，Commentloop 会递归读取其中的 Markdown 并监听外部修改。")}
-              {t("当前工作区已有 {{count}} 个目录", { count: roots.length })}
-            </p>
-            {error ? <p className="modal-error">{error}</p> : null}
-
-            <div className="browser-selection">
-              <span>{t("当前目录")}</span>
-              <code title={currentPath}>{currentPath || t("选择中…")}</code>
-              {alreadyAdded ? (
-                <span className="browser-added">{t("已添加")}</span>
-              ) : null}
-            </div>
-
-            <div className="modal-actions">
-              <button type="button" className="btn ghost" onClick={onClose}>
-                {t("取消")}
-              </button>
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => void addLocal()}
-                disabled={!currentPath || loading || localBusy || alreadyAdded}
-              >
-                {localBusy ? t("添加中…") : t("添加此目录")}
-              </button>
-            </div>
-          </>
-        ) : remoteConnecting ? (
-          <div className="remote-connecting" role="status" aria-live="polite">
-            <span className="spinner remote-spinner" />
-            <h3>{t("正在连接远程服务器…")}</h3>
-            <code>
-              {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
-            </code>
-            <p>{t("首次连接需要验证 SSH 密钥和主机指纹，可能需要几秒。")}</p>
-            <div className="remote-connecting-actions">
-              <button type="button" className="btn primary" disabled>
-                {t("连接中…")}
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={cancelRemoteConnect}
-              >
-                {t("关闭")}
-              </button>
-            </div>
-          </div>
-        ) : remoteAdding ? (
-          <div className="remote-connecting" role="status" aria-live="polite">
-            <span className="spinner remote-spinner" />
-            <h3>{t("正在读取远程文件…")}</h3>
-            <code>
-              {remoteUser || "user"}@{remoteHost || "host"}:{remotePort || "22"}
-            </code>
-            <p>
-              {t("连接已建立，正在索引 Markdown 文件。目录较大时可能需要几秒，完成后文件会立即出现在侧栏。")}
-            </p>
-            <div className="remote-connecting-actions">
-              <button type="button" className="btn ghost" onClick={onClose}>
-                {t("关闭")}
-              </button>
-            </div>
-          </div>
-        ) : remoteBrowsing ? (
-          <>
-            <form className="browser-path-form" onSubmit={submitRemoteBrowsePath}>
-              <button
-                type="button"
-                className="browser-up"
-                onClick={() => {
-                  if (remoteData?.parent) {
-                    void loadRemote(remoteData.parent, remoteShowHidden);
-                  }
+      <Tabs
+        activeKey={tab}
+        onChange={(key) => switchTab(key as RootTab)}
+        aria-label={t("目录类型")}
+        classNames={{ header: "root-tabs" }}
+        destroyOnHidden
+        items={[
+          {
+            key: "local",
+            disabled: remoteBusy,
+            label: (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
                 }}
-                disabled={!remoteData?.parent}
-                title={t("上一级")}
-                aria-label={t("上一级")}
               >
-                <IconArrowUp size={15} />
-              </button>
-              <div className="browser-path-wrap">
-                <IconServer size={14} />
-                <input
-                  value={remoteBrowseInput}
-                  onChange={(event) => setRemoteBrowseInput(event.target.value)}
-                  placeholder={t("远程目录路径")}
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-label={t("远程目录")}
-                />
-              </div>
-              <button type="submit" className="btn ghost">
-                {t("转到")}
-              </button>
-            </form>
-
-            {remoteData?.shortcuts.length ? (
-              <div className="browser-shortcuts">
-                {remoteData.shortcuts.map((shortcut) => (
-                  <button
-                    key={shortcut.path}
-                    type="button"
-                    className={`browser-shortcut${
-                      shortcut.path === remoteData.path ? " active" : ""
-                    }`}
-                    title={shortcut.path}
-                    onClick={() =>
-                      void loadRemote(shortcut.path, remoteShowHidden)
-                    }
-                  >
-                    <IconFolder size={12} />
-                    {t(shortcut.name)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="browser-list" aria-live="polite">
-              {remoteLoading ? (
-                <div className="browser-loading">
-                  <span className="spinner" />
-                  {t("读取远程目录…")}
-                </div>
-              ) : remoteData?.entries.length ? (
-                remoteData.entries.map(renderRemoteEntry)
-              ) : (
-                <div className="browser-empty">
-                  {remoteBrowseError ? t("无法读取此目录") : t("这里没有子目录")}
-                </div>
-              )}
-            </div>
-
-            <div className="browser-list-foot">
-              <label className="browser-hidden-toggle">
-                <input
-                  type="checkbox"
-                  checked={remoteShowHidden}
-                  onChange={(event) => toggleRemoteHidden(event.target.checked)}
-                />
-                {t("显示隐藏目录")}
-              </label>
-              <span>
-                {t("{{count}} 个子目录", {
-                  count: remoteData?.entries.length ?? 0,
-                })}
-                {remoteData?.truncated ? t("（已截断）") : ""}
+                <IconFolder size={14} />
+                {t("本地目录")}
               </span>
-            </div>
-
-            <p className="modal-hint remote-hint">
-              {t("已连接 {{user}}@{{host}}:{{port}}。点击目录进入，选择要加入工作区的远程目录。", { user: remoteUser, host: remoteHost, port: remotePort })}
-            </p>
-            {remoteBrowseError ? (
-              <p className="modal-error">{remoteBrowseError}</p>
-            ) : null}
-            <div className="browser-selection">
-              <span>{t("当前目录")}</span>
-              <code title={remoteData?.path ?? ""}>
-                {remoteData?.path || t("读取中…")}
-              </code>
-            </div>
-
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={backToRemoteForm}
+            ),
+            children: localPanel,
+          },
+          {
+            key: "remote",
+            disabled: remoteBusy,
+            label: (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
               >
-                {t("返回连接设置")}
-              </button>
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => void addFromRemoteBrowser()}
-                disabled={!remoteData?.path || remoteLoading || remoteBusy}
-              >
-                {remoteBusy ? t("添加中…") : t("添加此目录")}
-              </button>
-            </div>
-          </>
-        ) : (
-          <form
-            className="remote-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!remoteBusy) void startRemoteBrowse();
-            }}
-          >
-            <div className="remote-grid">
-              <label>
-                {t("名称（可选）")}
-                <input
-                  value={remoteName}
-                  onChange={(event) => setRemoteName(event.target.value)}
-                  placeholder={t("例如 dev-notes")}
-                  autoComplete="off"
-                />
-              </label>
-              <label>
-                {t("主机")}
-                <input
-                  ref={hostRef}
-                  value={remoteHost}
-                  onChange={(event) => setRemoteHost(event.target.value)}
-                  placeholder={t("192.168.1.10 或 example.com")}
-                  spellCheck={false}
-                  autoComplete="off"
-                  required
-                />
-              </label>
-              <label>
-                {t("端口")}
-                <input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={remotePort}
-                  onChange={(event) => setRemotePort(event.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                {t("用户名")}
-                <input
-                  value={remoteUser}
-                  onChange={(event) => setRemoteUser(event.target.value)}
-                  placeholder="root"
-                  spellCheck={false}
-                  autoComplete="username"
-                  required
-                />
-              </label>
-              <label className="wide">
-                {t("私钥路径（可选）")}
-                <input
-                  value={remoteKeyPath}
-                  onChange={(event) => setRemoteKeyPath(event.target.value)}
-                  placeholder={t("~/.ssh/id_ed25519；留空则尝试 ssh-agent / 默认私钥")}
-                  spellCheck={false}
-                  autoComplete="off"
-                />
-              </label>
-              <label className="wide">
-                {t("远程目录")}
-                <div className="remote-path-line">
-                  <input
-                    value={remotePath}
-                    onChange={(event) => setRemotePath(event.target.value)}
-                    placeholder={t("可留空；或填写浏览起点，如 /home/me/notes")}
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </div>
-              </label>
-            </div>
-            <p className="modal-hint remote-hint">
-              {t("使用 SSH Agent 或本机私钥认证，不支持密码 / ProxyJump。")}
-              {t("首次连接前请先在终端执行一次")}{" "}
-              <code>
-                ssh
-                {Number(remotePort) && Number(remotePort) !== 22
-                  ? ` -p ${remotePort}`
-                  : ""}{" "}
-                {remoteUser || "user"}@{remoteHost || "host"}
-              </code>{" "}
-              {t("接受主机指纹。远程文件变更每 5 秒轮询同步。")}
-            </p>
-            {remoteError ? (
-              <p className="modal-error">{remoteError}</p>
-            ) : null}
-            <div className="modal-actions">
-              <button type="button" className="btn ghost" onClick={onClose}>
-                {t("取消")}
-              </button>
-              <button
-                type="submit"
-                className="btn primary"
-                disabled={remoteBusy || remoteConnecting}
-              >
-                {remoteBusy || remoteConnecting
-                  ? t("连接中…")
-                  : remoteError
-                    ? t("重新连接")
-                    : t("浏览远程目录")}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+                <IconServer size={14} />
+                {t("远程服务器")}
+              </span>
+            ),
+            children: remotePanel,
+          },
+        ]}
+      />
+    </AppModal>
   );
 }
