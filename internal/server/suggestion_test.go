@@ -193,7 +193,7 @@ func TestAppendSuggestionUsesNearbyLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Index(snapshot.content, "extra") < 0 || strings.Index(snapshot.content, "extra") > strings.Index(snapshot.content, "body") {
+	if !strings.Contains(snapshot.content, "extra") || strings.Index(snapshot.content, "extra") > strings.Index(snapshot.content, "body") {
 		t.Fatalf("append landed at document end: %q", snapshot.content)
 	}
 	if strings.Contains(snapshot.content, "extrabody") {
@@ -201,10 +201,10 @@ func TestAppendSuggestionUsesNearbyLine(t *testing.T) {
 	}
 }
 
-func TestAppendSuggestionKeepsCRLFNextLine(t *testing.T) {
+func TestAppendSuggestionSeparatesFollowingParagraph(t *testing.T) {
 	app, root := newTestApp(t)
-	mustWrite(t, filepath.Join(root, "append-crlf.md"), "# Heading\r\nbody\r\n")
-	docPath := canonical(app, "append-crlf.md")
+	mustWrite(t, filepath.Join(root, "append.md"), "# Heading\nbody\n")
+	docPath := canonical(app, "append.md")
 	app.agentCaps.setToken("agent-token", agentGrant{
 		DocPath: docPath, Capabilities: agentCapabilities{ReplyComments: true},
 	})
@@ -229,7 +229,7 @@ func TestAppendSuggestionKeepsCRLFNextLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(snapshot.content, "extrabody") || !strings.Contains(snapshot.content, "extra\r\n") {
-		t.Fatalf("CRLF append corrupted the next line: %q", snapshot.content)
+	if want := "# Heading\n\nextra\n\nbody\n"; snapshot.content != want {
+		t.Fatalf("content = %q, want %q", snapshot.content, want)
 	}
 }

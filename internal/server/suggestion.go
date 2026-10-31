@@ -120,23 +120,19 @@ func (s *Server) handleResolveSuggestion(w http.ResponseWriter, r *http.Request)
 	}
 	var next string
 	if comment.Suggestion.Mode == "append" {
-		sep := "\n"
-		if strings.Contains(content, "\r\n") {
-			sep = "\r\n"
-		}
-		blank := sep + sep
-		at := end
-		if idx := strings.Index(content[at:], blank); idx >= 0 {
-			// After the current block, before the blank line that follows it.
-			at += idx
-			next = content[:at] + blank + text + content[at:]
-		} else if idx := strings.Index(content[at:], sep); idx >= 0 {
-			// No later blank line: insert after this line instead of jumping
-			// to the end of the document, keeping the following line separate.
-			at += idx
-			next = content[:at] + blank + text + sep + content[at:]
+		// Put the new paragraph after the quote's paragraph. A blank line
+		// already separates the next paragraph: insert before it. Otherwise
+		// insert after the quote's line, keeping both sides separated so the
+		// following line is not glued to the appended text.
+		rest := content[end:]
+		if idx := strings.Index(rest, "\n\n"); idx >= 0 {
+			at := end + idx
+			next = content[:at] + "\n\n" + text + content[at:]
+		} else if idx := strings.IndexByte(rest, '\n'); idx >= 0 && end+idx+1 < len(content) {
+			at := end + idx + 1
+			next = content[:at] + "\n" + text + "\n\n" + content[at:]
 		} else {
-			next = content + blank + text + sep
+			next = strings.TrimRight(content, "\r\n") + "\n\n" + text
 		}
 	} else {
 		next = content[:start] + text + content[end:]
