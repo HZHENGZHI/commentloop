@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestReviewStatusTracksReviewLoop(t *testing.T) {
@@ -312,17 +314,52 @@ func TestRemoteTreePathsOnlyTrustsCompleteCache(t *testing.T) {
 }
 
 func TestInboxDropsDeletedRemoteDocuments(t *testing.T) {
-	app, _ := newTestApp(t)
-	ro := &root{ID: "remote", Kind: rootKindRemote, Name: "remote"}
-	app.rootMu.Lock()
-	app.roots[ro.ID] = ro
-	app.rootList = append(app.rootList, ro)
-	app.rootMu.Unlock()
-	app.storeRemoteTree(ro, []remoteFile{{Rel: "kept.md"}})
-	if _, err := app.reviews.set("remote/kept.md", reviewStatusApproved); err != nil {
+	remoteRoot := t.TempDir()
+	mustWrite(t, filepath.Join(remoteRoot, "kept.md"), "# Kept\n")
+	srv := startTestSSHServer(t, remoteRoot)
+
+	primary := t.TempDir()
+	mustWrite(t, filepath.Join(primary, "local.md"), "# Local\n")
+	app, err := New(Options{
+		Root: primary, StateDir: t.TempDir(), WebFS: mapFS(),
+		Version: "test", AllowRemote: true,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.reviews.set("remote/gone.md", reviewStatusApproved); err != nil {
+	t.Cleanup(func() { _ = app.Close() })
+	app.remotePollInterval = 100 * time.Millisecond
+
+	rec := doJSON(t, app, http.MethodPost, "/api/roots/remote", addRemoteRootRequest{
+		Name: "remote-notes", Host: srv.host, Port: srv.port,
+		User: "tester", KeyPath: srv.keyPath, Path: remoteRoot,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("add remote root: %d %s", rec.Code, rec.Body.String())
+	}
+	var remoteID string
+	for _, ro := range app.rootsSnapshot() {
+		if ro.Kind == rootKindRemote {
+			remoteID = ro.ID
+		}
+	}
+	if remoteID == "" {
+		t.Fatal("remote root not registered")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, _, loaded := app.cachedRemoteTree(remoteID); loaded {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("remote tree did not load")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := app.reviews.set(remoteID+"/kept.md", reviewStatusApproved); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.reviews.set(remoteID+"/gone.md", reviewStatusApproved); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := app.buildInbox()
@@ -333,10 +370,72 @@ func TestInboxDropsDeletedRemoteDocuments(t *testing.T) {
 	for _, doc := range resp.Docs {
 		seen[doc.Path] = true
 	}
-	if !seen["remote/kept.md"] {
+	if !seen[remoteID+"/kept.md"] {
 		t.Fatal("existing remote document missing from inbox")
 	}
-	if seen["remote/gone.md"] {
+	if seen[remoteID+"/gone.md"] {
 		t.Fatal("deleted remote document still in inbox")
+	}
+}
+
+func TestRemotePollDoesNotRevokeApprovalAfterSave(t *testing.T) {
+	remoteRoot := t.TempDir()
+	mustWrite(t, filepath.Join(remoteRoot, "doc.md"), "# Original\n")
+	srv := startTestSSHServer(t, remoteRoot)
+
+	primary := t.TempDir()
+	mustWrite(t, filepath.Join(primary, "local.md"), "# Local\n")
+	app, err := New(Options{
+		Root: primary, StateDir: t.TempDir(), WebFS: mapFS(),
+		Version: "test", AllowRemote: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	app.remotePollInterval = 100 * time.Millisecond
+
+	rec := doJSON(t, app, http.MethodPost, "/api/roots/remote", addRemoteRootRequest{
+		Name: "remote-notes", Host: srv.host, Port: srv.port,
+		User: "tester", KeyPath: srv.keyPath, Path: remoteRoot,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("add remote root: %d %s", rec.Code, rec.Body.String())
+	}
+	var remoteID string
+	for _, ro := range app.rootsSnapshot() {
+		if ro.Kind == rootKindRemote {
+			remoteID = ro.ID
+		}
+	}
+	if remoteID == "" {
+		t.Fatal("remote root not registered")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, _, loaded := app.cachedRemoteTree(remoteID); loaded {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("remote tree did not load")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	ro := app.rootByID(remoteID)
+	if ro == nil {
+		t.Fatal("remote root missing")
+	}
+	canonical := remoteID + "/doc.md"
+	if _, err := app.persistDocument(ro, "doc.md", canonical, "# Changed\n", "save", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.reviews.set(canonical, reviewStatusApproved); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	review, ok := app.reviews.get(canonical)
+	if !ok || review.Status != reviewStatusApproved {
+		t.Fatalf("status after remote save poll = %+v, %v", review, ok)
 	}
 }

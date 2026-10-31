@@ -1,12 +1,16 @@
 package server
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pkg/sftp"
 )
 
 // inboxDoc is the review state of one document, aggregated across its comment
@@ -164,7 +168,12 @@ func (s *Server) buildInbox() (inboxResponse, error) {
 				remoteTrees[ro.ID] = known
 			}
 			if known != nil && !known[doc.RelPath] {
-				continue
+				// The cached tree may be incomplete (for example an
+				// unreadable subdirectory), so verify a missing document
+				// before hiding it. Keep it on transient/offline errors.
+				if _, statErr := s.statRootFile(ro, doc.RelPath); statErr != nil && remoteFileMissing(statErr) {
+					continue
+				}
 			}
 		}
 		doc.RootName = ro.Name
@@ -208,6 +217,17 @@ func remoteTreePaths(s *Server, ro *root) map[string]bool {
 		out[file.RelPath] = true
 	}
 	return out
+}
+
+// remoteFileMissing reports whether a remote stat error means the file does
+// not exist. Other errors (offline, timeout, permission) must not hide a
+// review item.
+func remoteFileMissing(err error) bool {
+	var statusErr *sftp.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.FxCode() == sftp.ErrSSHFxNoSuchFile
+	}
+	return os.IsNotExist(err)
 }
 
 // ensureInboxDoc resolves the canonical path to its root metadata. Unknown

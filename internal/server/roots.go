@@ -762,12 +762,6 @@ func (s *Server) pollRemoteRoot(ro *root) {
 				}
 				changed = true
 				canonical := ro.ID + "/" + rel
-				// A remote edit invalidates a previous approval even when
-				// nobody is watching the document.
-				s.noteReviewDocChanged(canonical)
-				if len(s.hub.viewers(canonical)) == 0 {
-					continue
-				}
 				data, _, err := ro.remoteFS.read(rel, maxRemoteDoc)
 				if err != nil {
 					continue
@@ -778,6 +772,13 @@ func (s *Server) pollRemoteRoot(ro *root) {
 				s.diskHash[canonical] = res.Revision
 				s.mu.Unlock()
 				if same {
+					continue
+				}
+				// A substantive remote edit invalidates a previous approval
+				// even when nobody is watching the document. The revision
+				// check above keeps our own remote saves from doing the same.
+				s.noteReviewDocChanged(canonical)
+				if len(s.hub.viewers(canonical)) == 0 {
 					continue
 				}
 				s.hub.broadcastPath(canonical, outMessage{
