@@ -9,6 +9,8 @@ import {
   fetchConfig,
   fetchDocCodeRepos,
   fetchDocDiscussions,
+  fetchDocReview,
+  fetchInbox,
   fetchPromptTemplates,
   fetchTree,
 } from "./api";
@@ -32,6 +34,8 @@ type QueryRoot =
   | "codeFiles"
   | "comments"
   | "config"
+  | "inbox"
+  | "review"
   | "codeRepos"
   | "docCodeRepos"
   | "discussions"
@@ -57,6 +61,18 @@ export const treeQuery = queryOptions({
   queryFn: fetchTree,
   enabled: false,
 });
+
+export const inboxQuery = queryOptions({
+  queryKey: ["inbox"],
+  queryFn: fetchInbox,
+});
+
+export const docReviewQuery = (path: string) =>
+  queryOptions({
+    queryKey: ["review", path],
+    queryFn: () => fetchDocReview(path),
+    enabled: path !== "",
+  });
 
 export const commentsQuery = (path: string) =>
   queryOptions({

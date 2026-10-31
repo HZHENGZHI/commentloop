@@ -8,7 +8,11 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import type { FileEntry, RootInfo, TreeResponse } from "../types";
+import type { FileEntry, InboxDoc, RootInfo, TreeResponse } from "../types";
+import {
+  REVIEW_STATUS_LABELS,
+  ReviewStatusDot,
+} from "./ReviewStatus";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -45,6 +49,7 @@ interface SidebarProps {
   onImport: (files: FileList) => void;
   onAddRoot: () => void;
   onRemoveRoot: (root: RootInfo) => void;
+  reviewByPath?: Map<string, InboxDoc>;
 }
 
 function buildTree(files: FileEntry[], rootId: string): DirNode {
@@ -106,6 +111,7 @@ export const Sidebar = memo(function Sidebar({
   onImport,
   onAddRoot,
   onRemoveRoot,
+  reviewByPath,
 }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
@@ -154,6 +160,15 @@ export const Sidebar = memo(function Sidebar({
 
   const fileRow = (file: FileEntry, depth: number) => {
     const active = file.path === currentPath;
+    const review = reviewByPath?.get(file.path);
+    const reviewTitle = review
+      ? review.awaiting > 0
+        ? t("{{status}} · {{count}} 条待我确认", {
+            status: t(REVIEW_STATUS_LABELS[review.status]),
+            count: review.awaiting,
+          })
+        : t(REVIEW_STATUS_LABELS[review.status])
+      : "";
     return (
       <div
         key={file.path}
@@ -175,6 +190,13 @@ export const Sidebar = memo(function Sidebar({
           <IconFileText size={14} />
         </span>
         <span className="tree-name">{file.name}</span>
+        {review ? (
+          <ReviewStatusDot
+            status={review.status}
+            awaiting={review.awaiting}
+            title={reviewTitle}
+          />
+        ) : null}
         {active && dirty ? <span className="dirty-dot" title={t("未保存")} /> : null}
         <button
           type="button"

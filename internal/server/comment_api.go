@@ -116,6 +116,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
+	s.noteReviewCommentAdded(canonical)
 	_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	writeJSON(w, http.StatusOK, comment)
 }
@@ -176,6 +177,7 @@ func (s *Server) handleReplyComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.broadcast(outMessage{Type: "comments", Path: canonical})
 	if author == "user" {
+		s.noteReviewCommentAdded(canonical)
 		_ = s.enqueueAutoReview(canonical, comment.ID, false, promptLanguage(r))
 	}
 	writeJSON(w, http.StatusOK, comment)

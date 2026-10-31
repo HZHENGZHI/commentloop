@@ -17,7 +17,9 @@ import type {
   DiscussionListResponse,
   DiscussionSession,
   DocCodeRepoResponse,
+  DocReview,
   ImportDiscussionResponse,
+  InboxResponse,
   LSPLocation,
   PromptTemplate,
   PromptTemplateInput,
@@ -26,6 +28,7 @@ import type {
   ConfigResponse,
   DocResponse,
   RenderResponse,
+  ReviewStatus,
   TreeResponse,
 } from "./types";
 
@@ -85,6 +88,26 @@ export function fetchTree(): Promise<TreeResponse> {
 
 export function fetchDoc(path: string): Promise<DocResponse> {
   return request<DocResponse>(`/api/doc?path=${encodeURIComponent(path)}`);
+}
+
+export function fetchInbox(): Promise<InboxResponse> {
+  return request<InboxResponse>("/api/inbox");
+}
+
+export function fetchDocReview(path: string): Promise<DocReview> {
+  return request<DocReview>(
+    `/api/doc/review?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export function setDocReview(
+  path: string,
+  status: ReviewStatus,
+): Promise<DocReview> {
+  return request<DocReview>("/api/doc/review", {
+    method: "POST",
+    body: JSON.stringify({ path, status }),
+  });
 }
 
 export function saveDoc(

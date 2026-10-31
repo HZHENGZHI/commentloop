@@ -74,6 +74,33 @@ export function CommentsPanel({
   const [replyDiscussions, setReplyDiscussions] = useState<string[]>([]);
   const [replyTemplateId, setReplyTemplateId] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [statusFilter, setStatusFilter] = useState<"all" | "awaiting" | "agent">(
+    "all",
+  );
+  const lastCommentAuthor = (comment: Comment) =>
+    comment.messages[comment.messages.length - 1]?.author;
+  const awaitingCount = comments.filter(
+    (comment) =>
+      !comment.resolved &&
+      (lastCommentAuthor(comment) === "agent" ||
+        lastCommentAuthor(comment) === "system"),
+  ).length;
+  const agentCount = comments.filter(
+    (comment) => !comment.resolved && lastCommentAuthor(comment) === "user",
+  ).length;
+  const visibleComments = comments.filter((comment) => {
+    if (statusFilter === "awaiting") {
+      return (
+        !comment.resolved &&
+        (lastCommentAuthor(comment) === "agent" ||
+          lastCommentAuthor(comment) === "system")
+      );
+    }
+    if (statusFilter === "agent") {
+      return !comment.resolved && lastCommentAuthor(comment) === "user";
+    }
+    return true;
+  });
   const unresolved = comments.filter((comment) => !comment.resolved).length;
   const allExpanded =
     comments.length > 0 && comments.every((comment) => expanded.has(comment.id));
@@ -184,6 +211,27 @@ export function CommentsPanel({
           </button>
         </div>
       </div>
+      <div className="comments-filter" role="tablist" aria-label={t("筛选评论")}>
+        {(
+          [
+            ["all", "全部", comments.length],
+            ["awaiting", "待我确认", awaitingCount],
+            ["agent", "等 Agent", agentCount],
+          ] as const
+        ).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === key}
+            className={`comments-filter-tab${statusFilter === key ? " active" : ""}`}
+            onClick={() => setStatusFilter(key)}
+          >
+            {t(label)}
+            <span>{count}</span>
+          </button>
+        ))}
+      </div>
       <div className="comments-body">
         {comments.length === 0 ? (
           <div className="comments-empty">
@@ -191,8 +239,13 @@ export function CommentsPanel({
             <p>{t("还没有评论")}</p>
             <span>{t("在预览中选择文字，点击“评论”即可添加。")}</span>
           </div>
+        ) : visibleComments.length === 0 ? (
+          <div className="comments-empty">
+            <IconMessage size={22} />
+            <p>{t("该状态下没有评论")}</p>
+          </div>
         ) : (
-          comments.map((comment) => {
+          visibleComments.map((comment) => {
             const members = groupMembers(comment);
             const lastMessage = comment.messages[comment.messages.length - 1];
             const isExpanded =
