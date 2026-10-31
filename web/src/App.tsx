@@ -63,6 +63,9 @@ import {
   IconSettings,
   IconSun,
 } from "./components/Icons";
+import { Badge, Button, ConfigProvider, Segmented, Tag, Tooltip, theme as antdTheme } from "antd";
+import enUS from "antd/locale/en_US";
+import zhCN from "antd/locale/zh_CN";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
 import { localizeServerMessage } from "./i18n/serverMessages";
@@ -1568,42 +1571,61 @@ export default function App() {
   const dirty = status !== "saved";
 
   return (
+    <ConfigProvider
+      locale={i18nHook.language === "zh-CN" ? zhCN : enUS}
+      theme={{
+        algorithm:
+          theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: "#2563eb",
+          borderRadius: 6,
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+          colorBgLayout: theme === "dark" ? "#0d1117" : "#f6f7f9",
+          colorBgContainer: theme === "dark" ? "#161b22" : "#ffffff",
+          colorBorder: theme === "dark" ? "rgba(240,246,252,0.16)" : "rgba(15,23,42,0.16)",
+          colorBorderSecondary:
+            theme === "dark" ? "rgba(240,246,252,0.08)" : "rgba(15,23,42,0.09)",
+          colorText: theme === "dark" ? "#e6edf3" : "#0f172a",
+          colorTextSecondary: theme === "dark" ? "#9da7b3" : "#4b5563",
+          colorTextTertiary: theme === "dark" ? "#6e7681" : "#9aa3af",
+        },
+      }}
+    >
     <div className={`app${sidebarOpen ? " sidebar-visible" : ""}`}>
       <header className="topbar">
         <div className="topbar-left">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => setSidebarOpen((value) => !value)}
+          <Tooltip
             title={sidebarOpen ? t("隐藏侧边栏 (⌘B)") : t("显示侧边栏 (⌘B)")}
-            aria-label={t("切换侧边栏")}
-            aria-pressed={sidebarOpen}
+            placement="bottom"
           >
-            <IconPanelLeft size={17} />
-          </button>
+            <Button
+              type="text"
+              onClick={() => setSidebarOpen((value) => !value)}
+              aria-label={t("切换侧边栏")}
+              aria-pressed={sidebarOpen}
+              icon={<IconPanelLeft size={17} />}
+            />
+          </Tooltip>
           <div className="brand">
             <span className="brand-mark">C</span>
             <span className="brand-name">Commentloop</span>
           </div>
           {debugMode ? (
-            <span
-              className="mode-pill debug"
+            <Tooltip
               title={
                 config?.hotReload
                   ? t("调试模式：前端资源变化后自动刷新")
                   : t("调试模式：热更新目录不可用")
               }
             >
-              DEBUG
-            </span>
+              <Tag color="purple">DEBUG</Tag>
+            </Tooltip>
           ) : null}
           {previewOnly ? (
-            <span
-              className="mode-pill readonly"
-              title={t("审阅模式：前台只读；后台 Agent 可写入，评论与局部回滚可用")}
-            >
-              {t("审阅模式")}
-            </span>
+            <Tooltip title={t("审阅模式：前台只读；后台 Agent 可写入，评论与局部回滚可用")}>
+              <Tag>{t("审阅模式")}</Tag>
+            </Tooltip>
           ) : null}
         </div>
 
@@ -1637,79 +1659,82 @@ export default function App() {
             <SaveIndicator status={status} />
           ) : null}
           {!previewOnly ? (
-            <div className="segmented" role="group" aria-label={t("视图模式")}>
-              {VIEW_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={viewMode === option.value ? "active" : ""}
-                  title={t(option.label)}
-                  aria-label={t(option.label)}
-                  aria-pressed={viewMode === option.value}
-                  onClick={() => setViewMode(option.value)}
-                >
-                  {option.icon}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              size="small"
+              aria-label={t("视图模式")}
+              value={viewMode}
+              onChange={(value) => setViewMode(value as ViewMode)}
+              options={VIEW_OPTIONS.map((option) => ({
+                value: option.value,
+                label: <span title={t(option.label)}>{option.icon}</span>,
+              }))}
+            />
           ) : null}
-          <button
-            type="button"
-            className={`icon-btn inbox-btn${inboxOpen ? " active" : ""}`}
-            onClick={() => {
-              setInboxOpen(true);
-              void inboxResult.refetch();
-            }}
-            title={t("收件箱")}
-            aria-label={t("收件箱")}
-          >
-            <IconInbox size={17} />
-            {inboxAttention > 0 ? (
-              <span className="inbox-badge">{inboxAttention}</span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => setSettingsOpen(true)}
-            title={t("设置")}
-            aria-label={t("设置")}
-          >
-            <IconSettings size={17} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() =>
-              setTheme((value) => (value === "dark" ? "light" : "dark"))
-            }
+          <Tooltip title={t("收件箱")} placement="bottom">
+            <Badge count={inboxAttention} size="small" color="#2563eb" offset={[-2, 2]}>
+              <Button
+                type={inboxOpen ? "primary" : "text"}
+                onClick={() => {
+                  setInboxOpen(true);
+                  void inboxResult.refetch();
+                }}
+                aria-label={t("收件箱")}
+                icon={<IconInbox size={17} />}
+              />
+            </Badge>
+          </Tooltip>
+          <Tooltip title={t("设置")} placement="bottom">
+            <Button
+              type="text"
+              onClick={() => setSettingsOpen(true)}
+              aria-label={t("设置")}
+              icon={<IconSettings size={17} />}
+            />
+          </Tooltip>
+          <Tooltip
             title={theme === "dark" ? t("切换到浅色") : t("切换到深色")}
-            aria-label={t("切换主题")}
+            placement="bottom"
           >
-            {theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
-          </button>
-          <button
-            type="button"
-            className="icon-btn lang-btn"
-            onClick={() =>
-              void i18nHook.changeLanguage(
-                i18nHook.language === "zh-CN" ? "en" : "zh-CN",
-              )
-            }
+            <Button
+              type="text"
+              onClick={() =>
+                setTheme((value) => (value === "dark" ? "light" : "dark"))
+              }
+              aria-label={t("切换主题")}
+              icon={
+                theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />
+              }
+            />
+          </Tooltip>
+          <Tooltip
             title={i18nHook.language === "zh-CN" ? "English" : "简体中文"}
-            aria-label={i18nHook.language === "zh-CN" ? "Switch to English" : "切换到中文"}
+            placement="bottom"
           >
-            <span>{i18nHook.language === "zh-CN" ? "EN" : "中"}</span>
-          </button>
-          <button
-            type="button"
-            className="btn primary new-btn"
-            onClick={requestNewDoc}
-            title={t("新建文档 (⌘⇧N)")}
-          >
-            <IconPlus size={15} />
-            <span>{t("新建")}</span>
-          </button>
+            <Button
+              type="text"
+              onClick={() =>
+                void i18nHook.changeLanguage(
+                  i18nHook.language === "zh-CN" ? "en" : "zh-CN",
+                )
+              }
+              aria-label={
+                i18nHook.language === "zh-CN"
+                  ? "Switch to English"
+                  : "切换到中文"
+              }
+            >
+              {i18nHook.language === "zh-CN" ? "EN" : "中"}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t("新建文档 (⌘⇧N)")} placement="bottom">
+            <Button
+              type="primary"
+              onClick={requestNewDoc}
+              icon={<IconPlus size={15} />}
+            >
+              {t("新建")}
+            </Button>
+          </Tooltip>
         </div>
       </header>
 
@@ -1811,70 +1836,72 @@ export default function App() {
                       </span>
                     ) : null}
                     {currentPath ? (
-                      <button
-                        type="button"
-                        className="comments-toggle code-repos-toggle"
-                        onClick={() => {
-                          if (codeRepos.length > 0) {
-                            setCodeBrowserOpen(true);
-                          } else {
-                            setCodeRepoModalOpen(true);
-                          }
-                        }}
+                      <Tooltip
                         title={
                           codeRepos.length
                             ? t("已关联 {{count}} 个代码仓库", { count: codeRepos.length })
                             : t("关联代码仓库")
                         }
                       >
-                        <IconGitBranch size={13} />
-                        {t("代码")}
-                        {codeRepos.length ? (
-                          <span className="comments-badge">
-                            {codeRepos.length}
-                          </span>
-                        ) : null}
-                      </button>
+                        <Badge count={codeRepos.length} size="small" color="#2563eb" offset={[3, -3]}>
+                          <Button
+                            size="small"
+                            icon={<IconGitBranch size={13} />}
+                            onClick={() => {
+                              if (codeRepos.length > 0) {
+                                setCodeBrowserOpen(true);
+                              } else {
+                                setCodeRepoModalOpen(true);
+                              }
+                            }}
+                          >
+                            {t("代码")}
+                          </Button>
+                        </Badge>
+                      </Tooltip>
                     ) : null}
                     {currentPath ? (
-                      <button
-                        type="button"
-                        className="comments-toggle discussion-toggle"
-                        onClick={() => setDiscussionModalOpen(true)}
-                        title={t("导入讨论并维护文档共识")}
-                      >
-                        <IconMessage size={13} />
-                        {t("讨论")}
-                        {consensusActivity &&
-                        consensusActivity.status !== "done" &&
-                        consensusActivity.status !== "error" ? (
-                          <span className="spinner" />
-                        ) : discussions.length ? (
-                          <span className="comments-badge">
-                            {discussions.length}
-                          </span>
-                        ) : null}
-                      </button>
+                      <Tooltip title={t("导入讨论并维护文档共识")}>
+                        <Badge
+                          count={discussions.length}
+                          size="small"
+                          color="#2563eb"
+                          offset={[3, -3]}
+                        >
+                          <Button
+                            size="small"
+                            icon={<IconMessage size={13} />}
+                            onClick={() => setDiscussionModalOpen(true)}
+                            loading={
+                              consensusActivity?.status !== "done" &&
+                              consensusActivity?.status !== "error" &&
+                              Boolean(consensusActivity)
+                            }
+                          >
+                            {t("讨论")}
+                          </Button>
+                        </Badge>
+                      </Tooltip>
                     ) : null}
-                    <button
-                      type="button"
-                      className={`comments-toggle${commentsOpen ? " active" : ""}`}
-                      onClick={() => setCommentsOpen((value) => !value)}
-                      title={t("查看 / 添加评论")}
-                      aria-pressed={commentsOpen}
-                    >
-                      <IconMessage size={13} />
-                      {t("评论")}
-                      {comments.length ? (
-                        <span className="comments-badge">{comments.length}</span>
-                      ) : null}
-                    </button>
-                    <span
-                      className={`live-badge${connection === "open" ? " on" : ""}`}
-                    >
-                      <i />
-                      {connection === "open" ? t("实时") : t("离线渲染")}
-                    </span>
+                    <Tooltip title={t("查看 / 添加评论")}>
+                      <Badge count={comments.length} size="small" color="#2563eb" offset={[3, -3]}>
+                        <Button
+                          size="small"
+                          type={commentsOpen ? "primary" : "default"}
+                          icon={<IconMessage size={13} />}
+                          onClick={() => setCommentsOpen((value) => !value)}
+                          aria-pressed={commentsOpen}
+                        >
+                          {t("评论")}
+                        </Button>
+                      </Badge>
+                    </Tooltip>
+                    <Badge
+                      status={connection === "open" ? "processing" : "default"}
+                      text={
+                        connection === "open" ? t("实时") : t("离线渲染")
+                      }
+                    />
                   </div>
                 </div>
                 <Preview
@@ -2084,6 +2111,7 @@ export default function App() {
 
       <Toasts items={toasts} onDismiss={dismissToast} />
     </div>
+    </ConfigProvider>
   );
 }
 
@@ -2149,42 +2177,41 @@ function Welcome({
 
         <div className="welcome-actions">
           {roots.length === 0 ? (
-            <button
-              type="button"
-              className="btn primary large"
+            <Button
+              type="primary"
+              size="large"
               onClick={onAddRoot}
+              icon={<IconFolderPlus size={16} />}
             >
-              <IconFolderPlus size={16} />
               {t("添加目录")}
-            </button>
+            </Button>
           ) : (
             <>
               {!readOnly ? (
-                <button
-                  type="button"
-                  className="btn primary large"
+                <Button
+                  type="primary"
+                  size="large"
                   onClick={onNew}
+                  icon={<IconPlus size={16} />}
                 >
-                  <IconPlus size={16} />
                   {t("新建文档")}
-                </button>
+                </Button>
               ) : null}
-              <button
-                type="button"
-                className={`btn ${readOnly ? "primary" : "ghost"} large`}
+              <Button
+                type={readOnly ? "primary" : "default"}
+                size="large"
                 onClick={onBrowse}
+                icon={<IconFileText size={16} />}
               >
-                <IconFileText size={16} />
                 {t("浏览文件")}
-              </button>
-              <button
-                type="button"
-                className="btn ghost large"
+              </Button>
+              <Button
+                size="large"
                 onClick={onAddRoot}
+                icon={<IconFolderPlus size={16} />}
               >
-                <IconFolderPlus size={16} />
                 {t("添加目录")}
-              </button>
+              </Button>
             </>
           )}
         </div>

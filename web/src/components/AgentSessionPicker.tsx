@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 import type { AgentSession } from "../types";
 import { IconCheck, IconChevronDown, IconMessage, IconPlus } from "./Icons";
@@ -82,30 +83,32 @@ export function AgentSessionPicker({
 
   return (
     <div className="agent-session-picker" ref={rootRef}>
-      <button
-        type="button"
-        className={`agent-session-trigger${open ? " active" : ""}`}
+      <Button
+        size="small"
+        type={open ? "primary" : "text"}
+        className="agent-session-trigger"
         onClick={() => setOpen((value) => !value)}
         title={t("切换这个文档的 Agent 会话")}
         aria-expanded={open}
+        icon={<IconMessage size={10} />}
       >
-        <IconMessage size={10} />
         <span>{active?.title ? t(active.title) : t("会话")}</span>
         <IconChevronDown size={10} />
-      </button>
+      </Button>
       {open ? (
         <div className="agent-session-menu">
           <div className="agent-session-head">
             <span>{t("Agent 会话")}</span>
-            <button
-              type="button"
+            <Button
+              size="small"
+              type="text"
               className="agent-session-new"
               onClick={() => void create()}
               disabled={busy || working}
+              icon={<IconPlus size={11} />}
             >
-              <IconPlus size={11} />
               {t("新建")}
-            </button>
+            </Button>
           </div>
           <div className="agent-session-list">
             {sessions.map((item) => (

@@ -1,3 +1,4 @@
+import { Select, Tag } from "antd";
 import { useTranslation } from "react-i18next";
 import type { ReviewSeverity, ReviewStatus } from "../types";
 
@@ -24,19 +25,35 @@ export const SEVERITY_LABELS: Record<ReviewSeverity, string> = {
 
 export function SeverityBadge({ severity }: { severity: ReviewSeverity }) {
   const { t } = useTranslation();
+  const color =
+    severity === "blocking"
+      ? "red"
+      : severity === "should_fix"
+        ? "orange"
+        : severity === "question"
+          ? "blue"
+          : undefined;
   return (
-    <span className={`comment-severity ${severity}`}>
+    <Tag bordered={false} color={color}>
       {t(SEVERITY_LABELS[severity])}
-    </span>
+    </Tag>
   );
 }
 
 export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
   const { t } = useTranslation();
+  const color =
+    status === "in_review"
+      ? "blue"
+      : status === "changes_requested"
+        ? "orange"
+        : status === "approved"
+          ? "green"
+          : undefined;
   return (
-    <span className={`review-status-badge ${status}`}>
+    <Tag bordered={false} color={color}>
       {t(REVIEW_STATUS_LABELS[status])}
-    </span>
+    </Tag>
   );
 }
 
@@ -72,22 +89,25 @@ export function ReviewStatusSelect({
 }) {
   const { t } = useTranslation();
   return (
-    <span className={`review-status-control ${value}`}>
-      <span className={`review-dot ${value}`} aria-hidden="true" />
-      <select
-        className="review-status-select"
-        value={value}
-        onChange={(event) => onChange(event.target.value as ReviewStatus)}
-        disabled={disabled}
-        title={t("审阅状态")}
-        aria-label={t("审阅状态")}
-      >
-        {REVIEW_STATUSES.map((status) => (
-          <option key={status} value={status}>
+    <Select
+      size="small"
+      variant="borderless"
+      className={`review-status-control ${value}`}
+      value={value}
+      onChange={(next) => onChange(next as ReviewStatus)}
+      disabled={disabled}
+      title={t("审阅状态")}
+      aria-label={t("审阅状态")}
+      popupMatchSelectWidth={false}
+      options={REVIEW_STATUSES.map((status) => ({
+        value: status,
+        label: (
+          <span className="review-status-option">
+            <span className={`review-dot ${status}`} aria-hidden="true" />
             {t(REVIEW_STATUS_LABELS[status])}
-          </option>
-        ))}
-      </select>
-    </span>
+          </span>
+        ),
+      }))}
+    />
   );
 }

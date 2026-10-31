@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Button, Empty, Input, Segmented, Select, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   Comment,
@@ -247,22 +248,19 @@ export function CommentsPanel({
         </div>
         <div className="comments-head-actions">
           {comments.length > 0 ? (
-            <button
-              type="button"
-              className="comments-expand-all"
-              onClick={toggleAll}
-            >
+            <Button size="small" type="text" onClick={toggleAll}>
               {allExpanded ? t("全部收起") : t("全部展开")}
-            </button>
+            </Button>
           ) : null}
-          <button
-            type="button"
-            className="icon-btn small"
-            onClick={onClose}
-            aria-label={t("关闭评论")}
-          >
-            <IconX size={15} />
-          </button>
+          <Tooltip title={t("关闭评论")}>
+            <Button
+              size="small"
+              type="text"
+              onClick={onClose}
+              aria-label={t("关闭评论")}
+              icon={<IconX size={15} />}
+            />
+          </Tooltip>
         </div>
       </div>
       <div className="review-summary">
@@ -271,15 +269,17 @@ export function CommentsPanel({
             <IconSparkles size={13} />
             {t("Agent 审阅")}
           </span>
-          <button
-            type="button"
-            className="review-summary-request"
+          <Button
+            size="small"
+            type="primary"
+            ghost
+            loading={reviewing}
             onClick={onRequestReview}
             disabled={reviewing}
+            icon={<IconSparkles size={12} />}
           >
-            {reviewing ? <span className="spinner" /> : <IconSparkles size={12} />}
             {reviewing ? t("审阅中…") : t("让 Agent 审一遍")}
-          </button>
+          </Button>
         </div>
         {review?.summary ? (
           <div className="review-summary-body">{review.summary}</div>
@@ -289,58 +289,45 @@ export function CommentsPanel({
           </div>
         )}
       </div>
-      <div className="comments-filter" role="tablist" aria-label={t("筛选评论")}>
-        {(
-          [
-            ["all", "全部", comments.length],
-            ["awaiting", "待我确认", awaitingCount],
-            ["agent", "等 Agent", agentCount],
-          ] as const
-        ).map(([key, label, count]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === key}
-            className={`comments-filter-tab${statusFilter === key ? " active" : ""}`}
-            onClick={() => setStatusFilter(key)}
-          >
-            {t(label)}
-            <span>{count}</span>
-          </button>
-        ))}
-      </div>
-      <div className="comments-search">
-        <IconSearch size={12} />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("搜索评论内容或行号")}
-          aria-label={t("搜索评论内容或行号")}
+      <div className="comments-filter">
+        <Segmented
+          size="small"
+          block
+          value={statusFilter}
+          onChange={(value) =>
+            setStatusFilter(value as "all" | "awaiting" | "agent")
+          }
+          options={[
+            { value: "all", label: `${t("全部")} ${comments.length}` },
+            { value: "awaiting", label: `${t("待我确认")} ${awaitingCount}` },
+            { value: "agent", label: `${t("等 Agent")} ${agentCount}` },
+          ]}
         />
-        {query ? (
-          <button
-            type="button"
-            className="comments-search-clear"
-            onClick={() => setQuery("")}
-            aria-label={t("清空搜索")}
-          >
-            ×
-          </button>
-        ) : null}
       </div>
+      <Input
+        className="comments-search-input"
+        allowClear
+        prefix={<IconSearch size={12} />}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={t("搜索评论内容或行号")}
+        aria-label={t("搜索评论内容或行号")}
+      />
       <div className="comments-body">
         {comments.length === 0 ? (
-          <div className="comments-empty">
-            <IconMessage size={22} />
-            <p>{t("还没有评论")}</p>
-            <span>{t("在预览中选择文字，点击“评论”即可添加。")}</span>
-          </div>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t("还没有评论，在预览中选择文字后点击评论即可添加。")}
+          />
         ) : visibleComments.length === 0 ? (
-          <div className="comments-empty">
-            <IconMessage size={22} />
-            <p>{normalizedQuery ? t("没有匹配的评论") : t("该状态下没有评论")}</p>
-          </div>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              normalizedQuery
+                ? t("没有匹配的评论")
+                : t("该状态下没有评论")
+            }
+          />
         ) : (
           visibleComments.map((comment) => {
             const members = groupMembers(comment);
@@ -363,20 +350,22 @@ export function CommentsPanel({
             >
               <div className="comment-card-head">
                 <div className="comment-location">
-                  <button
-                    type="button"
+                  <Button
+                    size="small"
+                    type="text"
                     className="comment-expand"
                     onClick={() => toggleExpanded(comment.id)}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? t("收起评论") : t("展开评论")}
                     title={isExpanded ? t("收起评论") : t("展开评论")}
-                  >
-                    {isExpanded ? (
-                      <IconChevronDown size={12} />
-                    ) : (
-                      <IconChevronRight size={12} />
-                    )}
-                  </button>
+                    icon={
+                      isExpanded ? (
+                        <IconChevronDown size={12} />
+                      ) : (
+                        <IconChevronRight size={12} />
+                      )
+                    }
+                  />
                   {comment.orphaned || comment.line === 0 ? (
                     <span className="comment-orphaned">{t("未定位")}</span>
                   ) : (
@@ -396,43 +385,46 @@ export function CommentsPanel({
                   ) : null}
                 </div>
                 <div className="comment-actions">
-                  <button
-                    type="button"
+                  <Button
+                    size="small"
+                    type="text"
                     className="comment-action"
                     onClick={() => onJump(comment)}
                     title={t("在预览中定位")}
+                    icon={<IconLocate size={11} />}
                   >
-                    <IconLocate size={11} />
                     {t("定位")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    size="small"
+                    type="text"
                     className="comment-action"
                     onClick={() => setGroupTarget(comment)}
                     title={comment.groupId ? t("管理关联评论") : t("关联其他评论")}
                     aria-label={comment.groupId ? t("管理关联评论") : t("关联其他评论")}
+                    icon={<IconLink size={11} />}
                   >
-                    <IconLink size={11} />
                     {t("关联评论")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    size="small"
+                    type="text"
                     className="comment-action"
                     onClick={() => onResolve(comment, !comment.resolved)}
                     title={comment.resolved ? t("重新打开") : t("标记解决")}
+                    icon={<IconCheck size={12} />}
                   >
-                    <IconCheck size={12} />
                     {comment.resolved ? t("重新打开") : t("解决")}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    size="small"
+                    type="text"
                     className="comment-action danger"
                     onClick={() => onDelete(comment)}
                     title={t("删除评论")}
                     aria-label={t("删除评论")}
-                  >
-                    <IconTrash size={12} />
-                  </button>
+                    icon={<IconTrash size={12} />}
+                  />
                 </div>
               </div>
 
@@ -495,20 +487,21 @@ export function CommentsPanel({
                   </div>
                   {comment.suggestion.status === "pending" ? (
                     <div className="comment-suggestion-actions">
-                      <button
-                        type="button"
-                        className="btn primary suggestion-accept"
+                      <Button
+                        size="small"
+                        type="primary"
+                        className="suggestion-accept"
                         onClick={() => onSuggestion(comment, true)}
                       >
                         {t("接受建议")}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost suggestion-reject"
+                      </Button>
+                      <Button
+                        size="small"
+                        className="suggestion-reject"
                         onClick={() => onSuggestion(comment, false)}
                       >
                         {t("拒绝")}
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                 </div>
@@ -712,13 +705,13 @@ export function CommentsPanel({
               {!comment.resolved &&
               lastMessage?.author === "user" &&
               replyTo !== comment.id ? (
-                <button
-                  type="button"
+                <Button
+                  size="small"
                   className="comment-agent-trigger"
                   onClick={() => void onTrigger(comment)}
                 >
                   {t("让 Agent 处理")}
-                </button>
+                </Button>
               ) : null}
 
               {replyTo === comment.id ? (
@@ -726,28 +719,26 @@ export function CommentsPanel({
                   className="comment-reply-form"
                   onSubmit={(event) => void submitReply(event, comment)}
                 >
-                  <textarea
-                    className="comment-reply-input"
+                  <Input.TextArea
                     value={replyText}
                     onChange={(event) => setReplyText(event.target.value)}
-                    placeholder={t("说明还需要修改什么，发送给 {{agent}}…", { agent: agentName })}
+                    placeholder={t("说明还需要修改什么，发送给 {{agent}}…", {
+                      agent: agentName,
+                    })}
                     rows={3}
                     autoFocus
                   />
                   {promptTemplates.length > 0 ? (
                     <label className="comment-template-field">
                       <span>{t("任务类型")}</span>
-                      <select
+                      <Select
                         value={replyTemplateId}
-                        onChange={(event) => setReplyTemplateId(event.target.value)}
-                      >
-                        {promptTemplates.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                            {item.allowDocumentEdit ? "" : t("（只分析）")}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setReplyTemplateId}
+                        options={promptTemplates.map((item) => ({
+                          value: item.id,
+                          label: `${item.name}${item.allowDocumentEdit ? "" : t("（只分析）")}`,
+                        }))}
+                      />
                     </label>
                   ) : null}
                   <DiscussionRefPicker
@@ -764,9 +755,9 @@ export function CommentsPanel({
                     <p className="comment-reply-error">{replyError}</p>
                   ) : null}
                   <div className="comment-reply-actions">
-                    <button
-                      type="button"
-                      className="comment-action"
+                    <Button
+                      size="small"
+                      type="text"
                       onClick={() => {
                         setReplyTo(null);
                         setReplyText("");
@@ -776,20 +767,23 @@ export function CommentsPanel({
                       }}
                     >
                       {t("取消")}
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn primary comment-reply-submit"
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      htmlType="submit"
+                      loading={replyBusy}
                       disabled={replyBusy}
                     >
                       {replyBusy ? t("发送中…") : t("发送给 Agent")}
-                    </button>
+                    </Button>
                   </div>
                 </form>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  size="small"
                   className="comment-reply-trigger"
+                  icon={<IconMessage size={12} />}
                   onClick={() => {
                     setExpanded((current) => new Set(current).add(comment.id));
                     setReplyTo(comment.id);
@@ -818,9 +812,8 @@ export function CommentsPanel({
                     setReplyTemplateId(preferredTemplate?.id ?? "");
                   }}
                 >
-                  <IconMessage size={12} />
                   {comment.resolved ? t("有新的修改意见") : t("继续修改 / 回复")}
-                </button>
+                </Button>
               )}
             </article>
             );
