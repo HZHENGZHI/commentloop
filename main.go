@@ -12,10 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,6 +27,7 @@ import (
 	"github.com/hzhengzhi/commentloop/internal/ignore"
 	"github.com/hzhengzhi/commentloop/internal/logging"
 	"github.com/hzhengzhi/commentloop/internal/server"
+	"github.com/pkg/browser"
 )
 
 //go:embed all:web/dist
@@ -283,7 +282,9 @@ func runServer(args []string) {
 	}
 
 	if !*noOpen {
-		openBrowser(browseURL)
+		if err := browser.OpenURL(browseURL); err != nil {
+			slog.Warn("could not open the browser", "err", err)
+		}
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -434,25 +435,6 @@ func isLoopbackAddr(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func openBrowser(u string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", u)
-	case "linux":
-		cmd = exec.Command("xdg-open", u)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
-	default:
-		return
-	}
-	if err := cmd.Start(); err != nil {
-		slog.Warn("could not open the browser", "err", err)
-		return
-	}
-	go func() { _ = cmd.Wait() }()
 }
 
 // migrateLegacyState moves the old mdlive state directory and database to the
