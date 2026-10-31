@@ -473,6 +473,28 @@ func TestDeleteDocumentClearsReviewStatus(t *testing.T) {
 	}
 }
 
+func TestExplicitDraftSurvivesFirstComment(t *testing.T) {
+	app, _ := newTestApp(t)
+	rootID := app.rootsSnapshot()[0].ID
+	docPath := rootID + "/explicit-draft.md"
+	const content = "# Draft\n\nbody\n"
+
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc", map[string]string{"path": docPath, "content": content}); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/doc/review", map[string]string{"path": docPath, "status": reviewStatusDraft}); rec.Code != http.StatusOK {
+		t.Fatalf("draft: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, app, http.MethodPost, "/api/comments", createCommentRequest{
+		Path: docPath, Quote: "body", Body: "note",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("comment: %d %s", rec.Code, rec.Body.String())
+	}
+	if review, err := app.reviews.effective(docPath); err != nil || review.Status != reviewStatusDraft {
+		t.Fatalf("explicit draft changed: %+v, %v", review, err)
+	}
+}
+
 func TestSummaryDoesNotFreezeDraftStatus(t *testing.T) {
 	app, _ := newTestApp(t)
 	rootID := app.rootsSnapshot()[0].ID

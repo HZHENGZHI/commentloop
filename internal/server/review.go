@@ -58,18 +58,32 @@ func (s *reviewStore) get(path string) (docReview, bool) {
 // with review activity but no explicit status are considered in review;
 // everything else is still a draft.
 func (s *reviewStore) effective(path string) (docReview, error) {
-	if review, ok := s.get(path); ok {
+	review, ok := s.get(path)
+	if ok && review.Status != "" {
 		return review, nil
 	}
-	var comments int64
-	if err := s.db.Model(&commentRow{}).Where("path = ?", path).Count(&comments).Error; err != nil {
+	status, err := s.inferredStatus(path)
+	if err != nil {
 		return docReview{}, err
 	}
-	status := reviewStatusDraft
-	if comments > 0 {
-		status = reviewStatusInReview
+	if ok {
+		review.Status = status
+		return review, nil
 	}
 	return docReview{Path: path, Status: status}, nil
+}
+
+// inferredStatus derives the status used by documents whose review row only
+// carries a summary (no explicit status).
+func (s *reviewStore) inferredStatus(path string) (string, error) {
+	var comments int64
+	if err := s.db.Model(&commentRow{}).Where("path = ?", path).Count(&comments).Error; err != nil {
+		return "", err
+	}
+	if comments > 0 {
+		return reviewStatusInReview, nil
+	}
+	return reviewStatusDraft, nil
 }
 
 func (s *reviewStore) set(path, status string) (docReview, error) {
@@ -107,8 +121,10 @@ func (s *reviewStore) setSummary(path, summary string) (docReview, error) {
 		return docReview{}, err
 	}
 	now := time.Now()
+	// Do not materialize an inferred status: the row only needs the summary so
+	// a later comment can still move the document from draft to in-review.
 	row := docReviewRow{
-		DocPath: path, Status: current.Status, Summary: summary,
+		DocPath: path, Status: "", Summary: summary,
 		SummaryUpdatedAt: formatTime(now), UpdatedAt: formatTime(now),
 	}
 	if err := s.db.Clauses(clause.OnConflict{
@@ -127,22 +143,10 @@ func (s *reviewStore) setSummary(path, summary string) (docReview, error) {
 // stops being current as soon as the reviewer asks for more work.
 func (s *reviewStore) noteCommentAdded(path string) (docReview, bool, error) {
 	review, ok := s.get(path)
-	if !ok {
+	if !ok || review.Status != reviewStatusApproved {
 		return docReview{}, false, nil
 	}
-	next := ""
-	switch review.Status {
-	case reviewStatusApproved:
-		next = reviewStatusChangesRequested
-	case reviewStatusDraft:
-		// A summary written before any comment materializes an explicit draft
-		// row. Once feedback arrives the document is in review, matching the
-		// inference used when no row exists.
-		next = reviewStatusInReview
-	default:
-		return docReview{}, false, nil
-	}
-	updated, err := s.set(path, next)
+	updated, err := s.set(path, reviewStatusChangesRequested)
 	return updated, err == nil, err
 }
 
