@@ -281,6 +281,30 @@ func (s *Server) requireSameOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// rejectManagedAgent denies an operation that is reserved for the local user
+// to a managed agent grant. Browser requests carry no agent token or session,
+// and manual CLI calls without a managed grant keep their existing behavior.
+func (s *Server) rejectManagedAgent(w http.ResponseWriter, r *http.Request) bool {
+	if _, known := s.agentGrantForRequest(r); !known {
+		return false
+	}
+	writeLocalizedError(w, r, http.StatusForbidden, errUIActionAgentForbidden)
+	return true
+}
+
+// userOnly is requireSameOrigin plus the managed-agent denial used by routes
+// that belong to the human review UI (settings, comment moderation, repository
+// configuration, remote sessions).
+func (s *Server) userOnly(next http.HandlerFunc) http.HandlerFunc {
+	sameOrigin := s.requireSameOrigin(next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.rejectManagedAgent(w, r) {
+			return
+		}
+		sameOrigin(w, r)
+	}
+}
+
 // resolveRef maps a canonical "<rootID>/<relative-path>" path to its root and
 // validated relative path.
 func (s *Server) resolveRef(canonical string) (*root, string, error) {

@@ -20,6 +20,9 @@ func (s *Server) handleDocDiscussions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档的讨论") {
+		return
+	}
 	items, err := s.discussions.list(canonical)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

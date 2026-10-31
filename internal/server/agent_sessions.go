@@ -166,6 +166,9 @@ func (s *Server) handleGetAgentSessions(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档的 Agent 会话") {
+		return
+	}
 	sessions, active, err := s.agentSessions.list(canonical)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

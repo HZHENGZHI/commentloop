@@ -187,6 +187,9 @@ func (s *Server) handleDocCodeRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canonical := ro.ID + "/" + rel
+	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档的代码仓库") {
+		return
+	}
 	items, err := s.codeRepos.linked(canonical)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
