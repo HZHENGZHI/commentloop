@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hzhengzhi/commentloop/internal/discovery"
+	"github.com/pkg/browser"
 )
 
 const daemonStartTimeout = 10 * time.Second
@@ -85,7 +87,9 @@ func startDaemon(args []string) error {
 				fmt.Printf("  Stop      commentloop stop\n")
 				fmt.Printf("  Status    commentloop status\n")
 				if !hasFlag(args, "no-open") {
-					openBrowser(info.URL)
+					if err := browser.OpenURL(info.URL); err != nil {
+						slog.Warn("could not open the browser", "err", err)
+					}
 				}
 				return nil
 			}

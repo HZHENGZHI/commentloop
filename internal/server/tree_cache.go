@@ -1,10 +1,12 @@
 package server
 
+import "slices"
+
 func (c *localTreeCache) get(ro *root, list func(*root) ([]fileEntry, bool, error)) ([]fileEntry, bool, error) {
 	c.mu.Lock()
 	if entry, ok := c.entries[ro]; ok {
 		c.mu.Unlock()
-		return cloneFileEntries(entry.files), entry.truncated, nil
+		return slices.Clone(entry.files), entry.truncated, nil
 	}
 	if c.gen == nil {
 		c.gen = make(map[*root]uint64)
@@ -27,7 +29,7 @@ func (c *localTreeCache) get(ro *root, list func(*root) ([]fileEntry, bool, erro
 		if c.entries == nil {
 			c.entries = make(map[*root]localTreeEntry)
 		}
-		c.entries[ro] = localTreeEntry{files: cloneFileEntries(files), truncated: truncated}
+		c.entries[ro] = localTreeEntry{files: slices.Clone(files), truncated: truncated}
 	}
 	c.mu.Unlock()
 	return files, truncated, nil
@@ -50,10 +52,4 @@ func (c *localTreeCache) forget(ro *root) {
 	delete(c.entries, ro)
 	delete(c.gen, ro)
 	c.mu.Unlock()
-}
-
-func cloneFileEntries(files []fileEntry) []fileEntry {
-	out := make([]fileEntry, len(files))
-	copy(out, files)
-	return out
 }
