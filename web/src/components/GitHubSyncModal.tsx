@@ -4,15 +4,15 @@ import { useTranslation } from "react-i18next";
 import {
   clearGitHubSyncToken,
   fetchGitHubSyncConfig,
-  postGitHubComment,
   saveGitHubSyncConfig,
+  syncGitHubReview,
   testGitHubSync,
 } from "../api";
 import type {
   Comment,
   DocReview,
+  GitHubReviewSync,
   GitHubSyncConfig,
-  GitHubSyncResult,
   GitHubSyncTest,
 } from "../types";
 import { buildGitHubMarkdown } from "../githubMarkdown";
@@ -40,12 +40,13 @@ export function GitHubSyncModal({
   const [config, setConfig] = useState<GitHubSyncConfig | null>(null);
   const [repo, setRepo] = useState("");
   const [issue, setIssue] = useState("");
+  const [filePath, setFilePath] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [tested, setTested] = useState<GitHubSyncTest | null>(null);
-  const [synced, setSynced] = useState<GitHubSyncResult | null>(null);
+  const [synced, setSynced] = useState<GitHubReviewSync | null>(null);
 
   useEffect(() => {
     fetchGitHubSyncConfig()
@@ -53,6 +54,7 @@ export function GitHubSyncModal({
         setConfig(value);
         setRepo(value.repo);
         setIssue(value.issue > 0 ? String(value.issue) : "");
+        setFilePath(value.filePath);
       })
       .catch((err: unknown) => setError(errorText(err)));
   }, []);
@@ -69,7 +71,12 @@ export function GitHubSyncModal({
     setError(null);
     setNotice(null);
     try {
-      const value = await saveGitHubSyncConfig(repo.trim(), number, token.trim() || undefined);
+      const value = await saveGitHubSyncConfig(
+        repo.trim(),
+        number,
+        filePath.trim(),
+        token.trim() || undefined,
+      );
       setConfig(value);
       setToken("");
       setNotice(t("GitHub 同步配置已保存"));
@@ -98,7 +105,7 @@ export function GitHubSyncModal({
     setError(null);
     setNotice(null);
     try {
-      setSynced(await postGitHubComment(markdown()));
+      setSynced(await syncGitHubReview(path));
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -175,6 +182,18 @@ export function GitHubSyncModal({
         onChange={(event) => setIssue(event.target.value.replace(/[^0-9]/g, ""))}
         placeholder="123"
       />
+      <label className="modal-label" htmlFor="github-file">
+        {t("PR 文件路径（可选）")}
+      </label>
+      <Input
+        id="github-file"
+        value={filePath}
+        onChange={(event) => setFilePath(event.target.value)}
+        placeholder="docs/plan.md"
+      />
+      <p className="modal-hint">
+        {t("配置仓库内文件路径后优先创建 PR inline review；为空或失败会回退为 Issue 评论。")}
+      </p>
       <label className="modal-label" htmlFor="github-token">
         {t("Fine-grained PAT")}
       </label>
@@ -208,13 +227,22 @@ export function GitHubSyncModal({
       ) : null}
       {synced ? (
         <Alert
-          type="success"
+          type={synced.warning ? "warning" : "success"}
           showIcon
-          message={t("已同步到 GitHub")}
+          message={
+            synced.mode === "review"
+              ? t("已创建 GitHub inline review（{{count}} 条）", {
+                  count: synced.inline,
+                })
+              : t("已同步为 GitHub Issue 评论")
+          }
           description={
-            <a href={synced.url} target="_blank" rel="noreferrer">
-              <IconLink size={11} /> {synced.url}
-            </a>
+            <>
+              <a href={synced.url} target="_blank" rel="noreferrer">
+                <IconLink size={11} /> {synced.url}
+              </a>
+              {synced.warning ? <p>{synced.warning}</p> : null}
+            </>
           }
         />
       ) : null}

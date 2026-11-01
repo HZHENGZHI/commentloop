@@ -67,6 +67,7 @@ type githubSyncRow struct {
 	ID        string `gorm:"type:text;primaryKey"`
 	Repo      string `gorm:"type:text;not null;default:''"`
 	Issue     int    `gorm:"type:integer;not null;default:0"`
+	FilePath  string `gorm:"type:text;not null;default:''"`
 	UpdatedAt string `gorm:"type:text;not null"`
 }
 
@@ -75,6 +76,7 @@ func (githubSyncRow) TableName() string { return "github_sync" }
 type githubSyncConfig struct {
 	Repo       string `json:"repo"`
 	Issue      int    `json:"issue"`
+	FilePath   string `json:"filePath"`
 	Configured bool   `json:"configured"`
 	TokenSet   bool   `json:"tokenSet"`
 }
@@ -98,7 +100,7 @@ func (s *Server) githubConfig() (githubSyncConfig, error) {
 	}
 	token, _ := s.githubTokens.Get()
 	return githubSyncConfig{
-		Repo: row.Repo, Issue: row.Issue,
+		Repo: row.Repo, Issue: row.Issue, FilePath: row.FilePath,
 		Configured: row.Repo != "" && row.Issue > 0,
 		TokenSet:   token != "",
 	}, nil
@@ -116,6 +118,7 @@ func (s *Server) handleGetGitHubConfig(w http.ResponseWriter, r *http.Request) {
 type putGitHubConfigRequest struct {
 	Repo       string `json:"repo"`
 	Issue      int    `json:"issue"`
+	FilePath   string `json:"filePath"`
 	Token      string `json:"token"`
 	ClearToken bool   `json:"clearToken"`
 }
@@ -134,7 +137,12 @@ func (s *Server) handlePutGitHubConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Issue/PR 编号必须大于 0"})
 		return
 	}
-	row := githubSyncRow{ID: "default", Repo: req.Repo, Issue: req.Issue, UpdatedAt: formatTime(time.Now())}
+	req.FilePath = strings.Trim(strings.ReplaceAll(req.FilePath, "\\", "/"), "/")
+	if req.FilePath != "" && (strings.HasPrefix(req.FilePath, "../") || strings.Contains(req.FilePath, "/../") || req.FilePath == "..") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "PR 文件路径必须是仓库内的相对路径"})
+		return
+	}
+	row := githubSyncRow{ID: "default", Repo: req.Repo, Issue: req.Issue, FilePath: req.FilePath, UpdatedAt: formatTime(time.Now())}
 	if err := s.db.Save(&row).Error; err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
