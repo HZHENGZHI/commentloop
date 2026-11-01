@@ -27,6 +27,7 @@ interface PreviewProps {
   onScrollRatio: (ratio: number) => void;
   onOpenDoc: (path: string) => void;
   onRequestComment: (quote: string) => void;
+  onRequestBlockComment: (quote: string) => void;
   theme: Theme;
 }
 
@@ -38,6 +39,7 @@ export const Preview = memo(function Preview({
   onScrollRatio,
   onOpenDoc,
   onRequestComment,
+  onRequestBlockComment,
   theme,
 }: PreviewProps) {
   const { t } = useTranslation();
@@ -252,20 +254,36 @@ export const Preview = memo(function Preview({
         </div>
       )}
       {selection ? (
-        <Button
-          type="primary"
-          size="small"
-          className="selection-comment-btn"
+        <div
+          className="selection-actions"
           style={{ top: selection.top, left: selection.left }}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            onRequestComment(selection.quote);
-            window.getSelection()?.removeAllRanges();
-            setSelection(null);
-          }}
         >
-          {t("评论选中内容")}
-        </Button>
+          <Button
+            type="primary"
+            size="small"
+            className="selection-comment-btn"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onRequestComment(selection.quote);
+              window.getSelection()?.removeAllRanges();
+              setSelection(null);
+            }}
+          >
+            {t("评论选中内容")}
+          </Button>
+          <Button
+            size="small"
+            className="selection-comment-btn block"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onRequestBlockComment(selection.quote);
+              window.getSelection()?.removeAllRanges();
+              setSelection(null);
+            }}
+          >
+            {t("评论整段")}
+          </Button>
+        </div>
       ) : null}
     </div>
   );

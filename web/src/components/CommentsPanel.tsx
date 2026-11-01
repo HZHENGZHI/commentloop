@@ -14,6 +14,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconChevronRight,
+  IconDownload,
   IconHistory,
   IconLink,
   IconLocate,
@@ -53,6 +54,10 @@ interface CommentsPanelProps {
   onRequestReview: () => void;
   onSuggestion: (comment: Comment, accept: boolean) => void;
   onReaction: (comment: Comment, reaction: string) => void;
+  onNewDocumentComment: () => void;
+  onCopyLink: (comment: Comment) => void;
+  onExport: () => void;
+  highlightId?: string | null;
   agentName?: string;
 }
 
@@ -85,6 +90,10 @@ export function CommentsPanel({
   onRequestReview,
   onSuggestion,
   onReaction,
+  onNewDocumentComment,
+  onCopyLink,
+  onExport,
+  highlightId = null,
   agentName = "Code Agent",
 }: CommentsPanelProps) {
   const { t, i18n } = useTranslation();
@@ -101,6 +110,18 @@ export function CommentsPanel({
     "all",
   );
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const node = document.querySelector(
+      `[data-comment-id="${CSS.escape(highlightId)}"]`,
+    );
+    if (!node) return;
+    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    node.classList.add("highlighted");
+    const timer = window.setTimeout(() => node.classList.remove("highlighted"), 2600);
+    return () => window.clearTimeout(timer);
+  }, [highlightId, comments, statusFilter, query]);
   // If the discussion list finishes loading while a reply form is open, seed
   // its selection from the thread's stored references so the checkboxes match
   // what the server will keep.
@@ -247,6 +268,23 @@ export function CommentsPanel({
           </span>
         </div>
         <div className="comments-head-actions">
+          <Tooltip title={t("导出评论")}>
+            <Button
+              size="small"
+              type="text"
+              onClick={onExport}
+              icon={<IconDownload size={14} />}
+              aria-label={t("导出评论")}
+            />
+          </Tooltip>
+          <Button
+            size="small"
+            type="text"
+            onClick={onNewDocumentComment}
+            icon={<IconMessage size={13} />}
+          >
+            {t("全文评论")}
+          </Button>
           {comments.length > 0 ? (
             <Button size="small" type="text" onClick={toggleAll}>
               {allExpanded ? t("全部收起") : t("全部展开")}
@@ -366,7 +404,9 @@ export function CommentsPanel({
                       )
                     }
                   />
-                  {comment.orphaned || comment.line === 0 ? (
+                  {comment.scope === "document" ? (
+                    <span className="comment-scope-badge">{t("全文评论")}</span>
+                  ) : comment.orphaned || comment.line === 0 ? (
                     <span className="comment-orphaned">{t("未定位")}</span>
                   ) : (
                     <span>{t("第 {{line}} 行", { line: comment.line })}</span>
@@ -385,16 +425,18 @@ export function CommentsPanel({
                   ) : null}
                 </div>
                 <div className="comment-actions">
-                  <Button
-                    size="small"
-                    type="text"
-                    className="comment-action"
-                    onClick={() => onJump(comment)}
-                    title={t("在预览中定位")}
-                    icon={<IconLocate size={11} />}
-                  >
-                    {t("定位")}
-                  </Button>
+                  {comment.scope !== "document" ? (
+                    <Button
+                      size="small"
+                      type="text"
+                      className="comment-action"
+                      onClick={() => onJump(comment)}
+                      title={t("在预览中定位")}
+                      icon={<IconLocate size={11} />}
+                    >
+                      {t("定位")}
+                    </Button>
+                  ) : null}
                   <Button
                     size="small"
                     type="text"
@@ -405,6 +447,16 @@ export function CommentsPanel({
                     icon={<IconLink size={11} />}
                   >
                     {t("关联评论")}
+                  </Button>
+                  <Button
+                    size="small"
+                    type="text"
+                    className="comment-action"
+                    onClick={() => onCopyLink(comment)}
+                    title={t("复制评论链接")}
+                    icon={<IconLink size={11} />}
+                  >
+                    {t("链接")}
                   </Button>
                   <Button
                     size="small"
@@ -428,13 +480,15 @@ export function CommentsPanel({
                 </div>
               </div>
 
-              <blockquote
-                className="comment-anchor"
-                onClick={() => onJump(comment)}
-                title={t("点击定位")}
-              >
-                {comment.quote}
-              </blockquote>
+              {comment.scope !== "document" ? (
+                <blockquote
+                  className="comment-anchor"
+                  onClick={() => onJump(comment)}
+                  title={t("点击定位")}
+                >
+                  {comment.quote}
+                </blockquote>
+              ) : null}
 
               <div className="comment-reactions">
                 {["👍", "✅"].map((emoji) => (

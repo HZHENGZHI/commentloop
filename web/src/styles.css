@@ -3357,9 +3357,16 @@ body.dragging-split * {
   line-height: 1;
 }
 
-.selection-comment-btn {
+.selection-actions {
   position: fixed;
   z-index: 120;
+  display: flex;
+  gap: 4px;
+}
+
+.selection-comment-btn {
+  position: static;
+  z-index: auto;
   height: 28px;
   padding: 0 11px;
   border: 0;
@@ -7075,4 +7082,41 @@ body.mermaid-modal-open {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ===== Full-document and block comments ===== */
+.comment-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.comment-card.highlighted {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  animation: comment-highlight 2.6s ease-out;
+}
+
+@keyframes comment-highlight {
+  0% { background: var(--accent-soft); }
+  100% { background: transparent; }
+}
+
+.document-comment p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.selection-comment-btn.block {
+  background: var(--surface-strong);
+  color: var(--text-primary);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+
 }

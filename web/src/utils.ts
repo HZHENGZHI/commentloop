@@ -197,3 +197,17 @@ export function scrollToQuote(
   container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   return true;
 }
+
+/** Expand a selected quote to the Markdown paragraph (blank-line block) that
+ * contains it; used for block-level comments. */
+export function expandQuoteToBlock(content: string, quote: string): string {
+  const needle = quote.trim();
+  if (!needle) return quote;
+  const index = content.indexOf(needle);
+  if (index < 0) return quote;
+  const before = content.lastIndexOf("\n\n", index);
+  const start = before < 0 ? 0 : before + 2;
+  const after = content.indexOf("\n\n", index + needle.length);
+  const end = after < 0 ? content.length : after;
+  return content.slice(start, end).trim();
+}

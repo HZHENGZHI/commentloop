@@ -116,7 +116,12 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	comment, err := s.comments.createAs(author, canonical, req.Quote, req.Prefix, req.Suffix, req.Body, req.Severity, content, discussionIDs, templateID)
+	var comment *Comment
+	if req.Scope == "document" {
+		comment, err = s.comments.createDocumentAs(author, canonical, req.Body, req.Severity, discussionIDs, templateID)
+	} else {
+		comment, err = s.comments.createAs(author, canonical, req.Quote, req.Prefix, req.Suffix, req.Body, req.Severity, content, discussionIDs, templateID)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

@@ -80,14 +80,14 @@ func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, sever
 	comment := Comment{
 		ID: commentID(), Path: path, Quote: quote, Prefix: prefix, Suffix: suffix,
 		Start: start, End: end, Line: line, Orphaned: orphaned,
-		Anchor: quote, CreatedAt: now, UpdatedAt: now, Severity: severity,
+		Anchor: quote, CreatedAt: now, UpdatedAt: now, Severity: severity, Scope: "inline",
 	}
 	message := CommentMessage{ID: commentID(), Author: author, Body: body, CreatedAt: now}
 
 	row := commentRow{
 		ID: comment.ID, Path: path, Quote: quote, Anchor: quote, Prefix: prefix, Suffix: suffix,
 		Line: line, StartOffset: start, EndOffset: end, Orphaned: boolInt(orphaned),
-		Severity: severity, CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
+		Scope: "inline", Severity: severity, CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
 		DiscussionIDs: discussionIDsJSON(discussionIDs), PromptTemplateID: promptTemplateID,
 	}
 	messageRow := commentMessageRow{
@@ -100,6 +100,49 @@ func (s *commentStore) createAs(author, path, quote, prefix, suffix, body, sever
 		return tx.Create(&messageRow).Error
 	})
 	if err != nil {
+		return nil, err
+	}
+	comment.Messages = []CommentMessage{message}
+	comment.DiscussionIDs = normalizeDiscussionIDs(discussionIDs)
+	comment.PromptTemplateID = promptTemplateID
+	return &comment, nil
+}
+
+func (s *commentStore) createDocumentAs(author, path, body, severity string, discussionIDs []string, promptTemplateID string) (*Comment, error) {
+	body = strings.TrimSpace(body)
+	severity, err := normalizeSeverity(severity)
+	if err != nil {
+		return nil, err
+	}
+	if author != "agent" {
+		author = "user"
+	}
+	if body == "" {
+		return nil, fmt.Errorf("评论内容不能为空")
+	}
+	if len(body) > 8000 {
+		return nil, fmt.Errorf("评论内容过长")
+	}
+	now := time.Now()
+	comment := Comment{
+		ID: commentID(), Path: path, Scope: "document", Quote: "",
+		CreatedAt: now, UpdatedAt: now, Severity: severity,
+	}
+	message := CommentMessage{ID: commentID(), Author: author, Body: body, CreatedAt: now}
+	row := commentRow{
+		ID: comment.ID, Path: path, Scope: "document", Quote: "", Anchor: "",
+		Severity: severity, CreatedAt: formatTime(now), UpdatedAt: formatTime(now),
+		DiscussionIDs: discussionIDsJSON(discussionIDs), PromptTemplateID: promptTemplateID,
+	}
+	messageRow := commentMessageRow{
+		ID: message.ID, CommentID: comment.ID, Author: author, Body: body, CreatedAt: formatTime(now),
+	}
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		return tx.Create(&messageRow).Error
+	}); err != nil {
 		return nil, err
 	}
 	comment.Messages = []CommentMessage{message}
@@ -192,6 +235,11 @@ func (s *commentStore) list(path, content string) []Comment {
 	if content != "" {
 		versions := make(map[string]docVersion)
 		for i := range comments {
+			if comments[i].Scope == "document" {
+				comments[i].Line, comments[i].Start, comments[i].End = 0, 0, 0
+				comments[i].Orphaned = false
+				continue
+			}
 			candidates := commentAnchorCandidates(comments[i])
 			found := false
 			for _, candidate := range candidates {
@@ -302,7 +350,7 @@ func (s *commentStore) query(path string) ([]Comment, error) {
 func (r commentRow) comment() Comment {
 	comment := Comment{
 		ID: r.ID, Path: r.Path, Quote: r.Quote, Anchor: r.Anchor, GroupID: r.GroupID,
-		Prefix: r.Prefix, Suffix: r.Suffix,
+		Scope: r.Scope, Prefix: r.Prefix, Suffix: r.Suffix,
 		Line: r.Line, Start: r.StartOffset, End: r.EndOffset,
 		Resolved: r.Resolved != 0, Orphaned: r.Orphaned != 0,
 		CreatedAt: parseTime(r.CreatedAt), UpdatedAt: parseTime(r.UpdatedAt),
