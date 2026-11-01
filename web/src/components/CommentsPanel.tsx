@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Button, Empty, Input, Segmented, Select, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
+import { renderPreview } from "../api";
 import type {
   Comment,
   CommentMessage,
@@ -113,6 +114,40 @@ export function CommentsPanel({
     "all",
   );
   const [query, setQuery] = useState("");
+  const [summaryHtml, setSummaryHtml] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+
+  useEffect(() => {
+    const summary = review?.summary?.trim();
+    if (!summary) {
+      setSummaryHtml("");
+      setSummaryLoading(false);
+      setSummaryExpanded(false);
+      return;
+    }
+    setSummaryExpanded(false);
+    if (!docPath) {
+      setSummaryHtml("");
+      setSummaryLoading(false);
+      return;
+    }
+    let alive = true;
+    setSummaryLoading(true);
+    renderPreview(docPath, summary)
+      .then((result) => {
+        if (alive) setSummaryHtml(result.html);
+      })
+      .catch(() => {
+        if (alive) setSummaryHtml("");
+      })
+      .finally(() => {
+        if (alive) setSummaryLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [docPath, review?.summary]);
 
   useEffect(() => {
     if (!highlightId) return;
@@ -323,7 +358,36 @@ export function CommentsPanel({
           </Button>
         </div>
         {review?.summary ? (
-          <div className="review-summary-body">{review.summary}</div>
+          <>
+            <div
+              className={`review-summary-body markdown-body${
+                summaryExpanded ? " expanded" : ""
+              }`}
+            >
+              {summaryHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: summaryHtml }} />
+              ) : (
+                <div className="review-summary-fallback">
+                  {summaryLoading ? t("正在渲染摘要…") : review.summary}
+                </div>
+              )}
+            </div>
+            {review.summary.length > 240 ? (
+              <button
+                type="button"
+                className="review-summary-toggle"
+                aria-expanded={summaryExpanded}
+                onClick={() => setSummaryExpanded((value) => !value)}
+              >
+                {summaryExpanded ? t("收起摘要") : t("展开摘要")}
+                {summaryExpanded ? (
+                  <IconChevronDown size={12} />
+                ) : (
+                  <IconChevronRight size={12} />
+                )}
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="review-summary-empty">
             {t("让 Agent 通读全文，留下分级评论和审阅摘要。")}

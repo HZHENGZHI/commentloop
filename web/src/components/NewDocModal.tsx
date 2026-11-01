@@ -99,7 +99,7 @@ export function NewDocModal({
               {t("将创建")} <code>{preview}</code>
             </>
           ) : (
-            t("可以输入子目录，如 notes/想法.md")
+            t("可以输入子目录，如 子目录/想法.md")
           )}
         </p>
         {error ? <p className="modal-error">{error}</p> : null}

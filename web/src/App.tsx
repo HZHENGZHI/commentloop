@@ -711,6 +711,19 @@ export default function App() {
     async (next: ReviewStatus) => {
       const path = currentPathRef.current;
       if (!path) return;
+      if (next === "approved") {
+        const unresolved = comments.filter((comment) => !comment.resolved).length;
+        if (
+          unresolved > 0 &&
+          !window.confirm(
+            i18n.t("还有 {{count}} 条评论未解决，仍要标记为“已通过”吗？", {
+              count: unresolved,
+            }),
+          )
+        ) {
+          return;
+        }
+      }
       try {
         const review = await setDocReview(path, next);
         queryClient.setQueryData(["review", path], review);
@@ -723,7 +736,7 @@ export default function App() {
         );
       }
     },
-    [toast],
+    [comments, toast],
   );
 
   const handleRequestReview = useCallback(async () => {
@@ -948,7 +961,6 @@ export default function App() {
       try {
         await triggerCommentAgent(path, comment.id);
         void invalidate("comments");
-        toast(i18n.t("已通知后台 Agent 处理该评论"), "success");
       } catch (error) {
         toast(i18n.t("启动 Agent 失败：{{error}}", { error: errorMessage(error) }), "error");
         throw error;
@@ -1118,9 +1130,16 @@ export default function App() {
       setNewModal(false);
       await refreshTree();
       await openDoc(result.path);
-      toast(i18n.t("文档已创建"), "success");
+      toast(
+        i18n.t(
+          previewOnly
+            ? "文档已创建；审阅模式下请通过 Agent 或导入写入内容。"
+            : "文档已创建",
+        ),
+        "success",
+      );
     },
-    [openDoc, refreshTree, toast],
+    [openDoc, previewOnly, refreshTree, toast],
   );
 
   const handleImport = useCallback(
@@ -2078,6 +2097,7 @@ export default function App() {
                   onRequestComment={setCommentQuote}
                   onRequestBlockComment={handleRequestBlockComment}
                   theme={theme}
+                  readOnly={previewOnly}
                 />
                 {commentsOpen ? (
                   <CommentsPanel
@@ -2477,7 +2497,13 @@ function Welcome({
           {roots.length > 1 ? (
             <span className="version">+{roots.length - 1}</span>
           ) : null}
-          {config ? <span className="version">v{config.version}</span> : null}
+          {config ? (
+            <span className="version">
+              {config.version.startsWith("v")
+                ? config.version
+                : `v${config.version}`}
+            </span>
+          ) : null}
         </p>
       </div>
 
