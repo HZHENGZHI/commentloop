@@ -37,6 +37,7 @@ func (s *Server) routes() *gin.Engine {
 	api.GET("/doc", s.api(s.handleGetDoc))
 	api.PUT("/doc", s.api(s.requireSameOrigin(s.handleSaveDoc)))
 	api.POST("/doc", s.api(s.requireSameOrigin(s.handleSaveDoc)))
+	api.GET("/search", s.api(s.userOnly(s.handleSearch)))
 	api.GET("/doc/checklist", s.api(s.handleGetChecklist))
 	api.POST("/doc/checklist/apply", s.api(s.userOnly(s.requireSameOrigin(s.handleApplyChecklist))))
 	api.POST("/doc/checklist/item", s.api(s.userOnly(s.requireSameOrigin(s.handleAddChecklistItem))))

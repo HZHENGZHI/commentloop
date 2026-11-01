@@ -32,6 +32,7 @@ import type {
   DocResponse,
   RenderResponse,
   ReviewStatus,
+  SearchResponse,
   TreeResponse,
 } from "./types";
 
@@ -87,6 +88,10 @@ export function fetchConfig(): Promise<ConfigResponse> {
 
 export function fetchTree(): Promise<TreeResponse> {
   return request<TreeResponse>("/api/tree");
+}
+
+export function searchDocs(query: string): Promise<SearchResponse> {
+  return request<SearchResponse>(`/api/search?q=${encodeURIComponent(query)}`);
 }
 
 export function fetchChecklist(path: string): Promise<ChecklistResponse> {
