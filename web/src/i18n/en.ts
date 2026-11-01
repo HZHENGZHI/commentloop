@@ -585,6 +585,7 @@ const en: Record<string, string> = {
   "开启桌面通知": "Enable desktop notifications",
   "审阅状态已更新": "Review status updated.",
   "还有 {{count}} 条评论未解决，仍要标记为“已通过”吗？": "{{count}} comments are still unresolved. Mark the document as approved anyway?",
+  "评论还没有加载完成，可能还有未解决项。仍要标记为“已通过”吗？": "Comments have not finished loading; some may still be unresolved. Mark the document as approved anyway?",
   "更新审阅状态失败：{{error}}": "Failed to update review status: {{error}}",
   "{{status}} · {{count}} 条待我确认": "{{status}} · {{count}} to confirm",
   "{{docs}} 篇文档 · {{awaiting}} 条待我确认 · {{pending}} 条待处理": "{{docs}} documents · {{awaiting}} to confirm · {{pending}} pending",

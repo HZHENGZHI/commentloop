@@ -32,15 +32,23 @@ type Result struct {
 
 // Renderer is safe for concurrent use.
 type Renderer struct {
-	md  goldmark.Markdown
-	css sync.Map // style name -> generated CSS
+	md   goldmark.Markdown
+	safe goldmark.Markdown
+	css  sync.Map // style name -> generated CSS
 }
 
 var docPathKey = parser.NewContextKey()
 
 // New builds a renderer configured for commentloop's preview.
 func New() *Renderer {
-	md := goldmark.New(
+	return &Renderer{
+		md:   newMarkdown(true),
+		safe: newMarkdown(false),
+	}
+}
+
+func newMarkdown(unsafe bool) goldmark.Markdown {
+	options := []goldmark.Option{
 		goldmark.WithExtensions(
 			extension.GFM,
 			extension.Footnote,
@@ -56,24 +64,37 @@ func New() *Renderer {
 				util.Prioritized(imageRewriter{}, 100),
 			),
 		),
-		goldmark.WithRendererOptions(
+	}
+	if unsafe {
+		options = append(options, goldmark.WithRendererOptions(
 			// Notes are local and user-authored; raw HTML is expected.
 			rendererhtml.WithUnsafe(),
-		),
-	)
-	return &Renderer{md: md}
+		))
+	}
+	return goldmark.New(options...)
 }
 
 // Render renders source and returns a content revision derived from the
 // source plus the document path (the path influences relative image URLs).
 func (r *Renderer) Render(source []byte, docPath string) Result {
+	return renderMarkdown(r.md, source, docPath)
+}
+
+// RenderSafe renders source with raw HTML disabled. Agent-authored content
+// such as review summaries uses this path so a document cannot inject script
+// into the browser through generated prose.
+func (r *Renderer) RenderSafe(source []byte, docPath string) Result {
+	return renderMarkdown(r.safe, source, docPath)
+}
+
+func renderMarkdown(md goldmark.Markdown, source []byte, docPath string) Result {
 	ctx := parser.NewContext()
 	ctx.Set(docPathKey, docPath)
 
-	doc := r.md.Parser().Parse(text.NewReader(source), parser.WithContext(ctx))
+	doc := md.Parser().Parse(text.NewReader(source), parser.WithContext(ctx))
 
 	var buf bytes.Buffer
-	if err := r.md.Renderer().Render(&buf, source, doc); err != nil {
+	if err := md.Renderer().Render(&buf, source, doc); err != nil {
 		// goldmark's renderer only fails on writer errors, but keep the
 		// preview usable if that ever happens.
 		escaped := stdhtml.EscapeString(string(source))

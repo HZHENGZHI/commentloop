@@ -333,6 +333,11 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errInvalidPathNotMarkdownFile)
 		return
 	}
+	if req.Safe {
+		res := s.renderer.RenderSafe([]byte(req.Content), ro.ID+"/"+rel)
+		writeJSON(w, http.StatusOK, map[string]string{"html": res.HTML, "revision": res.Revision})
+		return
+	}
 	res := s.renderer.Render([]byte(req.Content), ro.ID+"/"+rel)
 	writeJSON(w, http.StatusOK, map[string]string{"html": res.HTML, "revision": res.Revision})
 }

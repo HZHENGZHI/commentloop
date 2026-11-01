@@ -286,6 +286,19 @@ func TestRawAndRender(t *testing.T) {
 		t.Fatalf("image not rewritten: %s", rendered["html"])
 	}
 
+	safeBody := saveRequest{Path: hello, Content: "<script>alert(1)</script>\n\n**safe**", Safe: true}
+	rec = doJSON(t, app, http.MethodPost, "/api/render", safeBody)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("safe render status = %d: %s", rec.Code, rec.Body)
+	}
+	safeRendered := decode[map[string]string](t, rec)
+	if strings.Contains(safeRendered["html"], "<script") {
+		t.Fatalf("safe render kept raw HTML: %s", safeRendered["html"])
+	}
+	if !strings.Contains(safeRendered["html"], "<strong>safe</strong>") {
+		t.Fatalf("safe render lost Markdown formatting: %s", safeRendered["html"])
+	}
+
 	onDisk, err := os.ReadFile(filepath.Join(root, "hello.md"))
 	if err != nil || !strings.Contains(string(onDisk), "Hello") {
 		t.Fatalf("render endpoint modified the file: %q err=%v", onDisk, err)

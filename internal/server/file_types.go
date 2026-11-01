@@ -50,6 +50,7 @@ type treeResponse struct {
 type saveRequest struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
+	Safe    bool   `json:"safe,omitempty"`
 }
 
 type browseEntry struct {

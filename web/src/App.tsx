@@ -264,7 +264,9 @@ export default function App() {
     }
     return out;
   }, [inboxDocs, seenPaths, currentPath]);
-  const comments = useQuery(commentsQuery(docKey)).data?.comments ?? NO_COMMENTS;
+  const commentsResult = useQuery(commentsQuery(docKey));
+  const comments = commentsResult.data?.comments ?? NO_COMMENTS;
+  const commentsLoaded = commentsResult.isSuccess;
   const codeRepos = useQuery(docCodeReposQuery(docKey)).data?.repos ?? NO_CODE_REPOS;
   const discussionsResult = useQuery(discussionsQuery(docKey));
   const discussions = discussionsResult.data?.discussions ?? NO_DISCUSSIONS;
@@ -712,16 +714,28 @@ export default function App() {
       const path = currentPathRef.current;
       if (!path) return;
       if (next === "approved") {
-        const unresolved = comments.filter((comment) => !comment.resolved).length;
-        if (
-          unresolved > 0 &&
-          !window.confirm(
-            i18n.t("还有 {{count}} 条评论未解决，仍要标记为“已通过”吗？", {
-              count: unresolved,
-            }),
-          )
-        ) {
-          return;
+        if (!commentsLoaded) {
+          if (
+            !window.confirm(
+              i18n.t("评论还没有加载完成，可能还有未解决项。仍要标记为“已通过”吗？"),
+            )
+          ) {
+            return;
+          }
+        } else {
+          const unresolved = comments.filter(
+            (comment) => !comment.resolved,
+          ).length;
+          if (
+            unresolved > 0 &&
+            !window.confirm(
+              i18n.t("还有 {{count}} 条评论未解决，仍要标记为“已通过”吗？", {
+                count: unresolved,
+              }),
+            )
+          ) {
+            return;
+          }
         }
       }
       try {
@@ -736,7 +750,7 @@ export default function App() {
         );
       }
     },
-    [comments, toast],
+    [comments, commentsLoaded, toast],
   );
 
   const handleRequestReview = useCallback(async () => {
@@ -961,12 +975,18 @@ export default function App() {
       try {
         await triggerCommentAgent(path, comment.id);
         void invalidate("comments");
+        // The server's queued notice travels over the WebSocket. Keep a
+        // local confirmation for the disconnected case, where that notice
+        // never arrives and the button would otherwise look inert.
+        if (connection !== "open") {
+          toast(i18n.t("已通知后台 Agent 处理该评论"), "success");
+        }
       } catch (error) {
         toast(i18n.t("启动 Agent 失败：{{error}}", { error: errorMessage(error) }), "error");
         throw error;
       }
     },
-    [toast],
+    [connection, toast],
   );
 
   const handleDeleteComment = useCallback(
@@ -2104,6 +2124,7 @@ export default function App() {
                     key={currentPath ?? ""}
                     comments={comments}
                     docPath={currentPath ?? undefined}
+                    onOpenDoc={handlePreviewOpenDoc}
                     review={docReview}
                     reviewing={reviewRequestPath === currentPath}
                     onRequestReview={() => void handleRequestReview()}

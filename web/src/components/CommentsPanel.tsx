@@ -1,7 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import { Button, Empty, Input, Segmented, Select, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 import { renderPreview } from "../api";
+import { isMarkdownPath, rawUrl, resolveRelative } from "../utils";
 import type {
   Comment,
   CommentMessage,
@@ -31,6 +37,7 @@ import { SeverityBadge } from "./ReviewStatus";
 interface CommentsPanelProps {
   comments: Comment[];
   docPath?: string;
+  onOpenDoc: (path: string) => void;
   onClose: () => void;
   onJump: (comment: Comment) => void;
   onResolve: (comment: Comment, resolved: boolean) => void;
@@ -78,6 +85,7 @@ function formatTime(value: string, locale: string): string {
 export function CommentsPanel({
   comments,
   docPath,
+  onOpenDoc,
   onClose,
   onJump,
   onResolve,
@@ -134,7 +142,7 @@ export function CommentsPanel({
     }
     let alive = true;
     setSummaryLoading(true);
-    renderPreview(docPath, summary)
+    renderPreview(docPath, summary, true)
       .then((result) => {
         if (alive) setSummaryHtml(result.html);
       })
@@ -148,6 +156,32 @@ export function CommentsPanel({
       alive = false;
     };
   }, [docPath, review?.summary]);
+
+  const handleSummaryClick = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest<HTMLAnchorElement>("a");
+    if (!anchor) return;
+    const original =
+      anchor.dataset.mdHref ?? anchor.getAttribute("href") ?? "";
+    if (!original || original.startsWith("#")) return;
+    if (/^(https?:|mailto:)/i.test(original)) {
+      event.preventDefault();
+      window.open(original, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(original)) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    const resolved = resolveRelative(docPath ?? null, original);
+    if (!resolved) return;
+    if (isMarkdownPath(resolved)) {
+      onOpenDoc(resolved);
+    } else {
+      window.open(rawUrl(resolved), "_blank", "noopener,noreferrer");
+    }
+  };
 
   useEffect(() => {
     if (!highlightId) return;
@@ -363,6 +397,7 @@ export function CommentsPanel({
               className={`review-summary-body markdown-body${
                 summaryExpanded ? " expanded" : ""
               }`}
+              onClick={handleSummaryClick}
             >
               {summaryHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: summaryHtml }} />
