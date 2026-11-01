@@ -376,6 +376,7 @@ export interface Comment {
   updatedAt: string;
   discussionIds?: string[];
   promptTemplateId?: string;
+  scope?: "inline" | "document";
   severity?: ReviewSeverity;
   reaction?: string;
   suggestion?: CommentSuggestion;

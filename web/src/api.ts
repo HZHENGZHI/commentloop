@@ -493,10 +493,11 @@ export function createComment(
   body: string,
   discussionIds: string[] = [],
   promptTemplateId = "",
+  scope: "inline" | "document" = "inline",
 ): Promise<Comment> {
   return request<Comment>("/api/comments", {
     method: "POST",
-    body: JSON.stringify({ path, quote, body, discussionIds, promptTemplateId }),
+    body: JSON.stringify({ path, quote, body, discussionIds, promptTemplateId, scope }),
   });
 }
 

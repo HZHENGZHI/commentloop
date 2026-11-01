@@ -23,6 +23,7 @@ type commentRow struct {
 	Path             string `gorm:"type:text;not null;index:idx_comments_path"`
 	Quote            string `gorm:"type:text;not null"`
 	Anchor           string `gorm:"type:text;not null;default:''"`
+	Scope            string `gorm:"type:text;not null;default:''"`
 	GroupID          string `gorm:"type:text;not null;default:'';index:idx_comments_group"`
 	Prefix           string `gorm:"type:text;not null;default:''"`
 	Suffix           string `gorm:"type:text;not null;default:''"`
