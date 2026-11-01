@@ -2083,6 +2083,7 @@ export default function App() {
                   <CommentsPanel
                     key={currentPath ?? ""}
                     comments={comments}
+                    docPath={currentPath ?? undefined}
                     review={docReview}
                     reviewing={reviewRequestPath === currentPath}
                     onRequestReview={() => void handleRequestReview()}

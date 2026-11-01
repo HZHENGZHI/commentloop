@@ -31,6 +31,24 @@ export interface TreeResponse {
   truncated: boolean;
 }
 
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  done: boolean;
+  playbook?: string;
+}
+
+export interface ChecklistPlaybook {
+  id: string;
+  name: string;
+  items: string[];
+}
+
+export interface ChecklistResponse {
+  items: ChecklistItem[];
+  playbooks: ChecklistPlaybook[];
+}
+
 export interface DocVersion {
   id: string;
   createdAt: string;

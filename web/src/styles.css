@@ -7120,3 +7120,98 @@ body.mermaid-modal-open {
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
 
 }
+
+
+/* ===== Review checklist ===== */
+.review-checklist {
+  margin: 0 10px 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.review-checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.review-checklist-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.review-checklist-progress {
+  color: var(--text-faint);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-checklist-progress em {
+  margin-left: 5px;
+  color: var(--success);
+  font-style: normal;
+}
+
+.review-checklist-apply {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.review-checklist-apply .ant-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-checklist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.review-checklist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 22px;
+}
+
+.review-checklist-item .ant-checkbox-wrapper {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.review-checklist-delete {
+  flex: none;
+  opacity: 0.35;
+}
+
+.review-checklist-delete:hover {
+  opacity: 1;
+}
+
+.review-checklist-add {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.review-checklist-empty,
+.review-checklist-error {
+  margin: 2px 0;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.review-checklist-error {
+  color: var(--danger);
+}

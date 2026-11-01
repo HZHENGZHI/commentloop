@@ -12,6 +12,7 @@ import type {
   CodeRepoListResponse,
   CodeFileList,
   CodeReadResult,
+  ChecklistResponse,
   Consensus,
   DetectedAgent,
   DiscussionListResponse,
@@ -86,6 +87,53 @@ export function fetchConfig(): Promise<ConfigResponse> {
 
 export function fetchTree(): Promise<TreeResponse> {
   return request<TreeResponse>("/api/tree");
+}
+
+export function fetchChecklist(path: string): Promise<ChecklistResponse> {
+  return request<ChecklistResponse>(
+    `/api/doc/checklist?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export function applyChecklist(
+  path: string,
+  playbook: string,
+): Promise<ChecklistResponse> {
+  return request<ChecklistResponse>("/api/doc/checklist/apply", {
+    method: "POST",
+    body: JSON.stringify({ path, playbook }),
+  });
+}
+
+export function addChecklistItem(
+  path: string,
+  title: string,
+): Promise<ChecklistResponse> {
+  return request<ChecklistResponse>("/api/doc/checklist/item", {
+    method: "POST",
+    body: JSON.stringify({ path, title }),
+  });
+}
+
+export function toggleChecklistItem(
+  path: string,
+  id: string,
+  done: boolean,
+): Promise<ChecklistResponse> {
+  return request<ChecklistResponse>("/api/doc/checklist/item", {
+    method: "PATCH",
+    body: JSON.stringify({ path, id, done }),
+  });
+}
+
+export function deleteChecklistItem(
+  path: string,
+  id: string,
+): Promise<ChecklistResponse> {
+  return request<ChecklistResponse>(
+    `/api/doc/checklist/item?path=${encodeURIComponent(path)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
 }
 
 export function fetchDocVersions(
