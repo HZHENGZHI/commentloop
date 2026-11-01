@@ -47,6 +47,10 @@ func (k keychainTokenStore) Set(token string) error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("系统钥匙串目前仅支持 macOS")
 	}
+	// The macOS security CLI only accepts the password as an argument. It is
+	// visible in the process list briefly; the token is never written to the
+	// database or logged. A Security.framework implementation would remove this
+	// exposure and is tracked as R1 follow-up.
 	_, err := runCommand("security", "add-generic-password", "-U", "-s", k.service, "-a", k.account, "-w", token)
 	return err
 }
@@ -130,6 +134,11 @@ func (s *Server) handlePutGitHubConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Issue/PR 编号必须大于 0"})
 		return
 	}
+	row := githubSyncRow{ID: "default", Repo: req.Repo, Issue: req.Issue, UpdatedAt: formatTime(time.Now())}
+	if err := s.db.Save(&row).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 	if req.ClearToken {
 		if err := s.githubTokens.Clear(); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -140,11 +149,6 @@ func (s *Server) handlePutGitHubConfig(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-	}
-	row := githubSyncRow{ID: "default", Repo: req.Repo, Issue: req.Issue, UpdatedAt: formatTime(time.Now())}
-	if err := s.db.Save(&row).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
 	}
 	config, err := s.githubConfig()
 	if err != nil {

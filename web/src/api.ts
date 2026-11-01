@@ -108,6 +108,16 @@ export function saveGitHubSyncConfig(
   });
 }
 
+export function clearGitHubSyncToken(
+  repo: string,
+  issue: number,
+): Promise<GitHubSyncConfig> {
+  return request<GitHubSyncConfig>("/api/github/config", {
+    method: "PUT",
+    body: JSON.stringify({ repo, issue, clearToken: true }),
+  });
+}
+
 export function testGitHubSync(): Promise<GitHubSyncTest> {
   return request<GitHubSyncTest>("/api/github/test", {
     method: "POST",

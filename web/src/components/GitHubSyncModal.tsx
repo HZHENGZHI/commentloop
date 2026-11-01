@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Input } from "antd";
+import { Alert, Button, Input, Popconfirm } from "antd";
 import { useTranslation } from "react-i18next";
 import {
+  clearGitHubSyncToken,
   fetchGitHubSyncConfig,
   postGitHubComment,
   saveGitHubSyncConfig,
@@ -114,6 +115,24 @@ export function GitHubSyncModal({
     }
   };
 
+  const clearToken = async () => {
+    const number = Number(issue);
+    if (!repo.trim() || !Number.isInteger(number) || number <= 0) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const value = await clearGitHubSyncToken(repo.trim(), number);
+      setConfig(value);
+      setToken("");
+      setNotice(t("GitHub token 已清除"));
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const ready = Boolean(config?.configured && config?.tokenSet);
   return (
     <AppModal
@@ -198,6 +217,16 @@ export function GitHubSyncModal({
             </a>
           }
         />
+      ) : null}
+      {config?.tokenSet ? (
+        <Popconfirm
+          title={t("清除已保存的 GitHub token？")}
+          onConfirm={() => void clearToken()}
+        >
+          <Button danger size="small" disabled={busy}>
+            {t("清除 token")}
+          </Button>
+        </Popconfirm>
       ) : null}
       <div className="github-sync-actions">
         <Button disabled={!ready || busy} onClick={() => void test()}>
