@@ -9,6 +9,7 @@ import type {
   PromptTemplate,
 } from "../types";
 import { LinkCommentsModal } from "./LinkCommentsModal";
+import { ReviewChecklist } from "./ReviewChecklist";
 import { DiscussionRefPicker } from "./DiscussionRefPicker";
 import {
   IconCheck,
@@ -28,6 +29,7 @@ import { SeverityBadge } from "./ReviewStatus";
 
 interface CommentsPanelProps {
   comments: Comment[];
+  docPath?: string;
   onClose: () => void;
   onJump: (comment: Comment) => void;
   onResolve: (comment: Comment, resolved: boolean) => void;
@@ -74,6 +76,7 @@ function formatTime(value: string, locale: string): string {
 
 export function CommentsPanel({
   comments,
+  docPath,
   onClose,
   onJump,
   onResolve,
@@ -327,6 +330,7 @@ export function CommentsPanel({
           </div>
         )}
       </div>
+      {docPath ? <ReviewChecklist path={docPath} /> : null}
       <div className="comments-filter">
         <Segmented
           size="small"
