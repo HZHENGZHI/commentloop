@@ -211,3 +211,24 @@ export function expandQuoteToBlock(content: string, quote: string): string {
   const end = after < 0 ? content.length : after;
   return content.slice(start, end).trim();
 }
+
+export interface MarkdownHeading {
+  level: number;
+  text: string;
+}
+
+/** Parse ATX headings outside fenced code blocks for the outline menu. */
+export function parseMarkdownHeadings(content: string): MarkdownHeading[] {
+  const headings: MarkdownHeading[] = [];
+  let fenced = false;
+  for (const line of content.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (match) headings.push({ level: match[1]!.length, text: match[2]!.trim() });
+  }
+  return headings;
+}
