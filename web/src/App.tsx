@@ -40,6 +40,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { DiscussionModal } from "./components/DiscussionModal";
 import { InboxModal } from "./components/InboxModal";
 import { HistoryModal } from "./components/HistoryModal";
+import { SearchModal } from "./components/SearchModal";
 import { ReviewStatusSelect } from "./components/ReviewStatus";
 import { AgentSessionPicker } from "./components/AgentSessionPicker";
 import { Sidebar } from "./components/Sidebar";
@@ -62,6 +63,7 @@ import {
   IconPanelLeft,
   IconPen,
   IconPlus,
+  IconSearch,
   IconSettings,
   IconSun,
 } from "./components/Icons";
@@ -237,6 +239,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [documentCommentOpen, setDocumentCommentOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [agentActivity, setAgentActivity] = useState<{
     status: "queued" | "working" | "done" | "error";
     message: string;
@@ -1527,6 +1530,11 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
@@ -1876,6 +1884,14 @@ export default function App() {
               }))}
             />
           ) : null}
+          <Tooltip title={t("全文搜索 (⌘K)")} placement="bottom">
+            <Button
+              type="text"
+              onClick={() => setSearchOpen(true)}
+              aria-label={t("全文搜索")}
+              icon={<IconSearch size={17} />}
+            />
+          </Tooltip>
           <Tooltip title={t("收件箱")} placement="bottom">
             <Badge count={inboxAttention} size="small" color="#2563eb" offset={[-2, 2]}>
               <Button
@@ -2283,6 +2299,16 @@ export default function App() {
           promptTemplates={promptTemplates}
           onClose={() => setCommentQuote(null)}
           onSubmit={handleCreateComment}
+        />
+      ) : null}
+
+      {searchOpen ? (
+        <SearchModal
+          onClose={() => setSearchOpen(false)}
+          onOpen={(path) => {
+            setSearchOpen(false);
+            void openDoc(path);
+          }}
         />
       ) : null}
 

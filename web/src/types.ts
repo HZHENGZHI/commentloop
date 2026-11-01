@@ -31,6 +31,20 @@ export interface TreeResponse {
   truncated: boolean;
 }
 
+export interface SearchResult {
+  path: string;
+  name: string;
+  relPath: string;
+  rootName: string;
+  line: number;
+  snippet: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+}
+
 export interface ChecklistItem {
   id: string;
   title: string;
