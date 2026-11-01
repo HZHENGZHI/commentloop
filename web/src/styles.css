@@ -4653,6 +4653,17 @@ body.dragging-split * {
   line-height: 1.6;
 }
 
+.settings-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-footer .modal-error {
+  margin: 0;
+  text-align: left;
+}
+
 .settings-actions {
   flex: none;
   margin-top: 0;

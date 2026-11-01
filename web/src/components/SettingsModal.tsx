@@ -463,22 +463,25 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       onClose={onClose}
       className="settings-modal"
       footer={
-        <div className="modal-actions settings-actions">
-          {tab === "prompts" ? (
-            <Button onClick={onClose}>{t("关闭")}</Button>
-          ) : (
-            <>
-              <Button onClick={onClose}>{t("取消")}</Button>
-              <Button
-                type="primary"
-                loading={saving}
-                disabled={!settings || saving}
-                onClick={() => void save()}
-              >
-                {saving ? t("保存中…") : t("保存设置")}
-              </Button>
-            </>
-          )}
+        <div className="settings-footer">
+          {error ? <p className="modal-error">{error}</p> : null}
+          <div className="modal-actions settings-actions">
+            {tab === "prompts" ? (
+              <Button onClick={onClose}>{t("关闭")}</Button>
+            ) : (
+              <>
+                <Button onClick={onClose}>{t("取消")}</Button>
+                <Button
+                  type="primary"
+                  loading={saving}
+                  disabled={!settings || saving}
+                  onClick={() => void save()}
+                >
+                  {saving ? t("保存中…") : t("保存设置")}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       }
     >
@@ -489,8 +492,6 @@ export function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
         destroyOnHidden
         classNames={{ header: "settings-tabs" }}
       />
-
-      {error ? <p className="modal-error">{error}</p> : null}
     </AppModal>
   );
 }
