@@ -49,6 +49,9 @@ jobs:
       - name: Test
         run: go test ./... -count=1
 
+      - name: Test web
+        run: cd web && npm run test
+
       - name: Build web
         run: cd web && npm run build
 

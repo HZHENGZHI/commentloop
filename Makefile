@@ -61,6 +61,7 @@ debug-backend: web-build
 
 test:
 	$(GO) test ./...
+	cd web && npm run test
 	cd web && npm run build
 
 vet:
