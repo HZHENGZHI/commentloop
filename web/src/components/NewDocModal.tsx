@@ -1,16 +1,17 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input } from "antd";
+import { Button, Input, Select } from "antd";
 import { IconFilePlus } from "./Icons";
 import { AppModal } from "./AppModal";
 import { withMarkdownExtension } from "../utils";
+import { DOC_TEMPLATES } from "../docTemplates";
 
 interface NewDocModalProps {
   defaultDir: string;
   displayDir: string;
   exists: (path: string) => boolean;
   onClose: () => void;
-  onCreate: (path: string) => Promise<void>;
+  onCreate: (path: string, content: string) => Promise<void>;
 }
 
 export function NewDocModal({
@@ -22,6 +23,7 @@ export function NewDocModal({
 }: NewDocModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  const [templateId, setTemplateId] = useState("blank");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -57,7 +59,9 @@ export function NewDocModal({
     setBusy(true);
     setError(null);
     try {
-      await onCreate(full);
+      const template =
+        DOC_TEMPLATES.find((item) => item.id === templateId) ?? DOC_TEMPLATES[0]!;
+      await onCreate(full, template.content);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("创建失败"));
       setBusy(false);
@@ -92,6 +96,19 @@ export function NewDocModal({
           placeholder={t("未命名.md")}
           spellCheck={false}
           autoComplete="off"
+        />
+        <label className="modal-label" htmlFor="new-doc-template">
+          {t("文档模板")}
+        </label>
+        <Select
+          id="new-doc-template"
+          value={templateId}
+          onChange={setTemplateId}
+          options={DOC_TEMPLATES.map((item) => ({
+            value: item.id,
+            label: `${t(item.name)} — ${t(item.description)}`,
+          }))}
+          style={{ width: "100%" }}
         />
         <p className="modal-hint">
           {preview ? (

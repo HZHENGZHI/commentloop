@@ -65,7 +65,7 @@ import {
   IconSettings,
   IconSun,
 } from "./components/Icons";
-import { Badge, Button, ConfigProvider, Segmented, Tag, Tooltip, theme as antdTheme } from "antd";
+import { Badge, Button, ConfigProvider, Dropdown, Segmented, Tag, Tooltip, theme as antdTheme } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
 import { useTranslation } from "react-i18next";
@@ -119,6 +119,7 @@ import {
   isMarkdownPath,
   parentDir,
   expandQuoteToBlock,
+  parseMarkdownHeadings,
   scrollToQuote,
 } from "./utils";
 
@@ -253,6 +254,10 @@ export default function App() {
     [inboxDocs],
   );
   const inboxAttention = inboxDocs.filter((doc) => doc.awaiting > 0).length;
+  const headings = useMemo(
+    () => parseMarkdownHeadings(doc.content),
+    [doc.content],
+  );
   const unreadPaths = useMemo(() => {
     const out = new Set<string>();
     for (const doc of inboxDocs) {
@@ -629,6 +634,15 @@ export default function App() {
     },
     [toast],
   );
+
+  const handleJumpHeading = useCallback((index: number) => {
+    const container = previewRef.current;
+    if (!container) return;
+    const nodes = container.querySelectorAll(
+      ".markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6",
+    );
+    nodes[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const handleCopyCommentLink = useCallback(
     async (comment: Comment) => {
@@ -1113,8 +1127,8 @@ export default function App() {
   );
 
   const handleCreate = useCallback(
-    async (path: string) => {
-      const result = await saveDoc(path, "", true);
+    async (path: string, content = "") => {
+      const result = await saveDoc(path, content, true);
       setNewModal(false);
       await refreshTree();
       await openDoc(result.path);
@@ -2049,6 +2063,27 @@ export default function App() {
                         </Button>
                       </Badge>
                     </Tooltip>
+                    <Dropdown
+                      disabled={headings.length === 0}
+                      trigger={["click"]}
+                      menu={{
+                        items: headings.map((heading, index) => ({
+                          key: String(index),
+                          label: (
+                            <span style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
+                              {heading.text}
+                            </span>
+                          ),
+                        })),
+                        onClick: ({ key }) => handleJumpHeading(Number(key)),
+                      }}
+                    >
+                      <Tooltip title={t("大纲")}>
+                        <Button size="small" icon={<IconFileText size={13} />}>
+                          {t("大纲")}
+                        </Button>
+                      </Tooltip>
+                    </Dropdown>
                     <Tooltip title={t("版本历史 (H)")}>
                       <Button
                         size="small"
