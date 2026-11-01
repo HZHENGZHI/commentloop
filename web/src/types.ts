@@ -31,6 +31,24 @@ export interface TreeResponse {
   truncated: boolean;
 }
 
+export interface GitHubSyncConfig {
+  repo: string;
+  issue: number;
+  configured: boolean;
+  tokenSet: boolean;
+}
+
+export interface GitHubSyncTest {
+  title: string;
+  url: string;
+  state: string;
+}
+
+export interface GitHubSyncResult {
+  url: string;
+  id: number;
+}
+
 export interface SearchResult {
   path: string;
   name: string;

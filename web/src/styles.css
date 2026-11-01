@@ -7415,3 +7415,30 @@ body.mermaid-modal-open {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
+
+/* ===== GitHub sync ===== */
+.github-sync-modal .ant-input,
+.github-sync-modal .ant-input-affix-wrapper {
+  margin-bottom: 10px;
+}
+
+.github-sync-modal .ant-alert {
+  margin: 8px 0;
+}
+
+.github-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.github-sync-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.github-sync-modal .modal-label {
+  margin-top: 4px;
+}

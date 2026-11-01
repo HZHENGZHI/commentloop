@@ -230,7 +230,7 @@ func (docConsensusRow) TableName() string { return "doc_consensus" }
 
 // stateModels is the AutoMigrate order: parents before children.
 var stateModels = []any{
-	&rootRow{}, &commentRow{}, &commentMessageRow{}, &docVersionRow{}, &checklistItemRow{},
+	&rootRow{}, &commentRow{}, &commentMessageRow{}, &docVersionRow{}, &checklistItemRow{}, &githubSyncRow{},
 	&codeRepoRow{}, &docCodeRepoRow{}, &metaRow{}, &settingRow{},
 	&agentSessionRow{}, &docAgentActiveRow{}, &docDiscussionRow{},
 	&discussionMessageRow{}, &promptTemplateRow{}, &agentJobRow{},
