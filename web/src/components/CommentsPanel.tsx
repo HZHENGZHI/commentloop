@@ -24,6 +24,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconDownload,
+  IconGitBranch,
   IconHistory,
   IconLink,
   IconLocate,
@@ -67,6 +68,7 @@ interface CommentsPanelProps {
   onReaction: (comment: Comment, reaction: string) => void;
   onNewDocumentComment: () => void;
   onCopyLink: (comment: Comment) => void;
+  onCopyGitHub: () => void;
   onExport: () => void;
   highlightId?: string | null;
   agentName?: string;
@@ -109,6 +111,7 @@ export function CommentsPanel({
   onReaction,
   onNewDocumentComment,
   onCopyLink,
+  onCopyGitHub,
   onExport,
   highlightId = null,
   agentName = "Code Agent",
@@ -374,6 +377,15 @@ export function CommentsPanel({
           </span>
         </div>
         <div className="comments-head-actions">
+          <Tooltip title={t("复制为 GitHub 评论")}>
+            <Button
+              size="small"
+              type="text"
+              onClick={onCopyGitHub}
+              icon={<IconGitBranch size={14} />}
+              aria-label={t("复制为 GitHub 评论")}
+            />
+          </Tooltip>
           <Tooltip title={t("导出评论")}>
             <Button
               size="small"

@@ -649,6 +649,59 @@ export default function App() {
     nodes[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const handleCopyGitHubComment = useCallback(async () => {
+    const path = currentPathRef.current;
+    if (!path) return;
+    const lines = [
+      `## Commentloop review — ${baseName(path)}`,
+      "",
+      `Path: \`${path}\``,
+      `Status: ${docReview?.status ?? "unknown"}`,
+    ];
+    if (docReview?.summary) {
+      lines.push("", `**Summary:** ${docReview.summary}`);
+    }
+    lines.push("", "### Comments");
+    for (const comment of comments) {
+      const where =
+        comment.scope === "document" ? "Full document" : `Line ${comment.line}`;
+      const meta = [
+        comment.severity ? `\`${comment.severity}\`` : "",
+        comment.resolved ? "resolved" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      lines.push("", `- **${where}**${meta ? ` — ${meta}` : ""}`);
+      if (comment.quote) {
+        lines.push(`  > ${comment.quote.replace(/\n/g, "\n  > ")}`);
+      }
+      for (const message of comment.messages) {
+        lines.push("", `  **${message.author}:** ${message.body}`);
+      }
+      if (comment.suggestion) {
+        lines.push(
+          "",
+          `  Suggestion (${comment.suggestion.mode}):`,
+          "  ```diff",
+          `  - ${comment.suggestion.quote.replace(/\n/g, "\n  - ")}`,
+          `  + ${comment.suggestion.text.replace(/\n/g, "\n  + ")}`,
+          "  ```",
+        );
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast(i18n.t("已复制 GitHub 评论 Markdown"), "success");
+    } catch (error) {
+      toast(
+        i18n.t("复制 GitHub 评论失败：{{error}}", {
+          error: errorMessage(error),
+        }),
+        "error",
+      );
+    }
+  }, [comments, docReview, toast]);
+
   const handleCopyCommentLink = useCallback(
     async (comment: Comment) => {
       const path = currentPathRef.current;
@@ -2187,6 +2240,7 @@ export default function App() {
                     }
                     onNewDocumentComment={() => setDocumentCommentOpen(true)}
                     onCopyLink={(comment) => void handleCopyCommentLink(comment)}
+                    onCopyGitHub={() => void handleCopyGitHubComment()}
                     onExport={handleExportComments}
                     highlightId={new URLSearchParams(window.location.search).get("comment")}
                     onClose={() => setCommentsOpen(false)}
