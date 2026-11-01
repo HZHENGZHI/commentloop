@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type MouseEvent,
@@ -82,6 +83,10 @@ function formatTime(value: string, locale: string): string {
   });
 }
 
+function isExternalHref(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href) || href.startsWith("//");
+}
+
 export function CommentsPanel({
   comments,
   docPath,
@@ -125,6 +130,7 @@ export function CommentsPanel({
   const [summaryHtml, setSummaryHtml] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const summary = review?.summary?.trim();
@@ -156,6 +162,31 @@ export function CommentsPanel({
       alive = false;
     };
   }, [docPath, review?.summary]);
+
+  // Keep normal clicks on the in-app handler while making middle-click and
+  // "open in new tab" resolve through the app's ?file= document URL.
+  useEffect(() => {
+    const article = summaryRef.current;
+    if (!article) return;
+    article.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((anchor) => {
+      const original = anchor.getAttribute("href") ?? "";
+      if (!original || original.startsWith("#")) return;
+      anchor.dataset.mdHref = original;
+      if (isExternalHref(original)) {
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+        return;
+      }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(original)) return;
+      const resolved = resolveRelative(docPath ?? null, original);
+      if (!resolved) return;
+      anchor.href = isMarkdownPath(resolved)
+        ? `?file=${encodeURIComponent(resolved)}`
+        : rawUrl(resolved);
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+    });
+  }, [summaryHtml, docPath]);
 
   const handleSummaryClick = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
@@ -397,6 +428,7 @@ export function CommentsPanel({
         {review?.summary ? (
           <>
             <div
+              ref={summaryRef}
               className={`review-summary-body markdown-body${
                 summaryExpanded ? " expanded" : ""
               }`}
