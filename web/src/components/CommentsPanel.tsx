@@ -164,7 +164,10 @@ export function CommentsPanel({
     const original =
       anchor.dataset.mdHref ?? anchor.getAttribute("href") ?? "";
     if (!original || original.startsWith("#")) return;
-    if (/^(https?:|mailto:)/i.test(original)) {
+    if (
+      original.startsWith("//") ||
+      /^(https?:|mailto:)/i.test(original)
+    ) {
       event.preventDefault();
       window.open(original, "_blank", "noopener,noreferrer");
       return;
