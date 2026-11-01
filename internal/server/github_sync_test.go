@@ -64,6 +64,26 @@ func TestGitHubSyncConfigAndComment(t *testing.T) {
 	if !config.Configured || !config.TokenSet || config.Repo != "o/r" {
 		t.Fatalf("config = %+v", config)
 	}
+	rec = doJSON(t, app, http.MethodPut, "/api/github/config", putGitHubConfigRequest{
+		Repo: "o/r", Issue: 1, ClearToken: true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("clear token: %d %s", rec.Code, rec.Body.String())
+	}
+	var cleared githubSyncConfig
+	if err := json.Unmarshal(rec.Body.Bytes(), &cleared); err != nil {
+		t.Fatal(err)
+	}
+	if cleared.TokenSet {
+		t.Fatal("token still set after clear")
+	}
+	if tokens.token != "" {
+		t.Fatal("token store was not cleared")
+	}
+	// Restore the token for the remaining requests.
+	if err := tokens.Set("secret-token"); err != nil {
+		t.Fatal(err)
+	}
 
 	rec = doJSON(t, app, http.MethodPost, "/api/github/test", map[string]any{})
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Test issue") {
