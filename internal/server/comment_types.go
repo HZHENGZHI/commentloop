@@ -27,6 +27,7 @@ type Comment struct {
 	UpdatedAt        time.Time          `json:"updatedAt"`
 	DiscussionIDs    []string           `json:"discussionIds,omitempty"`
 	PromptTemplateID string             `json:"promptTemplateId,omitempty"`
+	Scope            string             `json:"scope,omitempty"`
 	Severity         string             `json:"severity,omitempty"`
 	Reaction         string             `json:"reaction,omitempty"`
 	Suggestion       *CommentSuggestion `json:"suggestion,omitempty"`
@@ -94,6 +95,7 @@ type commentStore struct {
 
 type createCommentRequest struct {
 	Path             string   `json:"path"`
+	Scope            string   `json:"scope"`
 	Quote            string   `json:"quote"`
 	Prefix           string   `json:"prefix"`
 	Suffix           string   `json:"suffix"`

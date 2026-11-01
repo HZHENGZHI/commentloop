@@ -8,6 +8,7 @@ import { AppModal } from "./AppModal";
 
 interface CommentModalProps {
   quote: string;
+  documentComment?: boolean;
   agentName?: string;
   discussions?: Discussion[];
   promptTemplates?: PromptTemplate[];
@@ -21,6 +22,7 @@ interface CommentModalProps {
 
 export function CommentModal({
   quote,
+  documentComment = false,
   agentName = "Code Agent",
   discussions = [],
   promptTemplates = [],
@@ -64,7 +66,7 @@ export function CommentModal({
       title={
         <span className="app-modal-title">
           <IconMessage size={17} />
-          {t("添加评论")}
+          {documentComment ? t("全文评论") : t("添加评论")}
         </span>
       }
       width={560}
@@ -72,10 +74,17 @@ export function CommentModal({
       className="comment-modal"
     >
       <form onSubmit={submit}>
-        <div className="comment-quote">
-          <span>{t("选中内容")}</span>
-          <blockquote>{quote}</blockquote>
-        </div>
+        {documentComment ? (
+          <div className="comment-quote document-comment">
+            <span>{t("评论范围")}</span>
+            <p>{t("整篇文档")}</p>
+          </div>
+        ) : (
+          <div className="comment-quote">
+            <span>{t("选中内容")}</span>
+            <blockquote>{quote}</blockquote>
+          </div>
+        )}
         <label className="modal-label" htmlFor="comment-body">
           {t("评论内容")}
         </label>

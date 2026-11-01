@@ -118,6 +118,7 @@ import {
   formatBytes,
   isMarkdownPath,
   parentDir,
+  expandQuoteToBlock,
   scrollToQuote,
 } from "./utils";
 
@@ -234,6 +235,7 @@ export default function App() {
     useState<ConsensusActivity | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [documentCommentOpen, setDocumentCommentOpen] = useState(false);
   const [agentActivity, setAgentActivity] = useState<{
     status: "queued" | "working" | "done" | "error";
     message: string;
@@ -608,6 +610,84 @@ export default function App() {
       toast(i18n.t("评论已添加"), "success");
     },
     [commentQuote, toast],
+  );
+
+  const handleCreateDocumentComment = useCallback(
+    async (body: string, discussionIds: string[] = [], promptTemplateId = "") => {
+      const path = currentPathRef.current;
+      if (!path) throw new Error(i18n.t("当前没有打开的文档"));
+      await createComment(path, "", body, discussionIds, promptTemplateId, "document");
+      setDocumentCommentOpen(false);
+      setCommentsOpen(true);
+      void invalidate("comments");
+      void invalidate("review");
+      void invalidate("inbox");
+      toast(i18n.t("评论已添加"), "success");
+    },
+    [toast],
+  );
+
+  const handleCopyCommentLink = useCallback(
+    async (comment: Comment) => {
+      const path = currentPathRef.current;
+      if (!path) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set("file", path);
+      url.searchParams.set("comment", comment.id);
+      try {
+        await navigator.clipboard.writeText(url.toString());
+        toast(i18n.t("链接已复制"), "success");
+      } catch (error) {
+        toast(
+          i18n.t("复制链接失败：{{error}}", { error: errorMessage(error) }),
+          "error",
+        );
+      }
+    },
+    [toast],
+  );
+
+  const handleExportComments = useCallback(() => {
+    const path = currentPathRef.current;
+    if (!path) return;
+    const lines = [
+      `# ${baseName(path)} — comments`,
+      "",
+      `Path: \`${path}\``,
+      "",
+    ];
+    for (const comment of comments) {
+      lines.push(
+        `## ${comment.scope === "document" ? "Full document" : `Line ${comment.line}`} · ${comment.resolved ? "resolved" : "open"}${comment.severity ? ` · ${comment.severity}` : ""}`,
+        "",
+      );
+      if (comment.quote) {
+        lines.push(`> ${comment.quote.replace(/\n/g, "\n> ")}`, "");
+      }
+      for (const message of comment.messages) {
+        lines.push(
+          `**${message.author}** (${new Date(message.createdAt).toLocaleString()}):`,
+          "",
+          message.body,
+          "",
+        );
+      }
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${baseName(path)}.comments.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast(i18n.t("评论已导出"), "success");
+  }, [comments, toast]);
+
+  const handleRequestBlockComment = useCallback(
+    (quote: string) => {
+      setCommentQuote(expandQuoteToBlock(doc.content, quote));
+    },
+    [doc.content],
   );
 
   const handleResolveComment = useCallback(
@@ -1389,6 +1469,58 @@ export default function App() {
     void refreshTree();
   }, [refreshTree]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key === "Escape") {
+        if (documentCommentOpen) setDocumentCommentOpen(false);
+        else if (commentQuote !== null) setCommentQuote(null);
+        else if (historyOpen) setHistoryOpen(false);
+        else if (inboxOpen) setInboxOpen(false);
+        else if (settingsOpen) setSettingsOpen(false);
+        else if (commentsOpen) setCommentsOpen(false);
+        else return;
+        event.preventDefault();
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (event.key.toLowerCase() === "c" && currentPath) {
+        setCommentsOpen((value) => !value);
+        event.preventDefault();
+      } else if (event.key.toLowerCase() === "h" && currentPath) {
+        setHistoryOpen((value) => !value);
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    commentQuote,
+    commentsOpen,
+    currentPath,
+    documentCommentOpen,
+    historyOpen,
+    inboxOpen,
+    settingsOpen,
+  ]);
+
+  useEffect(() => {
+    if (!currentPath) return;
+    if (new URLSearchParams(window.location.search).get("comment")) {
+      setCommentsOpen(true);
+    }
+  }, [currentPath]);
+
   const configError = configResult.data ? null : configResult.error;
   useEffect(() => {
     if (configError) {
@@ -1909,7 +2041,7 @@ export default function App() {
                         </Button>
                       </Badge>
                     </Tooltip>
-                    <Tooltip title={t("版本历史")}>
+                    <Tooltip title={t("版本历史 (H)")}>
                       <Button
                         size="small"
                         type={historyOpen ? "primary" : "default"}
@@ -1936,6 +2068,7 @@ export default function App() {
                   onScrollRatio={handlePreviewScroll}
                   onOpenDoc={handlePreviewOpenDoc}
                   onRequestComment={setCommentQuote}
+                  onRequestBlockComment={handleRequestBlockComment}
                   theme={theme}
                 />
                 {commentsOpen ? (
@@ -1951,6 +2084,10 @@ export default function App() {
                     onReaction={(comment, reaction) =>
                       void handleReaction(comment, reaction)
                     }
+                    onNewDocumentComment={() => setDocumentCommentOpen(true)}
+                    onCopyLink={(comment) => void handleCopyCommentLink(comment)}
+                    onExport={handleExportComments}
+                    highlightId={new URLSearchParams(window.location.search).get("comment")}
                     onClose={() => setCommentsOpen(false)}
                     onJump={handleJumpToComment}
                     onResolve={(comment, resolved) =>
@@ -2061,6 +2198,18 @@ export default function App() {
           promptTemplates={promptTemplates}
           onClose={() => setCommentQuote(null)}
           onSubmit={handleCreateComment}
+        />
+      ) : null}
+
+      {documentCommentOpen && currentPath ? (
+        <CommentModal
+          quote=""
+          documentComment
+          agentName={config?.agentName || "Code Agent"}
+          discussions={discussions}
+          promptTemplates={promptTemplates}
+          onClose={() => setDocumentCommentOpen(false)}
+          onSubmit={handleCreateDocumentComment}
         />
       ) : null}
 
