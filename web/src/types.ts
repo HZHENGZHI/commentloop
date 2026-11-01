@@ -34,8 +34,16 @@ export interface TreeResponse {
 export interface GitHubSyncConfig {
   repo: string;
   issue: number;
+  filePath: string;
   configured: boolean;
   tokenSet: boolean;
+}
+
+export interface GitHubReviewSync {
+  url: string;
+  mode: "review" | "comment";
+  inline: number;
+  warning?: string;
 }
 
 export interface GitHubSyncTest {

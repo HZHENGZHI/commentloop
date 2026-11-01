@@ -42,6 +42,7 @@ func (s *Server) routes() *gin.Engine {
 	api.PUT("/github/config", s.api(s.userOnly(s.requireSameOrigin(s.handlePutGitHubConfig))))
 	api.POST("/github/test", s.api(s.userOnly(s.requireSameOrigin(s.handleTestGitHubSync))))
 	api.POST("/github/comment", s.api(s.userOnly(s.requireSameOrigin(s.handleGitHubComment))))
+	api.POST("/github/review", s.api(s.userOnly(s.requireSameOrigin(s.handleGitHubReview))))
 	api.GET("/doc/checklist", s.api(s.handleGetChecklist))
 	api.POST("/doc/checklist/apply", s.api(s.userOnly(s.requireSameOrigin(s.handleApplyChecklist))))
 	api.POST("/doc/checklist/item", s.api(s.userOnly(s.requireSameOrigin(s.handleAddChecklistItem))))

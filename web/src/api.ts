@@ -21,6 +21,7 @@ import type {
   DocReview,
   DocVersion,
   DocVersionDetail,
+  GitHubReviewSync,
   GitHubSyncConfig,
   GitHubSyncResult,
   GitHubSyncTest,
@@ -100,11 +101,12 @@ export function fetchGitHubSyncConfig(): Promise<GitHubSyncConfig> {
 export function saveGitHubSyncConfig(
   repo: string,
   issue: number,
+  filePath: string,
   token?: string,
 ): Promise<GitHubSyncConfig> {
   return request<GitHubSyncConfig>("/api/github/config", {
     method: "PUT",
-    body: JSON.stringify({ repo, issue, token: token ?? "" }),
+    body: JSON.stringify({ repo, issue, filePath, token: token ?? "" }),
   });
 }
 
@@ -122,6 +124,13 @@ export function testGitHubSync(): Promise<GitHubSyncTest> {
   return request<GitHubSyncTest>("/api/github/test", {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+export function syncGitHubReview(path: string): Promise<GitHubReviewSync> {
+  return request<GitHubReviewSync>("/api/github/review", {
+    method: "POST",
+    body: JSON.stringify({ path }),
   });
 }
 
