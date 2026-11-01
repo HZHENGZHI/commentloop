@@ -68,7 +68,7 @@ interface CommentsPanelProps {
   onReaction: (comment: Comment, reaction: string) => void;
   onNewDocumentComment: () => void;
   onCopyLink: (comment: Comment) => void;
-  onCopyGitHub: () => void;
+  onGitHubSync: () => void;
   onExport: () => void;
   highlightId?: string | null;
   agentName?: string;
@@ -111,7 +111,7 @@ export function CommentsPanel({
   onReaction,
   onNewDocumentComment,
   onCopyLink,
-  onCopyGitHub,
+  onGitHubSync,
   onExport,
   highlightId = null,
   agentName = "Code Agent",
@@ -377,13 +377,13 @@ export function CommentsPanel({
           </span>
         </div>
         <div className="comments-head-actions">
-          <Tooltip title={t("复制为 GitHub 评论")}>
+          <Tooltip title={t("GitHub 同步")}>
             <Button
               size="small"
               type="text"
-              onClick={onCopyGitHub}
+              onClick={onGitHubSync}
               icon={<IconGitBranch size={14} />}
-              aria-label={t("复制为 GitHub 评论")}
+              aria-label={t("GitHub 同步")}
             />
           </Tooltip>
           <Tooltip title={t("导出评论")}>

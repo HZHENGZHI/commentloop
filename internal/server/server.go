@@ -89,6 +89,8 @@ type Server struct {
 	settingsStore  *settingsStore
 	settings       *settingsSnapshot
 	lsp            *lsp.Manager
+	githubTokens   githubTokenStore
+	githubAPIBase  string
 	agentRunner    *agentRunner
 	agentSessions  *agentSessionStore
 	stateDir       string
@@ -152,6 +154,8 @@ func New(opts Options) (*Server, error) {
 		settingsStore:       settingsStore,
 		settings:            newSettingsSnapshot(loadedSettings),
 		lsp:                 lsp.NewManager(),
+		githubTokens:        keychainTokenStore{service: "commentloop-github", account: "default"},
+		githubAPIBase:       "https://api.github.com",
 		persistedRoots:      persistedRoots,
 		web:                 opts.WebFS,
 		version:             opts.Version,

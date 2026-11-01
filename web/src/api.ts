@@ -21,6 +21,9 @@ import type {
   DocReview,
   DocVersion,
   DocVersionDetail,
+  GitHubSyncConfig,
+  GitHubSyncResult,
+  GitHubSyncTest,
   ImportDiscussionResponse,
   InboxResponse,
   LSPLocation,
@@ -88,6 +91,35 @@ export function fetchConfig(): Promise<ConfigResponse> {
 
 export function fetchTree(): Promise<TreeResponse> {
   return request<TreeResponse>("/api/tree");
+}
+
+export function fetchGitHubSyncConfig(): Promise<GitHubSyncConfig> {
+  return request<GitHubSyncConfig>("/api/github/config");
+}
+
+export function saveGitHubSyncConfig(
+  repo: string,
+  issue: number,
+  token?: string,
+): Promise<GitHubSyncConfig> {
+  return request<GitHubSyncConfig>("/api/github/config", {
+    method: "PUT",
+    body: JSON.stringify({ repo, issue, token: token ?? "" }),
+  });
+}
+
+export function testGitHubSync(): Promise<GitHubSyncTest> {
+  return request<GitHubSyncTest>("/api/github/test", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function postGitHubComment(body: string): Promise<GitHubSyncResult> {
+  return request<GitHubSyncResult>("/api/github/comment", {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
 }
 
 export function searchDocs(query: string): Promise<SearchResponse> {

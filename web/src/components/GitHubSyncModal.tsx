@@ -1,0 +1,215 @@
+import { useEffect, useState } from "react";
+import { Alert, Button, Input } from "antd";
+import { useTranslation } from "react-i18next";
+import {
+  fetchGitHubSyncConfig,
+  postGitHubComment,
+  saveGitHubSyncConfig,
+  testGitHubSync,
+} from "../api";
+import type {
+  Comment,
+  DocReview,
+  GitHubSyncConfig,
+  GitHubSyncResult,
+  GitHubSyncTest,
+} from "../types";
+import { buildGitHubMarkdown } from "../githubMarkdown";
+import { IconGitBranch, IconLink } from "./Icons";
+import { AppModal } from "./AppModal";
+
+interface GitHubSyncModalProps {
+  path: string;
+  review?: DocReview;
+  comments: Comment[];
+  onClose: () => void;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function GitHubSyncModal({
+  path,
+  review,
+  comments,
+  onClose,
+}: GitHubSyncModalProps) {
+  const { t } = useTranslation();
+  const [config, setConfig] = useState<GitHubSyncConfig | null>(null);
+  const [repo, setRepo] = useState("");
+  const [issue, setIssue] = useState("");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [tested, setTested] = useState<GitHubSyncTest | null>(null);
+  const [synced, setSynced] = useState<GitHubSyncResult | null>(null);
+
+  useEffect(() => {
+    fetchGitHubSyncConfig()
+      .then((value) => {
+        setConfig(value);
+        setRepo(value.repo);
+        setIssue(value.issue > 0 ? String(value.issue) : "");
+      })
+      .catch((err: unknown) => setError(errorText(err)));
+  }, []);
+
+  const markdown = () => buildGitHubMarkdown(path, review, comments);
+
+  const save = async () => {
+    const number = Number(issue);
+    if (!repo.trim() || !Number.isInteger(number) || number <= 0) {
+      setError(t("请填写 owner/repo 和有效的 Issue/PR 编号"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const value = await saveGitHubSyncConfig(repo.trim(), number, token.trim() || undefined);
+      setConfig(value);
+      setToken("");
+      setNotice(t("GitHub 同步配置已保存"));
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      setTested(await testGitHubSync());
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sync = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      setSynced(await postGitHubComment(markdown()));
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown());
+      setNotice(t("已复制 GitHub 评论 Markdown"));
+    } catch (err) {
+      setError(t("复制 GitHub 评论失败：{{error}}", { error: errorText(err) }));
+    }
+  };
+
+  const ready = Boolean(config?.configured && config?.tokenSet);
+  return (
+    <AppModal
+      title={
+        <span className="app-modal-title">
+          <IconGitBranch size={17} />
+          {t("GitHub 同步")}
+        </span>
+      }
+      width={640}
+      onClose={onClose}
+      className="github-sync-modal"
+      footer={
+        <div className="github-sync-footer">
+          <Button onClick={onClose}>{t("取消")}</Button>
+          <Button type="primary" loading={busy} onClick={() => void save()}>
+            {t("保存配置")}
+          </Button>
+        </div>
+      }
+    >
+      <p className="modal-hint">
+        {t("评论会作为一条 GitHub Issue/PR 评论发送；token 保存在 macOS 钥匙串，不会写入数据库。")}
+      </p>
+      <label className="modal-label" htmlFor="github-repo">
+        {t("仓库")}
+      </label>
+      <Input
+        id="github-repo"
+        value={repo}
+        onChange={(event) => setRepo(event.target.value)}
+        placeholder="owner/repo"
+      />
+      <label className="modal-label" htmlFor="github-issue">
+        {t("Issue / PR 编号")}
+      </label>
+      <Input
+        id="github-issue"
+        value={issue}
+        onChange={(event) => setIssue(event.target.value.replace(/[^0-9]/g, ""))}
+        placeholder="123"
+      />
+      <label className="modal-label" htmlFor="github-token">
+        {t("Fine-grained PAT")}
+      </label>
+      <Input.Password
+        id="github-token"
+        value={token}
+        onChange={(event) => setToken(event.target.value)}
+        placeholder={
+          config?.tokenSet
+            ? t("已保存，留空保持不变")
+            : t("仅需目标仓库的 Issues 写权限")
+        }
+        autoComplete="off"
+      />
+      <p className="modal-hint">
+        {t("读取时使用 /repos/{repo}/issues/{number}；写入时创建 issue comment。")}
+      </p>
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {notice ? <Alert type="success" showIcon message={notice} /> : null}
+      {tested ? (
+        <Alert
+          type="success"
+          showIcon
+          message={t("连接成功：{{title}}", { title: tested.title })}
+          description={
+            <a href={tested.url} target="_blank" rel="noreferrer">
+              <IconLink size={11} /> {tested.url}
+            </a>
+          }
+        />
+      ) : null}
+      {synced ? (
+        <Alert
+          type="success"
+          showIcon
+          message={t("已同步到 GitHub")}
+          description={
+            <a href={synced.url} target="_blank" rel="noreferrer">
+              <IconLink size={11} /> {synced.url}
+            </a>
+          }
+        />
+      ) : null}
+      <div className="github-sync-actions">
+        <Button disabled={!ready || busy} onClick={() => void test()}>
+          {t("测试连接")}
+        </Button>
+        <Button disabled={!ready || busy} onClick={() => void copy()}>
+          {t("复制 Markdown")}
+        </Button>
+        <Button type="primary" disabled={!ready || busy} onClick={() => void sync()}>
+          {t("同步当前评论")}
+        </Button>
+      </div>
+    </AppModal>
+  );
+}
