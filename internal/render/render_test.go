@@ -26,6 +26,22 @@ func TestRenderGFMAndHighlighting(t *testing.T) {
 	}
 }
 
+func TestRenderSafeDropsRawHTML(t *testing.T) {
+	r := New()
+	src := "<script>alert(1)</script>\n\n**safe**\n"
+	got := r.RenderSafe([]byte(src), "notes/demo.md")
+
+	if strings.Contains(got.HTML, "<script") {
+		t.Fatalf("safe render kept raw HTML: %s", got.HTML)
+	}
+	if !strings.Contains(got.HTML, "<strong>safe</strong>") {
+		t.Fatalf("safe render lost Markdown formatting: %s", got.HTML)
+	}
+	if !strings.Contains(r.Render([]byte(src), "notes/demo.md").HTML, "<script") {
+		t.Fatal("unsafe preview no longer allows raw HTML; update the trust model intentionally")
+	}
+}
+
 func TestRevisionChanges(t *testing.T) {
 	r := New()
 	a := r.Render([]byte("hello"), "a.md")

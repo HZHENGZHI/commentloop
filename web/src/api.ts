@@ -236,10 +236,11 @@ export function deleteDoc(path: string): Promise<void> {
 export function renderPreview(
   path: string,
   content: string,
+  safe = false,
 ): Promise<RenderResponse> {
   return request<RenderResponse>("/api/render", {
     method: "POST",
-    body: JSON.stringify({ path, content }),
+    body: JSON.stringify({ path, content, safe }),
   });
 }
 

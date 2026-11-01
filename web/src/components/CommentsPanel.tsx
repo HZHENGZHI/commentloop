@@ -1,6 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import { Button, Empty, Input, Segmented, Select, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
+import { renderPreview } from "../api";
+import { isMarkdownPath, rawUrl, resolveRelative } from "../utils";
 import type {
   Comment,
   CommentMessage,
@@ -30,6 +38,7 @@ import { SeverityBadge } from "./ReviewStatus";
 interface CommentsPanelProps {
   comments: Comment[];
   docPath?: string;
+  onOpenDoc: (path: string) => void;
   onClose: () => void;
   onJump: (comment: Comment) => void;
   onResolve: (comment: Comment, resolved: boolean) => void;
@@ -74,9 +83,14 @@ function formatTime(value: string, locale: string): string {
   });
 }
 
+function isExternalHref(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href) || href.startsWith("//");
+}
+
 export function CommentsPanel({
   comments,
   docPath,
+  onOpenDoc,
   onClose,
   onJump,
   onResolve,
@@ -113,6 +127,95 @@ export function CommentsPanel({
     "all",
   );
   const [query, setQuery] = useState("");
+  const [summaryHtml, setSummaryHtml] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const summary = review?.summary?.trim();
+    if (!summary) {
+      setSummaryHtml("");
+      setSummaryLoading(false);
+      setSummaryExpanded(false);
+      return;
+    }
+    setSummaryExpanded(false);
+    if (!docPath) {
+      setSummaryHtml("");
+      setSummaryLoading(false);
+      return;
+    }
+    let alive = true;
+    setSummaryLoading(true);
+    renderPreview(docPath, summary, true)
+      .then((result) => {
+        if (alive) setSummaryHtml(result.html);
+      })
+      .catch(() => {
+        if (alive) setSummaryHtml("");
+      })
+      .finally(() => {
+        if (alive) setSummaryLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [docPath, review?.summary]);
+
+  // Keep normal clicks on the in-app handler while making middle-click and
+  // "open in new tab" resolve through the app's ?file= document URL.
+  useEffect(() => {
+    const article = summaryRef.current;
+    if (!article) return;
+    article.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((anchor) => {
+      const original = anchor.getAttribute("href") ?? "";
+      if (!original || original.startsWith("#")) return;
+      anchor.dataset.mdHref = original;
+      if (isExternalHref(original)) {
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+        return;
+      }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(original)) return;
+      const resolved = resolveRelative(docPath ?? null, original);
+      if (!resolved) return;
+      anchor.href = isMarkdownPath(resolved)
+        ? `?file=${encodeURIComponent(resolved)}`
+        : rawUrl(resolved);
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+    });
+  }, [summaryHtml, docPath]);
+
+  const handleSummaryClick = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest<HTMLAnchorElement>("a");
+    if (!anchor) return;
+    const original =
+      anchor.dataset.mdHref ?? anchor.getAttribute("href") ?? "";
+    if (!original || original.startsWith("#")) return;
+    if (
+      original.startsWith("//") ||
+      /^(https?:|mailto:)/i.test(original)
+    ) {
+      event.preventDefault();
+      window.open(original, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(original)) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    const resolved = resolveRelative(docPath ?? null, original);
+    if (!resolved) return;
+    if (isMarkdownPath(resolved)) {
+      onOpenDoc(resolved);
+    } else {
+      window.open(rawUrl(resolved), "_blank", "noopener,noreferrer");
+    }
+  };
 
   useEffect(() => {
     if (!highlightId) return;
@@ -323,7 +426,38 @@ export function CommentsPanel({
           </Button>
         </div>
         {review?.summary ? (
-          <div className="review-summary-body">{review.summary}</div>
+          <>
+            <div
+              ref={summaryRef}
+              className={`review-summary-body markdown-body${
+                summaryExpanded ? " expanded" : ""
+              }`}
+              onClick={handleSummaryClick}
+            >
+              {summaryHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: summaryHtml }} />
+              ) : (
+                <div className="review-summary-fallback">
+                  {summaryLoading ? t("正在渲染摘要…") : review.summary}
+                </div>
+              )}
+            </div>
+            {review.summary.length > 240 ? (
+              <button
+                type="button"
+                className="review-summary-toggle"
+                aria-expanded={summaryExpanded}
+                onClick={() => setSummaryExpanded((value) => !value)}
+              >
+                {summaryExpanded ? t("收起摘要") : t("展开摘要")}
+                {summaryExpanded ? (
+                  <IconChevronDown size={12} />
+                ) : (
+                  <IconChevronRight size={12} />
+                )}
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="review-summary-empty">
             {t("让 Agent 通读全文，留下分级评论和审阅摘要。")}

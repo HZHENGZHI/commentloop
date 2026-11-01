@@ -182,6 +182,7 @@ export const Sidebar = memo(function Sidebar({
         role="button"
         tabIndex={0}
         title={displayFile(file)}
+        aria-label={displayFile(file)}
         onClick={() => onOpen(file.path)}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;

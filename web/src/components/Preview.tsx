@@ -29,6 +29,7 @@ interface PreviewProps {
   onRequestComment: (quote: string) => void;
   onRequestBlockComment: (quote: string) => void;
   theme: Theme;
+  readOnly?: boolean;
 }
 
 export const Preview = memo(function Preview({
@@ -41,6 +42,7 @@ export const Preview = memo(function Preview({
   onRequestComment,
   onRequestBlockComment,
   theme,
+  readOnly = false,
 }: PreviewProps) {
   const { t } = useTranslation();
   const articleRef = useRef<HTMLElement>(null);
@@ -250,7 +252,11 @@ export const Preview = memo(function Preview({
       ) : (
         <div className="preview-blank">
           <p className="preview-blank-title">{t("空白文档")}</p>
-          <p>{t("开始输入 Markdown，预览会实时出现在这里。")}</p>
+          <p>
+            {readOnly
+              ? t("审阅模式下这里不提供编辑。让 Agent 通过 MCP/CLI 写入内容，或导入现有 Markdown。")
+              : t("开始输入 Markdown，预览会实时出现在这里。")}
+          </p>
         </div>
       )}
       {selection ? (
