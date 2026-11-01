@@ -30,6 +30,10 @@ func (s *Server) handleListDocVersions(w http.ResponseWriter, r *http.Request) {
 	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档") {
 		return
 	}
+	if _, err := s.statRootFile(ro, rel); err != nil {
+		writeError(w, http.StatusNotFound, errDocumentNotFound)
+		return
+	}
 	versions, err := s.comments.listVersions(canonical)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -46,6 +50,10 @@ func (s *Server) handleGetDocVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	canonical := ro.ID + "/" + rel
 	if s.rejectAgentDocPath(w, r, canonical, "当前任务只能读取关联文档") {
+		return
+	}
+	if _, err := s.statRootFile(ro, rel); err != nil {
+		writeError(w, http.StatusNotFound, errDocumentNotFound)
 		return
 	}
 	version, ok := s.comments.version(r.URL.Query().Get("id"))
@@ -83,10 +91,14 @@ func (s *Server) handleRestoreDocVersion(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusNotFound, errDocVersionNotFound)
 		return
 	}
-	if _, _, err := s.readRootFile(ro, rel, maxDocSize); err != nil {
+	current, _, err := s.readRootFile(ro, rel, maxDocSize)
+	if err != nil {
 		writeError(w, http.StatusNotFound, errDocumentNotFound)
 		return
 	}
+	// Keep the content that is about to be replaced in the timeline even when
+	// it came from an external edit that bypassed the normal save path.
+	s.saveDocumentVersion(canonical, string(current), false)
 	doc, err := s.persistDocument(ro, rel, canonical, version.Content, "restore", true)
 	if err != nil {
 		writeErrorDetail(w, http.StatusInternalServerError, errFailedWriteFile, err.Error())

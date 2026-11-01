@@ -311,6 +311,9 @@ func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
 	if err := s.reviews.clear(canonical); err != nil {
 		slog.Warn("failed to clear review status for deleted document", "path", canonical, "err", err)
 	}
+	if err := s.comments.purgeVersions(canonical); err != nil {
+		slog.Warn("failed to purge document versions", "path", canonical, "err", err)
+	}
 	s.hub.broadcast(outMessage{Type: "tree"})
 	s.hub.broadcastPath(canonical, outMessage{Type: "gone", Path: canonical})
 	w.WriteHeader(http.StatusNoContent)

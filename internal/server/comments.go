@@ -562,16 +562,42 @@ func (s *commentStore) version(id string) (docVersion, bool) {
 }
 
 func (s *commentStore) listVersions(path string) ([]docVersionInfo, error) {
-	var rows []docVersionRow
-	if err := s.db.Select("id", "content", "created_at").Where("path = ?", path).
+	type versionInfoRow struct {
+		ID        string
+		CreatedAt string
+		Size      int64
+	}
+	var rows []versionInfoRow
+	// Do not load every snapshot's content just to report its size: a document
+	// can have 30 versions of up to 8 MiB each.
+	if err := s.db.Model(&docVersionRow{}).
+		Select("id, created_at, length(content) AS size").
+		Where("path = ?", path).
 		Order("created_at DESC, rowid DESC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]docVersionInfo, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, docVersionInfo{ID: row.ID, CreatedAt: parseTime(row.CreatedAt), Size: int64(len(row.Content))})
+		out = append(out, docVersionInfo{ID: row.ID, CreatedAt: parseTime(row.CreatedAt), Size: row.Size})
 	}
 	return out, nil
+}
+
+// purgeVersions removes every snapshot for a deleted document and clears
+// rollback links from its remaining comment threads. Version content must not
+// outlive the document it belongs to (a re-created path is a new document).
+func (s *commentStore) purgeVersions(path string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		commentIDs := tx.Model(&commentRow{}).Select("id").Where("path = ?", path)
+		for _, column := range []string{"version_id", "before_version_id"} {
+			if err := tx.Model(&commentMessageRow{}).
+				Where("comment_id IN (?) AND "+column+" != ''", commentIDs).
+				Update(column, "").Error; err != nil {
+				return err
+			}
+		}
+		return tx.Where("path = ?", path).Delete(&docVersionRow{}).Error
+	})
 }
 
 func (s *commentStore) resolve(path, id string, resolved bool) (*Comment, error) {

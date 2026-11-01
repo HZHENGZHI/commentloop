@@ -380,6 +380,9 @@ export default function App() {
 
   const applySavedDoc = useCallback(
     (content: string, nextHtml: string) => {
+      // Any save started before this authoritative content must not be able to
+      // land afterwards and overwrite it (for example during a version restore).
+      saveSeqRef.current += 1;
       cancelTimers();
       contentRef.current = content;
       savedContentRef.current = content;
@@ -1811,7 +1814,12 @@ export default function App() {
               onChange={(value) => setViewMode(value as ViewMode)}
               options={VIEW_OPTIONS.map((option) => ({
                 value: option.value,
-                label: <span title={t(option.label)}>{option.icon}</span>,
+                label: (
+                  <span title={t(option.label)}>
+                    <span className="sr-only">{t(option.label)}</span>
+                    {option.icon}
+                  </span>
+                ),
               }))}
             />
           ) : null}
@@ -2216,13 +2224,15 @@ export default function App() {
       {historyOpen && currentPath ? (
         <HistoryModal
           path={currentPath}
-          currentContent={doc.content}
+          currentContent={contentRef.current}
           canRestore={!previewOnly}
           onClose={() => setHistoryOpen(false)}
           onRestored={(restored) => {
+            setHistoryOpen(false);
+            // A slow restore may finish after the user switched documents.
+            if (currentPathRef.current !== restored.path) return;
             applySavedDoc(restored.content, restored.html);
             setMeta({ size: restored.size, modTime: restored.modTime });
-            setHistoryOpen(false);
             toast(i18n.t("已恢复到所选版本"), "success");
           }}
         />
